@@ -24,7 +24,6 @@ class ProjectProvider extends ChangeNotifier {
     notifyListeners();
 
     try {
-      // AMBIL ID USER YANG LAGI LOGIN
       final userId = _supabase.auth.currentUser?.id;
       if (userId == null) throw Exception("User belum login!");
 
@@ -39,7 +38,7 @@ class ProjectProvider extends ChangeNotifier {
         'bathrooms': bathrooms,
         'house_style': houseStyle,
         'location': location,
-        'client_id': userId, // <-- SEKARANG PAKAI ID ASLI, BUKAN NULL LAGI
+        'client_id': userId,
       });
       _isLoading = false;
       notifyListeners();
@@ -52,21 +51,35 @@ class ProjectProvider extends ChangeNotifier {
     }
   }
 
-  // --- FUNGSI 2: BUAT NGAMBIL DATA PROYEK (Cuma punya user sendiri) ---
+  // --- FUNGSI 2: BUAT NGAMBIL DATA PROYEK (Punya User Sendiri) ---
   Future<List<Map<String, dynamic>>> fetchProjects() async {
     try {
-      // AMBIL ID USER YANG LAGI LOGIN
       final userId = _supabase.auth.currentUser?.id;
       if (userId == null) return [];
 
       final response = await _supabase
           .from('projects')
           .select('*')
-          .eq('client_id', userId) // <-- FILTER SAKTI: Cuma ambil yg client_id-nya sama kayak yg login
+          .eq('client_id', userId)
           .order('created_at', ascending: false);
       return List<Map<String, dynamic>>.from(response);
     } catch (e) {
       debugPrint("Error fetch: $e");
+      return [];
+    }
+  }
+
+  // --- FUNGSI 3: TARIK DATA KONTRAKTOR / VENDOR ---
+  Future<List<Map<String, dynamic>>> fetchVendors() async {
+    try {
+      final response = await _supabase
+          .from('profiles')
+          .select('*')
+          .eq('role', 'vendor') // Cuma ambil yang role-nya vendor
+          .order('created_at', ascending: false);
+      return List<Map<String, dynamic>>.from(response);
+    } catch (e) {
+      debugPrint("Error fetch vendors: $e");
       return [];
     }
   }
