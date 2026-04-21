@@ -1,0 +1,49 @@
+name: buildmatch
+description: "BuildMatch - Marketplace Jasa Konstruksi"
+publish_to: 'none'
+
+version: 1.0.0+1
+
+environment:
+  sdk: ^3.11.0
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  cupertino_icons: ^1.0.8
+
+  # 🔥 FIREBASE CORE
+  firebase_core: ^2.30.0
+
+  # 🔐 AUTH (login/register)
+  firebase_auth: ^4.17.0
+
+  # 🗄️ DATABASE (project, user, dll)
+  cloud_firestore: ^4.15.0
+
+  # 🧠 OPTIONAL (RECOMMENDED BUAT BUILD MATCH)
+  
+  # State management (simple & clean)
+  provider: ^6.1.2
+
+  # Format tanggal (progress proyek, dll)
+  intl: ^0.19.0
+
+  # Generate ID unik (project id, dll)
+  uuid: ^4.4.0
+
+  # UI icons tambahan
+  flutter_svg: ^2.0.10
+  supabase_flutter: ^2.12.4
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+
+  flutter_lints: ^6.0.0
+
+flutter:
+  uses-material-design: true
+
+  # 🔹 Contoh kalau nanti mau pakai assets
