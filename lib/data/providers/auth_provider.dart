@@ -8,11 +8,12 @@ class AuthProvider extends ChangeNotifier {
   bool get isLoading => _isLoading;
   User? get currentUser => _supabase.auth.currentUser;
 
-  // FUNGSI REGISTER
+  // FUNGSI REGISTER (Ditambah parameter phone)
   Future<bool> register({
     required String email,
     required String password,
     required String name,
+    required String phone, // <-- Tambahan dari Figma
   }) async {
     _isLoading = true;
     notifyListeners();
@@ -23,7 +24,9 @@ class AuthProvider extends ChangeNotifier {
         password: password,
         data: {
           'name': name,
-        }, // Data ini bakal ditangkap sama SQL Trigger di atas
+          'phone': phone, // <-- Dikirim ke trigger SQL
+          'role': 'client' // Default sesuai MVP kita
+        },
       );
       _isLoading = false;
       notifyListeners();

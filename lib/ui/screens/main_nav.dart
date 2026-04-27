@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 import '../tabs/beranda_tab.dart';
-import '../tabs/progress_tab.dart'; // Import tab progress
+import '../tabs/progress_tab.dart'; 
 import '../tabs/contractor_tab.dart';
+import '../tabs/profile_tab.dart'; // <-- IMPORT PROFILE TAB-NYA DI SINI
 
 class MainNavScreen extends StatefulWidget {
   const MainNavScreen({super.key});
@@ -17,8 +18,8 @@ class _MainNavScreenState extends State<MainNavScreen> {
     const BerandaTab(),
     const ContractorTab(),
     const Center(child: Text('Konsultasi')),
-    const ProgressTab(), // Masukkan widget ProgressTab di sini
-    const Center(child: Text('Profile')),
+    const ProgressTab(), 
+    const ProfileTab(), // <-- GANTI PLACEHOLDER JADI WIDGET ASLINYA DI SINI
   ];
 
   @override
@@ -43,7 +44,10 @@ class _MainNavScreenState extends State<MainNavScreen> {
             icon: Icon(Icons.chat_bubble_outline),
             label: 'Konsultasi',
           ),
-          NavigationDestination(icon: Icon(Icons.timeline), label: 'Progress'),
+          NavigationDestination(
+            icon: Icon(Icons.timeline), 
+            label: 'Progress'
+          ),
           NavigationDestination(
             icon: Icon(Icons.person_outline),
             label: 'Profile',

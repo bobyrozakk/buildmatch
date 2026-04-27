@@ -4,11 +4,11 @@ import 'package:provider/provider.dart';
 
 // --- IMPORT PROVIDERS ---
 import 'data/providers/project_provider.dart';
-import 'data/providers/auth_provider.dart'; // Ini yang ngilangin merah di AuthProvider & currentUser
+import 'data/providers/auth_provider.dart';
 
 // --- IMPORT SCREENS ---
 import 'ui/screens/main_nav.dart';
-import 'ui/screens/login_screen.dart'; // Ini yang ngilangin merah di LoginScreen
+import 'ui/screens/role_screen.dart'; // <-- BUKAN LOGIN_SCREEN LAGI, TAPI ROLE_SCREEN
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -25,7 +25,6 @@ void main() async {
         ChangeNotifierProvider(create: (_) => AuthProvider()),
         ChangeNotifierProvider(create: (_) => ProjectProvider()),
       ],
-      // Panggil BuildMatchApp di sini biar strukturnya rapi
       child: const BuildMatchApp(),
     ),
   );
@@ -36,23 +35,25 @@ class BuildMatchApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Consumer dipindah ke sini, ngebungkus MaterialApp
     return Consumer<AuthProvider>(
       builder: (context, auth, _) {
         return MaterialApp(
           debugShowCheckedModeBanner: false,
           title: 'BuildMatch',
           theme: ThemeData(
-            scaffoldBackgroundColor: const Color(0xFFF5F7FA),
+            scaffoldBackgroundColor: const Color(0xFFF7F4EF), // Disesuaikan dengan warna cream Figma
             colorScheme: ColorScheme.fromSeed(
-              seedColor: const Color(0xFF2B5C8F),
+              seedColor: const Color(0xFF8B2B0F), // Disesuaikan dengan warna terakota Figma
             ),
             useMaterial3: true,
+            fontFamily: 'Inter', // Opsional: Tambahin font Inter atau Roboto biar makin mirip Figma
           ),
+          
           // LOGIC AUTH: Cek user udah login apa belum
+          // Kalau belum login, lempar ke RoleScreen (Pilih Peran)
           home: auth.currentUser != null
               ? const MainNavScreen()
-              : const LoginScreen(),
+              : const RoleScreen(), 
         );
       },
     );

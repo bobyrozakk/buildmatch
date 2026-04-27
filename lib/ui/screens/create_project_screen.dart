@@ -1,7 +1,12 @@
+import 'dart:math' as math;
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:image_picker/image_picker.dart';
+import 'package:file_picker/file_picker.dart';
 import '../../data/providers/project_provider.dart';
-import '../../core/utils/glass_card.dart'; // Pastikan import IOSGlassCard lu ada di sini
+import 'package:latlong2/latlong.dart';
+import '../../ui/screens/map_picker_screen.dart'; // Sesuaikan path import lu
 
 class CreateProjectScreen extends StatefulWidget {
   const CreateProjectScreen({super.key});
@@ -11,20 +16,22 @@ class CreateProjectScreen extends StatefulWidget {
 }
 
 class _CreateProjectScreenState extends State<CreateProjectScreen> {
+  final PageController _pageController = PageController();
+  int _currentStep = 0;
+  final int _totalSteps = 4;
   final _formKey = GlobalKey<FormState>();
-  
-  // Controllers Baru Sesuai Database
+
   final _titleController = TextEditingController();
   final _descController = TextEditingController();
-  final _locationController = TextEditingController();
   final _buildingSizeController = TextEditingController();
-  final _floorsController = TextEditingController(text: '1');
-  final _bedroomsController = TextEditingController();
-  final _bathroomsController = TextEditingController();
+  final _locationController = TextEditingController();
+  LatLng? _selectedLocation;
 
-  // Template & Dropdowns
-  final List<String> _houseStyles = ['Minimalis', 'Modern', 'Tropis', 'Industrial', 'Klasik', 'Scandinavian'];
+  int _bedrooms = 0;
+  int _bathrooms = 0;
+  int _floors = 1;
   String? _selectedStyle;
+  final List<String> _houseStyles = ['Minimalis', 'Modern', 'Klasik', 'Tropis', 'Industrial'];
 
   final List<Map<String, dynamic>> _landTemplates = [
     {'label': 'Tipe 36 (6 x 10 m)', 'size': 60.0, 'basePrice': 250000000.0},
@@ -32,13 +39,15 @@ class _CreateProjectScreenState extends State<CreateProjectScreen> {
     {'label': 'Tipe 60 (10 x 15 m)', 'size': 150.0, 'basePrice': 550000000.0},
     {'label': 'Custom Mansion (12 x 20 m)', 'size': 240.0, 'basePrice': 900000000.0},
   ];
-
   Map<String, dynamic>? _selectedLand;
   double _budget = 0;
   double _minBudget = 0;
   final double _maxBudget = 2000000000.0; 
 
-  bool _isButtonPressed = false;
+  // --- STATE UNTUK FILE FISIK ---
+  File? _selectedImageFile;
+  File? _selectedPdfFile;
+  final ImagePicker _picker = ImagePicker();
 
   String _formatRupiah(double amount) {
     return 'Rp ${amount.toStringAsFixed(0).replaceAllMapped(RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (Match m) => '${m[1]}.')}';
@@ -54,40 +63,86 @@ class _CreateProjectScreenState extends State<CreateProjectScreen> {
     }
   }
 
-  void _submitData() async {
-    if (_formKey.currentState!.validate() && _selectedLand != null && _selectedStyle != null) {
-      final provider = Provider.of<ProjectProvider>(context, listen: false);
-      
-      bool success = await provider.createProject(
-        title: _titleController.text,
-        description: _descController.text,
-        budget: _budget,
-        landSize: _selectedLand!['size'],
-        buildingSize: double.tryParse(_buildingSizeController.text) ?? 0.0,
-        floors: int.tryParse(_floorsController.text) ?? 1,
-        bedrooms: int.tryParse(_bedroomsController.text) ?? 0,
-        bathrooms: int.tryParse(_bathroomsController.text) ?? 0,
-        houseStyle: _selectedStyle!,
-        location: _locationController.text,
-      );
+  // --- FUNGSI AMBIL FOTO (DENGAN NATIVE COMPRESSION) ---
+  Future<void> _pickImage() async {
+    final XFile? image = await _picker.pickImage(source: ImageSource.gallery, imageQuality: 50);
+    if (image != null) {
+      setState(() => _selectedImageFile = File(image.path));
+    }
+  }
 
-      if (!mounted) return;
+  // --- FUNGSI AMBIL PDF (DENGAN LIMIT 2MB) ---
+  Future<void> _pickPdf() async {
+    FilePickerResult? result = await FilePicker.platform.pickFiles(
+      type: FileType.custom,
+      allowedExtensions: ['pdf'],
+    );
 
-      if (success) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: const Text('Proyek berhasil dibuat! 🚀'), 
-            behavior: SnackBarBehavior.floating,
-            backgroundColor: Colors.green.shade800,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-          ),
-        );
-        Navigator.pop(context);
+    if (result != null) {
+      File file = File(result.files.single.path!);
+      int fileSizeInBytes = file.lengthSync();
+      double fileSizeInMB = fileSizeInBytes / (1024 * 1024);
+
+      if (fileSizeInMB > 2.0) {
+        if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Ukuran PDF maksimal 2MB!'), backgroundColor: Colors.redAccent));
+        return;
       }
+      setState(() => _selectedPdfFile = file);
+    }
+  }
+
+  void _submitData() async {
+    // Validasi: Pastikan semua form penting & peta udah diisi
+    if (_titleController.text.isEmpty || _selectedLand == null || _selectedStyle == null || _selectedLocation == null) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Form, Template Tanah, Desain, dan Peta Lokasi wajib diisi!'), backgroundColor: Colors.redAccent));
+      return;
+    }
+
+    final provider = Provider.of<ProjectProvider>(context, listen: false);
+    
+    // Kirim data Teks, Koordinat, DAN File fisik ke Provider
+    bool success = await provider.createProject(
+      title: _titleController.text.trim(),
+      description: _descController.text.trim(),
+      budget: _budget,
+      landSize: _selectedLand!['size'],
+      buildingSize: double.tryParse(_buildingSizeController.text) ?? 0.0,
+      floors: _floors,
+      bedrooms: _bedrooms,
+      bathrooms: _bathrooms,
+      houseStyle: _selectedStyle!,
+      location: _locationController.text.trim(),
+      latitude: _selectedLocation!.latitude,   // <-- Kordinat Y
+      longitude: _selectedLocation!.longitude, // <-- Kordinat X
+      imageFile: _selectedImageFile,           // <-- Foto Inspirasi
+      pdfFile: _selectedPdfFile,               // <-- PDF Dokumen
+    );
+
+    if (!mounted) return;
+
+    if (success) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: const Text('Proyek berhasil dipublikasikan! 🚀'), backgroundColor: Colors.green.shade800));
+      Navigator.pop(context);
     } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Lengkapi semua template & gaya desain, bro!'), backgroundColor: Colors.redAccent),
-      );
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Gagal membuat proyek. Coba lagi.'), backgroundColor: Colors.redAccent));
+    }
+  }
+
+  void _nextStep() {
+    if (_currentStep == _totalSteps - 1) {
+      _submitData();
+      return;
+    }
+    setState(() => _currentStep++);
+    _pageController.animateToPage(_currentStep, duration: const Duration(milliseconds: 300), curve: Curves.easeInOut);
+  }
+
+  void _prevStep() {
+    if (_currentStep > 0) {
+      setState(() => _currentStep--);
+      _pageController.animateToPage(_currentStep, duration: const Duration(milliseconds: 300), curve: Curves.easeInOut);
+    } else {
+      Navigator.pop(context);
     }
   }
 
@@ -96,240 +151,275 @@ class _CreateProjectScreenState extends State<CreateProjectScreen> {
     final isLoading = context.watch<ProjectProvider>().isLoading;
 
     return Scaffold(
-      body: Container(
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            colors: [Color(0xFFF3F8FF), Color(0xFFFFF0F5)], // Soft pastel gradient ala iOS
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-          ),
-        ),
-        child: SafeArea(
-          child: Column(
-            children: [
-              // Custom Transparent AppBar
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
-                child: Row(
-                  children: [
-                    IconButton(
-                      icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.black87),
-                      onPressed: () => Navigator.pop(context),
-                    ),
-                    const Text('Detail Proyek Baru', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.black87)),
-                  ],
+      backgroundColor: const Color(0xFFF7F4EF), 
+      body: SafeArea(
+        child: Column(
+          children: [
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  IconButton(icon: Container(padding: const EdgeInsets.all(8), decoration: const BoxDecoration(color: Colors.white, shape: BoxShape.circle), child: const Icon(Icons.arrow_back, color: Colors.black87, size: 20)), onPressed: isLoading ? null : _prevStep),
+                  const Text("Buat Proyek Baru", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.black87)),
+                  IconButton(icon: Container(padding: const EdgeInsets.all(8), decoration: const BoxDecoration(color: Colors.white, shape: BoxShape.circle), child: const Icon(Icons.notifications_none_rounded, color: Colors.black87, size: 20)), onPressed: () {}),
+                ],
+              ),
+            ),
+            Padding(padding: const EdgeInsets.symmetric(vertical: 16), child: _buildStepper()),
+            Expanded(
+              child: Form(
+                key: _formKey,
+                child: PageView(
+                  controller: _pageController,
+                  physics: const NeverScrollableScrollPhysics(), 
+                  children: [ _buildStep1(), _buildStep2(), _buildStep3(), _buildStep4() ],
                 ),
               ),
-              
-              Expanded(
-                child: SingleChildScrollView(
-                  physics: const BouncingScrollPhysics(),
-                  padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 10),
-                  child: Form(
-                    key: _formKey,
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        _buildSectionTitle('Informasi Dasar'),
-                        _buildSmoothTextField(_titleController, 'Nama Proyek', Icons.home_work_outlined),
-                        const SizedBox(height: 16),
-                        _buildSmoothTextField(_descController, 'Deskripsi Mimpimu...', Icons.description_outlined, maxLines: 3),
-                        const SizedBox(height: 16),
-                        _buildSmoothTextField(_locationController, 'Lokasi / Kota', Icons.location_on_outlined),
-                        const SizedBox(height: 16),
-                        
-                        // Dropdown Gaya Rumah
-                        _buildGlassDropdown<String>(
-                          value: _selectedStyle,
-                          hint: 'Gaya Desain',
-                          icon: Icons.architecture_rounded,
-                          items: _houseStyles.map((s) => DropdownMenuItem(value: s, child: Text(s))).toList(),
-                          onChanged: (val) => setState(() => _selectedStyle = val),
-                        ),
-                        
-                        const SizedBox(height: 32),
-                        _buildSectionTitle('Spesifikasi Ruangan'),
-                        Row(
-                          children: [
-                            Expanded(child: _buildSmoothTextField(_buildingSizeController, 'Luas Bangunan (m2)', Icons.square_foot_rounded, isNumber: true)),
-                            const SizedBox(width: 16),
-                            Expanded(child: _buildSmoothTextField(_floorsController, 'Jml. Lantai', Icons.layers_outlined, isNumber: true)),
-                          ],
-                        ),
-                        const SizedBox(height: 16),
-                        Row(
-                          children: [
-                            Expanded(child: _buildSmoothTextField(_bedroomsController, 'Kamar Tidur', Icons.bed_outlined, isNumber: true)),
-                            const SizedBox(width: 16),
-                            Expanded(child: _buildSmoothTextField(_bathroomsController, 'Kamar Mandi', Icons.bathtub_outlined, isNumber: true)),
-                          ],
-                        ),
+            ),
+            _buildBottomNav(isLoading),
+          ],
+        ),
+      ),
+    );
+  }
 
-                        const SizedBox(height: 32),
-                        _buildSectionTitle('Tanah & Budget'),
-                        
-                        _buildGlassDropdown<Map<String, dynamic>>(
-                          value: _selectedLand,
-                          hint: 'Template Luas Tanah',
-                          icon: Icons.landscape_outlined,
-                          items: _landTemplates.map((t) => DropdownMenuItem(value: t, child: Text(t['label']))).toList(),
-                          onChanged: _onTemplateSelected,
-                        ),
+  // --- KOMPONEN UI ---
+  Widget _buildStepper() {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: List.generate(_totalSteps, (index) {
+        bool isActive = index <= _currentStep;
+        return Row(
+          children: [
+            Container(
+              width: 32, height: 32,
+              decoration: BoxDecoration(color: isActive ? const Color(0xFF8B2B0F) : Colors.white, shape: BoxShape.circle, border: Border.all(color: isActive ? const Color(0xFF8B2B0F) : Colors.grey.shade300, width: 2)),
+              child: Center(child: index < _currentStep ? const Icon(Icons.check, color: Colors.white, size: 18) : Text("${index + 1}", style: TextStyle(color: isActive ? Colors.white : Colors.grey.shade400, fontWeight: FontWeight.bold))),
+            ),
+            if (index < _totalSteps - 1) Container(width: 40, height: 2, color: isActive ? const Color(0xFF8B2B0F) : Colors.grey.shade300),
+          ],
+        );
+      }),
+    );
+  }
 
-                        const SizedBox(height: 24),
+  Widget _buildBottomNav(bool isLoading) {
+    return Container(
+      padding: const EdgeInsets.all(24),
+      decoration: const BoxDecoration(color: Color(0xFFF7F4EF)),
+      child: Row(
+        children: [
+          if (_currentStep > 0) ...[
+            Expanded(flex: 1, child: OutlinedButton(onPressed: isLoading ? null : _prevStep, style: OutlinedButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 16), backgroundColor: Colors.white, side: const BorderSide(color: Colors.transparent), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16))), child: const Text("← Kembali", style: TextStyle(color: Colors.black87, fontWeight: FontWeight.bold)))),
+            const SizedBox(width: 16),
+          ],
+          Expanded(
+            flex: 2,
+            child: ElevatedButton(
+              onPressed: isLoading ? null : _nextStep,
+              style: ElevatedButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 16), backgroundColor: const Color(0xFF8B2B0F), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16))),
+              child: isLoading && _currentStep == _totalSteps - 1 ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2.5)) : Text(_currentStep == _totalSteps - 1 ? "Publikasikan ➔" : "Lanjut ➔", style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 
-                        // Slider Budget dengan Glassmorphism
-                        AnimatedOpacity(
-                          duration: const Duration(milliseconds: 300),
-                          opacity: _selectedLand != null ? 1.0 : 0.4,
-                          child: IOSGlassCard(
-                            blur: 15,
-                            child: Padding(
-                              padding: const EdgeInsets.all(20),
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Row(
-                                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                    children: [
-                                      const Text('Estimasi Budget', style: TextStyle(fontWeight: FontWeight.w600, color: Colors.black54)),
-                                      Text(
-                                        _formatRupiah(_budget),
-                                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: Color(0xFFB53D1B)), // Warna Terakota
-                                      ),
-                                    ],
-                                  ),
-                                  const SizedBox(height: 10),
-                                  SliderTheme(
-                                    data: SliderTheme.of(context).copyWith(
-                                      trackHeight: 6.0,
-                                      activeTrackColor: const Color(0xFFB53D1B),
-                                      inactiveTrackColor: Colors.black12,
-                                      thumbColor: Colors.white,
-                                      thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 14.0, elevation: 4),
-                                    ),
-                                    child: Slider(
-                                      value: _budget < _minBudget ? _minBudget : _budget,
-                                      min: _minBudget > 0 ? _minBudget : 0,
-                                      max: _maxBudget,
-                                      divisions: 100,
-                                      onChanged: _selectedLand != null ? (val) => setState(() => _budget = val) : null,
-                                    ),
-                                  ),
-                                  if (_selectedLand != null)
-                                    Text(
-                                      '*Base price mulai dari ${_formatRupiah(_minBudget)}',
-                                      style: const TextStyle(fontSize: 12, color: Colors.black38, fontStyle: FontStyle.italic),
-                                    )
-                                ],
-                              ),
-                            ),
-                          ),
-                        ),
+  Widget _buildStep1() {
+    return SingleChildScrollView(
+      physics: const BouncingScrollPhysics(), padding: const EdgeInsets.all(24),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text("Informasi Proyek", style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)), const SizedBox(height: 8),
+          const Text("Lengkapi detail dasar untuk memulai perencanaan proyek Anda.", style: TextStyle(color: Colors.black54)), const SizedBox(height: 30),
+          _buildSectionTitle("Judul Proyek"), _buildSmoothTextField(_titleController, "Contoh: Rumah 2 Lantai Minimalis", Icons.home_work_outlined), const SizedBox(height: 24),
+          _buildSectionTitle("Deskripsi Proyek"), _buildSmoothTextField(_descController, "Ceritakan detail keinginan Anda...", Icons.description_outlined, maxLines: 4),
+        ],
+      ),
+    );
+  }
 
-                        const SizedBox(height: 40),
+  Widget _buildStep2() {
+    return SingleChildScrollView(
+      physics: const BouncingScrollPhysics(), padding: const EdgeInsets.all(24),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text("Spesifikasi Bangunan", style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)), const SizedBox(height: 8),
+          const Text("Isi detail fisik bangunan yang akan Anda bangun.", style: TextStyle(color: Colors.black54)), const SizedBox(height: 24),
+          Row(children: [Expanded(child: _buildCounterCard("Kamar Tidur", Icons.bed_outlined, _bedrooms, (val) => setState(() => _bedrooms = val))), const SizedBox(width: 16), Expanded(child: _buildCounterCard("Kamar Mandi", Icons.bathtub_outlined, _bathrooms, (val) => setState(() => _bathrooms = val)))]), const SizedBox(height: 16),
+          _buildCounterCard("Jumlah Lantai", Icons.layers_outlined, _floors, (val) => setState(() => _floors = val), min: 1), const SizedBox(height: 24),
+          _buildSectionTitle("Luas Bangunan"), _buildSmoothTextField(_buildingSizeController, "Contoh: 120", Icons.square_foot_rounded, isNumber: true, suffix: "m²"), const SizedBox(height: 24),
+          _buildSectionTitle("Tipe Rumah"),
+          Wrap(spacing: 10, runSpacing: 10, children: _houseStyles.map((style) { bool isSelected = _selectedStyle == style; return ChoiceChip(label: Text(style, style: TextStyle(color: isSelected ? Colors.white : Colors.black87, fontWeight: FontWeight.bold)), selected: isSelected, selectedColor: const Color(0xFF8B2B0F), backgroundColor: Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20), side: BorderSide(color: isSelected ? Colors.transparent : Colors.grey.shade300)), onSelected: (selected) => setState(() => _selectedStyle = selected ? style : null)); }).toList()),
+        ],
+      ),
+    );
+  }
 
-                        // Tombol Submit (Terakota)
-                        GestureDetector(
-                          onTapDown: (_) => setState(() => _isButtonPressed = true),
-                          onTapUp: (_) {
-                            setState(() => _isButtonPressed = false);
-                            if (!isLoading) _submitData();
-                          },
-                          onTapCancel: () => setState(() => _isButtonPressed = false),
-                          child: AnimatedScale(
-                            scale: _isButtonPressed ? 0.95 : 1.0,
-                            duration: const Duration(milliseconds: 100),
-                            child: Container(
-                              width: double.infinity,
-                              height: 60,
-                              decoration: BoxDecoration(
-                                gradient: const LinearGradient(
-                                  colors: [Color(0xFFB53D1B), Color(0xFFD85A31)], // Terakota gradient persis di Beranda
-                                  begin: Alignment.topLeft,
-                                  end: Alignment.bottomRight,
-                                ),
-                                borderRadius: BorderRadius.circular(20),
-                                boxShadow: _isButtonPressed ? [] : [
-                                  BoxShadow(color: const Color(0xFFB53D1B).withOpacity(0.3), blurRadius: 15, offset: const Offset(0, 8))
-                                ],
-                              ),
-                              child: Center(
-                                child: isLoading
-                                    ? const SizedBox(height: 24, width: 24, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2.5))
-                                    : const Text(
-                                        'Mulai Proyek',
-                                        style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white, letterSpacing: 1.0),
-                                      ),
-                              ),
-                            ),
-                          ),
-                        ),
-                        const SizedBox(height: 40),
-                      ],
-                    ),
+  Widget _buildStep3() {
+    return SingleChildScrollView(
+      physics: const BouncingScrollPhysics(), padding: const EdgeInsets.all(24),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text("Estimasi Budget", style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)), const SizedBox(height: 8),
+          const Text("Tentukan ukuran tanah dan anggaran proyek Anda.", style: TextStyle(color: Colors.black54)), const SizedBox(height: 24),
+          _buildSectionTitle("Template Luas Tanah"), _buildGlassDropdown<Map<String, dynamic>>(value: _selectedLand, hint: 'Pilih Template...', icon: Icons.landscape_outlined, items: _landTemplates.map((t) => DropdownMenuItem(value: t, child: Text(t['label']))).toList(), onChanged: _onTemplateSelected), const SizedBox(height: 32),
+          _buildSectionTitle("Budget Anda"),
+          AnimatedOpacity(
+            duration: const Duration(milliseconds: 300), opacity: _selectedLand != null ? 1.0 : 0.4,
+            child: Container(
+              padding: const EdgeInsets.all(20), decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16), boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.03), blurRadius: 10, offset: const Offset(0, 4))]),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Center(child: Text(_formatRupiah(_budget), style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 24, color: Color(0xFF8B2B0F)))), const SizedBox(height: 16),
+                  SliderTheme(data: SliderTheme.of(context).copyWith(trackHeight: 6.0, activeTrackColor: const Color(0xFF8B2B0F), inactiveTrackColor: Colors.grey.shade200, thumbColor: Colors.white, thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 12.0, elevation: 4)), child: Slider(value: _budget < _minBudget ? _minBudget : _budget, min: _minBudget > 0 ? _minBudget : 0, max: _maxBudget, divisions: 100, onChanged: _selectedLand != null ? (val) => setState(() => _budget = val) : null)),
+                  if (_selectedLand != null) Center(child: Text('Minimal harga pasaran: ${_formatRupiah(_minBudget)}', style: const TextStyle(fontSize: 12, color: Colors.black38, fontStyle: FontStyle.italic)))
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildStep4() {
+    return SingleChildScrollView(
+      physics: const BouncingScrollPhysics(), padding: const EdgeInsets.all(24),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text("Lokasi & Inspirasi", style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)), const SizedBox(height: 8),
+          const Text("Berikan gambaran lokasi dan referensi desain agar kontraktor lebih paham.", style: TextStyle(color: Colors.black54)), const SizedBox(height: 24),
+          _buildSectionTitle("Lokasi Proyek"), _buildSmoothTextField(_locationController, "Pilih lokasi di peta...", Icons.location_on_outlined), const SizedBox(height: 16),
+          
+          GestureDetector(
+            onTap: () async {
+              // Buka layar peta, dan tunggu user milih titik
+              final LatLng? pickedLocation = await Navigator.push(
+                context,
+                MaterialPageRoute(builder: (context) => const MapPickerScreen()),
+              );
+
+              // Kalau user berhasil milih (gak asal back)
+              if (pickedLocation != null) {
+                setState(() {
+                  _selectedLocation = pickedLocation;
+                  // (Opsional) Auto-isi textfield lokasi dengan kordinat kalau masih kosong
+                  if (_locationController.text.isEmpty) {
+                    _locationController.text = "Lat: ${pickedLocation.latitude.toStringAsFixed(4)}, Lng: ${pickedLocation.longitude.toStringAsFixed(4)}";
+                  }
+                });
+              }
+            },
+            child: Container(
+              height: 150, width: double.infinity,
+              decoration: BoxDecoration(
+                color: Colors.grey.shade300, 
+                borderRadius: BorderRadius.circular(16), 
+                // Kalau udah milih lokasi, tampilkan peta statis area tersebut. Kalau belum, pake gambar dummy
+                image: DecorationImage(
+                  image: NetworkImage(
+                      _selectedLocation != null 
+                        ? 'https://tile.openstreetmap.org/15/${((_selectedLocation!.longitude + 180) / 360 * 32768).floor()}/${((1 - (math.log(math.tan(_selectedLocation!.latitude * math.pi / 180) + 1 / math.cos(_selectedLocation!.latitude * math.pi / 180)) / math.pi)) / 2 * 32768).floor()}.png' 
+                        : 'https://maps.googleapis.com/maps/api/staticmap?center=-7.9666,112.6326&zoom=14&size=400x200&sensor=false'
+                      ), 
+                    fit: BoxFit.cover
+                  )
+              ),
+              child: Stack(
+                alignment: Alignment.center,
+                children: [
+                  Icon(Icons.location_on, color: _selectedLocation != null ? Colors.green : const Color(0xFF8B2B0F), size: 40),
+                  Positioned(
+                    bottom: 12, 
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8), 
+                      decoration: BoxDecoration(color: Colors.white.withOpacity(0.95), borderRadius: BorderRadius.circular(20)), 
+                      child: Row(
+                        children: [
+                          Icon(_selectedLocation != null ? Icons.check_circle : Icons.map_outlined, size: 16, color: _selectedLocation != null ? Colors.green : const Color(0xFF8B2B0F)), 
+                          const SizedBox(width: 8), 
+                          Text(_selectedLocation != null ? "Titik Koordinat Disimpan!" : "Ketuk untuk menentukan koordinat pasti", style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.black87))
+                        ]
+                      )
+                    )
                   ),
-                ),
+                ],
               ),
-            ],
+            ),
           ),
-        ),
+          const SizedBox(height: 32),
+
+          _buildSectionTitle("Foto Lokasi / Inspirasi (Terkompresi otomatis)"),
+          _buildUploadBox(
+            title: _selectedImageFile == null ? "Unggah Foto (.jpg, .png)" : _selectedImageFile!.path.split('/').last,
+            icon: Icons.add_photo_alternate_outlined,
+            isUploaded: _selectedImageFile != null,
+            onTap: _pickImage,
+          ),
+          const SizedBox(height: 16),
+
+          _buildSectionTitle("Dokumen Pendukung / Denah (Max 2MB)"),
+          _buildUploadBox(
+            title: _selectedPdfFile == null ? "Unggah PDF Referensi (.pdf)" : _selectedPdfFile!.path.split('/').last,
+            icon: Icons.description_outlined,
+            isUploaded: _selectedPdfFile != null,
+            onTap: _pickPdf,
+          ),
+          const SizedBox(height: 40),
+        ],
       ),
     );
   }
 
-  // Helper Widget buat Bikin Dropdown Glassmorphism
-  Widget _buildGlassDropdown<T>({
-    required T? value,
-    required String hint,
-    required IconData icon,
-    required List<DropdownMenuItem<T>> items,
-    required void Function(T?) onChanged,
-  }) {
-    return IOSGlassCard(
-      blur: 15,
-      child: DropdownButtonFormField<T>(
-        value: value,
-        icon: const Icon(Icons.keyboard_arrow_down_rounded, color: Colors.black54),
-        decoration: InputDecoration(
-          prefixIcon: Icon(icon, color: const Color(0xFFB53D1B).withOpacity(0.8)),
-          labelText: hint,
-          labelStyle: const TextStyle(color: Colors.black54),
-          border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none),
-          filled: true,
-          fillColor: Colors.white.withOpacity(0.5),
-          contentPadding: const EdgeInsets.symmetric(vertical: 16, horizontal: 16),
-        ),
-        items: items,
-        onChanged: onChanged,
+  // --- REUSABLE UI COMPONENTS ---
+  Widget _buildSectionTitle(String title) { return Padding(padding: const EdgeInsets.only(bottom: 8), child: Text(title, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.black87))); }
+  
+  Widget _buildSmoothTextField(TextEditingController controller, String hint, IconData icon, {int maxLines = 1, bool isNumber = false, String? suffix}) {
+    return TextFormField(controller: controller, maxLines: maxLines, keyboardType: isNumber ? TextInputType.number : TextInputType.text, decoration: InputDecoration(hintText: hint, hintStyle: const TextStyle(color: Colors.black38, fontSize: 14), prefixIcon: Icon(icon, color: const Color(0xFF8B2B0F).withOpacity(0.7)), suffixText: suffix, suffixStyle: const TextStyle(fontWeight: FontWeight.bold, color: Colors.black54), border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none), filled: true, fillColor: Colors.white));
+  }
+
+  Widget _buildCounterCard(String title, IconData icon, int value, Function(int) onChanged, {int min = 0}) {
+    return Container(
+      padding: const EdgeInsets.all(16), decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16), boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.02), blurRadius: 10, offset: const Offset(0, 4))]),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(children: [Icon(icon, color: const Color(0xFF8B2B0F).withOpacity(0.7), size: 18), const SizedBox(width: 8), Text(title, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Colors.black54))]), const SizedBox(height: 16),
+          Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [_buildRoundBtn(Icons.remove, () => value > min ? onChanged(value - 1) : null), Text("$value", style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.black87)), _buildRoundBtn(Icons.add, () => onChanged(value + 1), isRed: true)])
+        ],
       ),
     );
   }
 
-  Widget _buildSectionTitle(String title) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 12, left: 4),
-      child: Text(title, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Colors.black87)),
-    );
+  Widget _buildRoundBtn(IconData icon, VoidCallback onTap, {bool isRed = false}) {
+    return InkWell(onTap: onTap, borderRadius: BorderRadius.circular(20), child: Container(padding: const EdgeInsets.all(8), decoration: BoxDecoration(color: isRed ? const Color(0xFF8B2B0F) : const Color(0xFFF7F4EF), shape: BoxShape.circle), child: Icon(icon, size: 16, color: isRed ? Colors.white : const Color(0xFF8B2B0F))));
   }
 
-  Widget _buildSmoothTextField(TextEditingController controller, String label, IconData icon, {int maxLines = 1, bool isNumber = false}) {
-    return IOSGlassCard(
-      blur: 15,
-      child: TextFormField(
-        controller: controller,
-        maxLines: maxLines,
-        keyboardType: isNumber ? TextInputType.number : TextInputType.text,
-        style: const TextStyle(color: Colors.black87),
-        decoration: InputDecoration(
-          labelText: label,
-          labelStyle: const TextStyle(color: Colors.black54, fontSize: 14),
-          prefixIcon: Icon(icon, color: const Color(0xFFB53D1B).withOpacity(0.7)),
-          border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none),
-          filled: true,
-          fillColor: Colors.white.withOpacity(0.5), // Semi transparan biar kerasa glass
+  Widget _buildGlassDropdown<T>({required T? value, required String hint, required IconData icon, required List<DropdownMenuItem<T>> items, required void Function(T?) onChanged}) {
+    return DropdownButtonFormField<T>(value: value, icon: const Icon(Icons.keyboard_arrow_down_rounded, color: Colors.black54), decoration: InputDecoration(prefixIcon: Icon(icon, color: const Color(0xFF8B2B0F).withOpacity(0.8)), labelText: hint, border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none), filled: true, fillColor: Colors.white, contentPadding: const EdgeInsets.symmetric(vertical: 16, horizontal: 16)), items: items, onChanged: onChanged);
+  }
+
+  Widget _buildUploadBox({required String title, required IconData icon, required bool isUploaded, required VoidCallback onTap}) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 16),
+        decoration: BoxDecoration(color: isUploaded ? const Color(0xFF8B2B0F).withOpacity(0.05) : Colors.white, borderRadius: BorderRadius.circular(16), border: Border.all(color: isUploaded ? const Color(0xFF8B2B0F) : Colors.transparent, style: BorderStyle.solid, width: 1.5)),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(isUploaded ? Icons.check_circle_rounded : icon, color: const Color(0xFF8B2B0F)), const SizedBox(width: 8),
+            Flexible(child: Text(title, overflow: TextOverflow.ellipsis, style: TextStyle(fontWeight: FontWeight.bold, color: isUploaded ? const Color(0xFF8B2B0F) : Colors.black54))),
+          ],
         ),
-        validator: (value) => value!.isEmpty ? 'Wajib diisi' : null,
       ),
     );
   }
