@@ -8,7 +8,7 @@ import 'data/providers/auth_provider.dart';
 
 // --- IMPORT SCREENS ---
 import 'ui/screens/main_nav.dart';
-import 'ui/screens/role_screen.dart'; // <-- BUKAN LOGIN_SCREEN LAGI, TAPI ROLE_SCREEN
+import 'ui/screens/onboarding_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -53,7 +53,7 @@ class BuildMatchApp extends StatelessWidget {
           // Kalau belum login, lempar ke RoleScreen (Pilih Peran)
           home: auth.currentUser != null
               ? const MainNavScreen()
-              : const RoleScreen(), 
+              : const OnboardingScreen(), 
         );
       },
     );
