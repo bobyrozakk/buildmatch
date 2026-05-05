@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'login_screen.dart';
+import 'register_screen.dart';
 
 class RoleScreen extends StatefulWidget {
   const RoleScreen({super.key});
@@ -65,13 +66,21 @@ class _RoleScreenState extends State<RoleScreen> {
                   const Icon(Icons.info_outline, color: Color(0xFF8B2B0F), size: 20),
                   const SizedBox(width: 12),
                   Expanded(
-                    child: RichText(
-                      text: const TextSpan(
-                        style: TextStyle(color: Colors.black54, fontSize: 13),
-                        children: [
-                          TextSpan(text: "Belum mempunyai akun? daftar dengan cara "),
-                          TextSpan(text: "klik disini", style: TextStyle(color: Color(0xFF8B2B0F), fontStyle: FontStyle.italic, fontWeight: FontWeight.bold)),
-                        ],
+                    child: GestureDetector(
+                      onTap: () {
+                        final roles = ['Client', 'Kontraktor', 'Arsitek'];
+                        Navigator.push(context, MaterialPageRoute(
+                          builder: (_) => RegisterScreen(role: roles[_selectedRole]),
+                        ));
+                      },
+                      child: RichText(
+                        text: const TextSpan(
+                          style: TextStyle(color: Colors.black54, fontSize: 13),
+                          children: [
+                            TextSpan(text: "Belum mempunyai akun? daftar dengan cara "),
+                            TextSpan(text: "klik disini", style: TextStyle(color: Color(0xFF8B2B0F), fontStyle: FontStyle.italic, fontWeight: FontWeight.bold)),
+                          ],
+                        ),
                       ),
                     ),
                   )
@@ -86,8 +95,11 @@ class _RoleScreenState extends State<RoleScreen> {
               height: 55,
               child: ElevatedButton(
                 onPressed: () {
-                  // MVP: Lanjut ke Login Client dulu apapun yg dipilih
-                  Navigator.push(context, MaterialPageRoute(builder: (_) => const LoginScreen()));
+                  // Kirim role yang dipilih ke LoginScreen
+                  final List<String> roles = ['Client', 'Kontraktor', 'Arsitek'];
+                  Navigator.push(context, MaterialPageRoute(
+                    builder: (_) => LoginScreen(role: roles[_selectedRole]),
+                  ));
                 },
                 style: ElevatedButton.styleFrom(
                   backgroundColor: const Color(0xFF8B2B0F), // Terakota gelap Figma
