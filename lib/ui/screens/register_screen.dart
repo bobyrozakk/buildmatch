@@ -32,7 +32,14 @@ class _RegisterScreenState extends State<RegisterScreen> {
   String? _npwpFileName; // Nama file foto NPWP yang dipilih
   File? _npwpFile; // File aktual NPWP
 
-  bool get _isKontraktor => widget.role == 'Kontraktor';
+  // Controller khusus Arsitek
+  final _straNumberController = TextEditingController();
+  final _experienceController = TextEditingController();
+  String? _straFileName;
+  File? _straFile;
+
+  bool get _isKontraktor => widget.role.toLowerCase() == 'kontraktor';
+  bool get _isArsitek => widget.role.toLowerCase() == 'arsitek';
 
   // ========== Password Strength Logic ==========
   int _getPasswordStrength(String password) {
@@ -117,9 +124,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
     final provider = Provider.of<AuthProvider>(context, listen: false);
 
     // Tentukan nama berdasarkan role
-    String name = _isKontraktor
-        ? _picNameController.text.trim()
-        : _nameController.text.trim();
+    String name = _nameController.text.trim();
+    if (_isKontraktor) name = _picNameController.text.trim();
 
     String? errorMsg = await provider.register(
       email: email,
@@ -130,6 +136,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
       companyName: _isKontraktor ? _companyNameController.text.trim() : null,
       picName: _isKontraktor ? _picNameController.text.trim() : null,
       npwp: _isKontraktor ? _npwpController.text.trim() : null,
+      straNumber: _isArsitek ? _straNumberController.text.trim() : null,
+      experienceYears: _isArsitek ? _experienceController.text.trim() : null,
     );
 
     if (!mounted) return;
@@ -310,6 +318,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
             // ========== FORM FIELDS BERDASARKAN ROLE ==========
             if (_isKontraktor)
               ..._buildKontraktorFields()
+            else if (_isArsitek)
+              ..._buildArsitekFields()
             else
               ..._buildClientFields(),
 
@@ -459,6 +469,43 @@ class _RegisterScreenState extends State<RegisterScreen> {
       const SizedBox(height: 16),
       _buildLabel("Foto NPWP (JPG, PNG)"),
       _buildNpwpUploadArea(),
+    ];
+  }
+
+  // ========== FIELD KHUSUS ARSITEK ==========
+  List<Widget> _buildArsitekFields() {
+    return [
+      _buildLabel("Nama Lengkap"),
+      _buildFigmaTextField(
+        _nameController,
+        "Masukan nama lengkap",
+        Icons.person_outline,
+      ),
+      const SizedBox(height: 16),
+      
+      _buildLabel("Nomor STRA"),
+      _buildFigmaTextField(
+        _straNumberController,
+        "Masukan nomor STRA",
+        Icons.badge_outlined,
+      ),
+      const SizedBox(height: 16),
+
+      _buildLabel("Foto STRA (JPG, PNG)"),
+      _buildStraUploadArea(),
+      const SizedBox(height: 16),
+
+      _buildLabel("Pengalaman Tahun"),
+      _buildFigmaTextField(
+        _experienceController,
+        "Masukan waktu pengalaman",
+        Icons.assignment_outlined,
+        keyboardType: TextInputType.number,
+      ),
+      const SizedBox(height: 16),
+
+      _buildLabel("No. Telepon"),
+      _buildPhoneField(_phoneController),
     ];
   }
 
@@ -789,6 +836,149 @@ class _RegisterScreenState extends State<RegisterScreen> {
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  // ========== WIDGET: Upload Area STRA ==========
+  Widget _buildStraUploadArea() {
+    return GestureDetector(
+      onTap: _showStraImageSourceDialog,
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(vertical: 28),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: _straFileName != null
+                ? const Color(0xFF8B2B0F)
+                : Colors.grey.shade300,
+            width: 1.5,
+          ),
+        ),
+        child: Column(
+          children: [
+            Container(
+              width: 52,
+              height: 52,
+              padding: _straFile != null
+                  ? EdgeInsets.zero
+                  : const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: const Color(0xFFF3EBE1),
+                borderRadius: BorderRadius.circular(10),
+                image: _straFile != null
+                    ? DecorationImage(
+                        image: FileImage(_straFile!),
+                        fit: BoxFit.cover,
+                      )
+                    : null,
+              ),
+              child: _straFile == null
+                  ? const Icon(Icons.badge_outlined, color: Color(0xFF8B2B0F))
+                  : null,
+            ),
+            const SizedBox(height: 12),
+            const Text(
+              "Tambah Foto",
+              style: TextStyle(
+                fontWeight: FontWeight.bold,
+                color: Colors.black87,
+                fontSize: 14,
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              _straFileName ?? "Tap untuk memilih file",
+              style: const TextStyle(
+                color: Colors.black54,
+                fontSize: 12,
+              ),
+              textAlign: TextAlign.center,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+            if (_straFileName == null) ...[
+              const SizedBox(height: 12),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF3EBE1),
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: const [
+                    Icon(Icons.photo_library, color: Color(0xFF8B2B0F), size: 14),
+                    SizedBox(width: 4),
+                    Text(
+                      "Galeri / Kamera",
+                      style: TextStyle(
+                        color: Color(0xFF8B2B0F),
+                        fontSize: 10,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ]
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _pickStraPhoto(ImageSource source) async {
+    final ImagePicker picker = ImagePicker();
+    final XFile? image = await picker.pickImage(source: source);
+    if (image != null) {
+      final ext = image.path.split('.').last.toLowerCase();
+      if (ext == 'jpg' || ext == 'jpeg' || ext == 'png') {
+        setState(() {
+          _straFile = File(image.path);
+          _straFileName = image.name;
+        });
+      } else {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Format file harus JPG atau PNG!'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
+  void _showStraImageSourceDialog() {
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (_) => SafeArea(
+        child: Wrap(
+          children: [
+            ListTile(
+              leading: const Icon(Icons.camera_alt),
+              title: const Text('Kamera'),
+              onTap: () {
+                Navigator.pop(context);
+                _pickStraPhoto(ImageSource.camera);
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.photo_library),
+              title: const Text('Galeri'),
+              onTap: () {
+                Navigator.pop(context);
+                _pickStraPhoto(ImageSource.gallery);
+              },
+            ),
+          ],
+        ),
       ),
     );
   }
