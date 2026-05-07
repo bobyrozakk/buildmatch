@@ -7,7 +7,7 @@ import 'data/providers/project_provider.dart';
 import 'data/providers/auth_provider.dart';
 
 // --- IMPORT SCREENS ---
-import 'ui/screens/main_nav.dart';
+import 'ui/shared/screens/main_nav.dart';
 import 'ui/screens/onboarding_screen.dart';
 
 void main() async {

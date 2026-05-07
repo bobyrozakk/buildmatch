@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import '../../data/providers/project_provider.dart';
+import '../../../data/providers/project_provider.dart';
 import '../screens/project_detail_screen.dart';
 
 class ProgressTab extends StatelessWidget {

@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import '../../core/utils/glass_card.dart'; // Pastikan path ini sesuai dengan file IOSGlassCard lu
+import '../../shared/widgets/glass_card.dart'; // Pastikan path ini sesuai dengan file IOSGlassCard lu
 import '../screens/create_project_screen.dart';
 
 class BerandaTab extends StatelessWidget {

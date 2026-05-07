@@ -4,9 +4,9 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:file_picker/file_picker.dart';
-import '../../data/providers/project_provider.dart';
+import '../../../data/providers/project_provider.dart';
 import 'package:latlong2/latlong.dart';
-import '../../ui/screens/map_picker_screen.dart'; // Sesuaikan path import lu
+import '../../shared/screens/map_picker_screen.dart'; // Sesuaikan path import lu
 
 class CreateProjectScreen extends StatefulWidget {
   const CreateProjectScreen({super.key});
@@ -92,7 +92,6 @@ class _CreateProjectScreenState extends State<CreateProjectScreen> {
   }
 
   void _submitData() async {
-    // Validasi: Pastikan semua form penting & peta udah diisi
     if (_titleController.text.isEmpty || _selectedLand == null || _selectedStyle == null || _selectedLocation == null) {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Form, Template Tanah, Desain, dan Peta Lokasi wajib diisi!'), backgroundColor: Colors.redAccent));
       return;
@@ -100,7 +99,7 @@ class _CreateProjectScreenState extends State<CreateProjectScreen> {
 
     final provider = Provider.of<ProjectProvider>(context, listen: false);
     
-    // Kirim data Teks, Koordinat, DAN File fisik ke Provider
+    // Kirim data ke Provider (DUPLIKAT UDAH GUE HAPUS)
     bool success = await provider.createProject(
       title: _titleController.text.trim(),
       description: _descController.text.trim(),
@@ -112,10 +111,10 @@ class _CreateProjectScreenState extends State<CreateProjectScreen> {
       bathrooms: _bathrooms,
       houseStyle: _selectedStyle!,
       location: _locationController.text.trim(),
-      latitude: _selectedLocation!.latitude,   // <-- Kordinat Y
-      longitude: _selectedLocation!.longitude, // <-- Kordinat X
-      imageFile: _selectedImageFile,           // <-- Foto Inspirasi
-      pdfFile: _selectedPdfFile,               // <-- PDF Dokumen
+      latitude: _selectedLocation!.latitude,
+      longitude: _selectedLocation!.longitude,
+      imageFile: _selectedImageFile, 
+      pdfFile: _selectedPdfFile,
     );
 
     if (!mounted) return;

@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import '../../data/providers/auth_provider.dart';
-import '../screens/role_screen.dart'; 
+import '../../../data/providers/auth_provider.dart';
+import '../../auth/role_screen.dart'; 
 
 class ProfileTab extends StatefulWidget {
   const ProfileTab({super.key});

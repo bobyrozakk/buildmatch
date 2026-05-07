@@ -88,36 +88,20 @@ class _RegisterScreenState extends State<RegisterScreen> {
   void _submit() async {
     final email = _emailController.text.trim();
     // Regex validasi format email agar tidak abal-abal
-    final emailRegex = RegExp(
-      r"^[a-zA-Z0-9.a-zA-Z0-9.!#$%&'*+-/=?^_`{|}~]+@[a-zA-Z0-9]+\.[a-zA-Z]+",
-    );
+    final emailRegex = RegExp(r"^[a-zA-Z0-9.a-zA-Z0-9.!#$%&'*+-/=?^_`{|}~]+@[a-zA-Z0-9]+\.[a-zA-Z]+");
+    
     if (!emailRegex.hasMatch(email)) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Format email tidak valid!'),
-          backgroundColor: Colors.red,
-        ),
-      );
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Format email tidak valid!'), backgroundColor: Colors.red));
       return;
     }
 
     if (_passwordController.text != _confirmController.text) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Password tidak cocok!'),
-          backgroundColor: Colors.red,
-        ),
-      );
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Password tidak cocok!'), backgroundColor: Colors.red));
       return;
     }
 
     if (_passwordController.text.length < 8) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Password minimal 8 karakter!'),
-          backgroundColor: Colors.red,
-        ),
-      );
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Password minimal 8 karakter!'), backgroundColor: Colors.red));
       return;
     }
 
@@ -127,6 +111,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
     String name = _nameController.text.trim();
     if (_isKontraktor) name = _picNameController.text.trim();
 
+    // LEMPAR SEMUA DATA TERMASUK FILE KE PROVIDER
     String? errorMsg = await provider.register(
       email: email,
       password: _passwordController.text,
@@ -136,29 +121,23 @@ class _RegisterScreenState extends State<RegisterScreen> {
       companyName: _isKontraktor ? _companyNameController.text.trim() : null,
       picName: _isKontraktor ? _picNameController.text.trim() : null,
       npwp: _isKontraktor ? _npwpController.text.trim() : null,
+      npwpFile: _isKontraktor ? _npwpFile : null, // <-- Kirim file NPWP
       straNumber: _isArsitek ? _straNumberController.text.trim() : null,
       experienceYears: _isArsitek ? _experienceController.text.trim() : null,
+      straFile: _isArsitek ? _straFile : null, // <-- Kirim file STRA
     );
 
     if (!mounted) return;
+    
     if (errorMsg == null) {
-      // Jika sukses, errorMsg adalah null
+      // Jika sukses, masuk ke halaman Register Success
       Navigator.pushAndRemoveUntil(
         context,
-        MaterialPageRoute(
-          builder: (_) => RegisterSuccessScreen(role: widget.role),
-        ),
+        MaterialPageRoute(builder: (_) => RegisterSuccessScreen(role: widget.role)),
         (route) => false,
       );
     } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            errorMsg,
-          ), // Pesan error spesifik (contoh: Email sudah terdaftar)
-          backgroundColor: Colors.red,
-        ),
-      );
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(errorMsg), backgroundColor: Colors.red));
     }
   }
 

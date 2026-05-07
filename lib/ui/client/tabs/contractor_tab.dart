@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import '../../core/utils/glass_card.dart';
-import '../../data/providers/project_provider.dart';
+import '../../shared/widgets/glass_card.dart';
+import '../../../data/providers/project_provider.dart';
 
 class ContractorTab extends StatelessWidget {
   const ContractorTab({super.key});
