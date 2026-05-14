@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
-
 class ChatPage extends StatefulWidget {
   const ChatPage({super.key});
 
@@ -22,45 +21,43 @@ class _ChatPageState extends State<ChatPage> {
 
   // 📥 STREAM REALTIME MESSAGES
   Stream<List<Map<String, dynamic>>> getMessages() {
-  const otherUser = "user_2";
+    const otherUser = "user_2";
 
-  return supabase
-      .from('messages')
-      .stream(primaryKey: ['id'])
-      .order('created_at')
-      .map((messages) {
-    return messages.where((msg) {
-      final sender = msg['user_id'];
-      final receiver = msg['receiver_id'];
+    return supabase
+        .from('messages')
+        .stream(primaryKey: ['id'])
+        .order('created_at')
+        .map((messages) {
+          return messages.where((msg) {
+            final sender = msg['user_id'];
+            final receiver = msg['receiver_id'];
 
-      return (sender == currentUser && receiver == otherUser) ||
-             (sender == otherUser && receiver == currentUser);
-    }).toList();
-  });
-}
+            return (sender == currentUser && receiver == otherUser) ||
+                (sender == otherUser && receiver == currentUser);
+          }).toList();
+        });
+  }
 
   // 📤 KIRIM PESAN
   Future<void> sendMessage() async {
-  const otherUser = "user_2";
+    const otherUser = "user_2";
 
-  final text = _controller.text.trim();
-  if (text.isEmpty) return;
+    final text = _controller.text.trim();
+    if (text.isEmpty) return;
 
-  await supabase.from('messages').insert({
-    'user_id': currentUser,
-    'receiver_id': otherUser,
-    'text': text,
-  });
+    await supabase.from('messages').insert({
+      'user_id': currentUser,
+      'receiver_id': otherUser,
+      'text': text,
+    });
 
-  _controller.clear();
-}
+    _controller.clear();
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text("Chat BuildMatch"),
-        centerTitle: true,
-      ),
+      appBar: AppBar(title: const Text("Chat BuildMatch"), centerTitle: true),
       body: Column(
         children: [
           // 🔥 LIST CHAT
@@ -90,7 +87,9 @@ class _ChatPageState extends State<ChatPage> {
                           : Alignment.centerLeft,
                       child: Container(
                         margin: const EdgeInsets.symmetric(
-                            horizontal: 10, vertical: 6),
+                          horizontal: 10,
+                          vertical: 6,
+                        ),
                         padding: const EdgeInsets.all(12),
                         decoration: BoxDecoration(
                           color: isMe ? Colors.blue : Colors.grey[300],

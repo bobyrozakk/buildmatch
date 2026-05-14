@@ -1,4 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+import '../../core/constants/colors.dart';
+import '../../core/utils/validators.dart';
+import '../../core/widgets/password_strength.dart';
 
 class CreateNewPasswordScreen extends StatefulWidget {
   const CreateNewPasswordScreen({super.key});
@@ -10,113 +14,53 @@ class CreateNewPasswordScreen extends StatefulWidget {
 class _CreateNewPasswordScreenState extends State<CreateNewPasswordScreen> {
   final _passwordController = TextEditingController();
   final _confirmController = TextEditingController();
-  
+
   bool _obscurePassword = true;
   bool _obscureConfirm = true;
   bool _isSuccess = false;
+  bool _isLoading = false;
+  String? _errorText;
 
-  int _getPasswordStrength(String password) {
-    if (password.isEmpty) return 0;
-    int score = 0;
-    if (password.length >= 8) score++;
-    if (RegExp(r'[A-Z]').hasMatch(password)) score++;
-    if (RegExp(r'[0-9]').hasMatch(password)) score++;
-    if (RegExp(r'[!@#\$%^&*(),.?":{}|<>]').hasMatch(password)) score++;
-    return score;
+  @override
+  void dispose() {
+    _passwordController.dispose();
+    _confirmController.dispose();
+    super.dispose();
   }
 
-  String _getStrengthLabel(int score) {
-    if (score == 0) return "";
-    if (score <= 2) return "Lemah";
-    if (score == 3) return "Sedang";
-    return "Kuat";
-  }
-
-  Color _getStrengthColor(int score) {
-    if (score == 0) return Colors.grey.shade300;
-    if (score <= 2) return Colors.red;
-    if (score == 3) return Colors.orange;
-    return Colors.green;
-  }
-
-  Widget _buildPasswordChecklist(String password) {
-    final checks = [
-      {'label': 'Minimal 8 karakter', 'valid': password.length >= 8},
-      {'label': 'Mengandung huruf besar', 'valid': RegExp(r'[A-Z]').hasMatch(password)},
-      {'label': 'Mengandung angka', 'valid': RegExp(r'[0-9]').hasMatch(password)},
-      {'label': 'Mengandung karakter khusus', 'valid': RegExp(r'[!@#\$%^&*(),.?":{}|<>]').hasMatch(password)},
-    ];
-
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: const Color(0xFFF3EBE1),
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text("Syarat Password", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.black87)),
-          const SizedBox(height: 12),
-          ...checks.map((check) {
-            final isValid = check['valid'] as bool;
-            return Padding(
-              padding: const EdgeInsets.only(bottom: 8.0),
-              child: Row(
-                children: [
-                  Icon(
-                    isValid ? Icons.check_circle_rounded : Icons.check_circle_rounded,
-                    color: isValid ? Colors.green : Colors.grey.shade400,
-                    size: 16,
-                  ),
-                  const SizedBox(width: 8),
-                  Text(
-                    check['label'] as String,
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: isValid ? Colors.green : Colors.grey.shade500,
-                    ),
-                  ),
-                ],
-              ),
-            );
-          }),
-        ],
-      ),
-    );
-  }
-
-  void _saveNewPassword() {
-    // Validasi dasar
-    if (_getPasswordStrength(_passwordController.text) < 4 || 
-        _passwordController.text != _confirmController.text) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Pastikan password memenuhi syarat dan cocok!'), backgroundColor: Colors.red),
-      );
+  void _saveNewPassword() async {
+    if (_passwordController.text != _confirmController.text) {
+      setState(() => _errorText = 'Password tidak cocok!');
       return;
     }
-    
-    // Tampilkan sukses
-    setState(() {
-      _isSuccess = true;
-    });
-
-    // Simulasi kembali ke login setelah sukses
-    Future.delayed(const Duration(seconds: 3), () {
-      if (mounted) {
-        Navigator.of(context).popUntil((route) => route.isFirst);
-      }
-    });
+    if (AppValidators.getPasswordStrength(_passwordController.text) < 4) {
+      setState(() => _errorText = 'Password terlalu lemah!');
+      return;
+    }
+    setState(() { _errorText = null; _isLoading = true; });
+    try {
+      await Supabase.instance.client.auth.updateUser(
+        UserAttributes(password: _passwordController.text),
+      );
+      if (!mounted) return;
+      setState(() => _isSuccess = true);
+      Future.delayed(const Duration(seconds: 3), () {
+        if (mounted) Navigator.of(context).popUntil((route) => route.isFirst);
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _errorText = 'Gagal update password: ${e.toString()}');
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    final strength = _getPasswordStrength(_passwordController.text);
-    final strengthColor = _getStrengthColor(strength);
-    final strengthLabel = _getStrengthLabel(strength);
+    final strength = AppValidators.getPasswordStrength(_passwordController.text);
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF7F4EF),
+      backgroundColor: AppColors.backgroundCream,
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
@@ -133,11 +77,7 @@ class _CreateNewPasswordScreenState extends State<CreateNewPasswordScreen> {
         ),
         title: const Text(
           "Buat Password Baru",
-          style: TextStyle(
-            color: Colors.black87,
-            fontWeight: FontWeight.bold,
-            fontSize: 16,
-          ),
+          style: TextStyle(color: Colors.black87, fontWeight: FontWeight.bold, fontSize: 16),
         ),
       ),
       body: SingleChildScrollView(
@@ -145,15 +85,9 @@ class _CreateNewPasswordScreenState extends State<CreateNewPasswordScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text(
-              "Buat Password Baru",
-              style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Colors.black87),
-            ),
+            const Text("Buat Password Baru", style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Colors.black87)),
             const SizedBox(height: 8),
-            const Text(
-              "Password baru harus berbeda dari password sebelumnya",
-              style: TextStyle(color: Colors.black54, fontSize: 14, height: 1.5),
-            ),
+            const Text("Password baru harus berbeda dari password sebelumnya", style: TextStyle(color: Colors.black54, fontSize: 14, height: 1.5)),
             const SizedBox(height: 32),
 
             // Password Baru
@@ -166,7 +100,7 @@ class _CreateNewPasswordScreenState extends State<CreateNewPasswordScreen> {
               decoration: InputDecoration(
                 hintText: "••••••••",
                 hintStyle: const TextStyle(color: Colors.black38),
-                prefixIcon: const Icon(Icons.lock_rounded, color: Color(0xFF8B2B0F), size: 20),
+                prefixIcon: const Icon(Icons.lock_rounded, color: AppColors.primary, size: 20),
                 suffixIcon: IconButton(
                   icon: Icon(_obscurePassword ? Icons.visibility_off_outlined : Icons.visibility_outlined, color: Colors.black54, size: 20),
                   onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
@@ -174,18 +108,9 @@ class _CreateNewPasswordScreenState extends State<CreateNewPasswordScreen> {
                 filled: true,
                 fillColor: Colors.white,
                 contentPadding: const EdgeInsets.symmetric(vertical: 16),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: const BorderSide(color: Color(0xFF8B2B0F)),
-                ),
-                enabledBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: const BorderSide(color: Color(0xFF8B2B0F)),
-                ),
-                focusedBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: const BorderSide(color: Color(0xFF8B2B0F), width: 2),
-                ),
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: AppColors.primary)),
+                enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: AppColors.primary)),
+                focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: AppColors.primary, width: 2)),
               ),
             ),
             const SizedBox(height: 24),
@@ -207,74 +132,47 @@ class _CreateNewPasswordScreenState extends State<CreateNewPasswordScreen> {
                 filled: true,
                 fillColor: Colors.white,
                 contentPadding: const EdgeInsets.symmetric(vertical: 16),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: BorderSide(color: Colors.grey.shade300),
-                ),
-                enabledBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: BorderSide(color: Colors.grey.shade300),
-                ),
-                focusedBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: const BorderSide(color: Color(0xFF8B2B0F), width: 2),
-                ),
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: Colors.grey.shade300)),
+                enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: Colors.grey.shade300)),
+                focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: AppColors.primary, width: 2)),
               ),
             ),
             const SizedBox(height: 24),
 
-            // Indikator Kekuatan
-            Row(
-              children: [
-                const Text("Kekuatan Password", style: TextStyle(fontSize: 12, color: Colors.black54)),
-                const Spacer(),
-                Text(strengthLabel, style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: strengthColor)),
-              ],
-            ),
-            const SizedBox(height: 8),
-            Row(
-              children: List.generate(4, (index) {
-                return Expanded(
-                  child: Container(
-                    height: 4,
-                    margin: EdgeInsets.only(right: index < 3 ? 4 : 0),
-                    decoration: BoxDecoration(
-                      color: index < strength ? strengthColor : Colors.grey.shade300,
-                      borderRadius: BorderRadius.circular(2),
-                    ),
-                  ),
-                );
-              }),
-            ),
+            // Shared password strength widgets (no more duplication!)
+            PasswordStrengthBar(strength: strength),
             const SizedBox(height: 24),
+            PasswordChecklist(password: _passwordController.text),
+            const SizedBox(height: 16),
 
-            // Checklist
-            _buildPasswordChecklist(_passwordController.text),
-            const SizedBox(height: 32),
+            if (_errorText != null)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 16),
+                child: Text(_errorText!, style: const TextStyle(color: Colors.red, fontSize: 13)),
+              ),
+
+            const SizedBox(height: 16),
 
             // Tombol Simpan
             SizedBox(
               width: double.infinity,
               height: 55,
               child: ElevatedButton.icon(
-                onPressed: _saveNewPassword,
-                icon: const Icon(Icons.save_rounded, color: Colors.white, size: 20),
-                label: const Text(
-                  "Simpan Password Baru",
-                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white),
-                ),
+                onPressed: _isLoading ? null : _saveNewPassword,
+                icon: _isLoading
+                    ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2.5))
+                    : const Icon(Icons.save_rounded, color: Colors.white, size: 20),
+                label: Text(_isLoading ? 'Menyimpan...' : 'Simpan Password Baru', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white)),
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF8B2B0F),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
+                  backgroundColor: AppColors.primary,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                 ),
               ),
             ),
-            
+
             const SizedBox(height: 24),
 
-            // Success Box (muncul jika isSuccess true)
+            // Success Box
             if (_isSuccess)
               AnimatedOpacity(
                 duration: const Duration(milliseconds: 500),
@@ -282,17 +180,14 @@ class _CreateNewPasswordScreenState extends State<CreateNewPasswordScreen> {
                 child: Container(
                   padding: const EdgeInsets.all(16),
                   decoration: BoxDecoration(
-                    color: const Color(0xFF2E7D32), // Hijau sesuai desain
+                    color: AppColors.successDark,
                     borderRadius: BorderRadius.circular(12),
                   ),
                   child: Row(
                     children: [
                       Container(
                         padding: const EdgeInsets.all(4),
-                        decoration: const BoxDecoration(
-                          color: Colors.white24,
-                          shape: BoxShape.circle,
-                        ),
+                        decoration: const BoxDecoration(color: Colors.white24, shape: BoxShape.circle),
                         child: const Icon(Icons.check_circle_rounded, color: Colors.white, size: 20),
                       ),
                       const SizedBox(width: 12),
@@ -300,15 +195,9 @@ class _CreateNewPasswordScreenState extends State<CreateNewPasswordScreen> {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text(
-                              "Password berhasil diperbarui!",
-                              style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white, fontSize: 13),
-                            ),
+                            Text("Password berhasil diperbarui!", style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white, fontSize: 13)),
                             SizedBox(height: 4),
-                            Text(
-                              "Silakan masuk dengan password baru Anda",
-                              style: TextStyle(color: Colors.white70, fontSize: 12),
-                            ),
+                            Text("Silakan masuk dengan password baru Anda", style: TextStyle(color: Colors.white70, fontSize: 12)),
                           ],
                         ),
                       ),

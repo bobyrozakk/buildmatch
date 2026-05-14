@@ -148,9 +148,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                     child: ElevatedButton(
                       onPressed: _nextPage,
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: _currentPage == 2
-                            ? const Color(0xFF8B2B0F)
-                            : const Color(0xFF8B2B0F),
+                        backgroundColor: const Color(0xFF8B2B0F),
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(16),
                         ),

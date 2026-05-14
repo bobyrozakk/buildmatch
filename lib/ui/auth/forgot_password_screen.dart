@@ -1,4 +1,7 @@
 import 'package:flutter/material.dart';
+import '../../core/constants/colors.dart';
+import '../../core/widgets/buildmatch_appbar.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'create_new_password_screen.dart';
 
 class ForgotPasswordScreen extends StatefulWidget {
@@ -10,20 +13,50 @@ class ForgotPasswordScreen extends StatefulWidget {
 
 class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
   final _emailController = TextEditingController();
+  bool _isLoading = false;
 
-  void _sendResetLink() {
-    // Dummy: Pindah ke halaman buat password baru
-    // Pada implementasi asli, ini akan memanggil Supabase reset password
-    Navigator.push(
-      context,
-      MaterialPageRoute(builder: (_) => const CreateNewPasswordScreen()),
-    );
+  @override
+  void dispose() {
+    _emailController.dispose();
+    super.dispose();
+  }
+
+  void _sendResetLink() async {
+    final email = _emailController.text.trim();
+    if (email.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Masukkan email terlebih dahulu.')),
+      );
+      return;
+    }
+    setState(() => _isLoading = true);
+    try {
+      await Supabase.instance.client.auth.resetPasswordForEmail(email);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Link reset password telah dikirim ke email Anda.'),
+          backgroundColor: Colors.green,
+        ),
+      );
+      Navigator.push(
+        context,
+        MaterialPageRoute(builder: (_) => const CreateNewPasswordScreen()),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Gagal kirim email: ${e.toString()}')),
+      );
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF7F4EF), // Sesuai desain (cream muda)
+      backgroundColor: AppColors.backgroundCream,
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
@@ -40,11 +73,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
         ),
         title: const Text(
           "Lupa Password",
-          style: TextStyle(
-            color: Colors.black87,
-            fontWeight: FontWeight.bold,
-            fontSize: 16,
-          ),
+          style: TextStyle(color: Colors.black87, fontWeight: FontWeight.bold, fontSize: 16),
         ),
       ),
       body: SingleChildScrollView(
@@ -59,31 +88,23 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
               height: 140,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                color: const Color(0xFFF3EBE1),
+                color: AppColors.cardCreamLight,
                 border: Border.all(color: Colors.white, width: 4),
               ),
               child: Stack(
                 alignment: Alignment.center,
                 children: [
-                  const Icon(
-                    Icons.key_rounded,
-                    size: 60,
-                    color: Color(0xFF8B2B0F),
-                  ),
+                  const Icon(Icons.key_rounded, size: 60, color: AppColors.primary),
                   Positioned(
                     bottom: 20,
                     right: 20,
                     child: Container(
                       padding: const EdgeInsets.all(6),
                       decoration: const BoxDecoration(
-                        color: Color(0xFFC95E36),
+                        color: AppColors.accent,
                         shape: BoxShape.circle,
                       ),
-                      child: const Icon(
-                        Icons.question_mark_rounded,
-                        color: Colors.white,
-                        size: 16,
-                      ),
+                      child: const Icon(Icons.question_mark_rounded, color: Colors.white, size: 16),
                     ),
                   ),
                 ],
@@ -92,11 +113,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
             const SizedBox(height: 32),
             const Text(
               "Reset Password Anda",
-              style: TextStyle(
-                fontSize: 22,
-                fontWeight: FontWeight.bold,
-                color: Colors.black87,
-              ),
+              style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Colors.black87),
             ),
             const SizedBox(height: 12),
             const Text(
@@ -105,17 +122,11 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
               style: TextStyle(color: Colors.black54, fontSize: 14, height: 1.5),
             ),
             const SizedBox(height: 40),
-            
+
             // Email Input
-            Align(
+            const Align(
               alignment: Alignment.centerLeft,
-              child: const Text(
-                "Email Terdaftar",
-                style: TextStyle(
-                  fontWeight: FontWeight.bold,
-                  color: Colors.black87,
-                ),
-              ),
+              child: Text("Email Terdaftar", style: TextStyle(fontWeight: FontWeight.bold, color: Colors.black87)),
             ),
             const SizedBox(height: 8),
             TextFormField(
@@ -123,42 +134,42 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
               decoration: InputDecoration(
                 hintText: "contoh@email.com",
                 hintStyle: const TextStyle(color: Colors.black38),
-                prefixIcon: const Icon(Icons.email_outlined, color: Color(0xFF8B2B0F)),
+                prefixIcon: const Icon(Icons.email_outlined, color: AppColors.primary),
                 filled: true,
                 fillColor: Colors.white,
                 contentPadding: const EdgeInsets.symmetric(vertical: 16),
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(12),
-                  borderSide: const BorderSide(color: Color(0xFF8B2B0F)),
+                  borderSide: const BorderSide(color: AppColors.primary),
                 ),
                 enabledBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(12),
-                  borderSide: const BorderSide(color: Color(0xFF8B2B0F)),
+                  borderSide: const BorderSide(color: AppColors.primary),
                 ),
                 focusedBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(12),
-                  borderSide: const BorderSide(color: Color(0xFF8B2B0F), width: 2),
+                  borderSide: const BorderSide(color: AppColors.primary, width: 2),
                 ),
               ),
             ),
             const SizedBox(height: 8),
             Row(
               children: [
-                const Icon(Icons.info_outline_rounded, color: Color(0xFFC95E36), size: 14),
+                const Icon(Icons.info_outline_rounded, color: AppColors.accent, size: 14),
                 const SizedBox(width: 4),
-                Text(
+                const Text(
                   "Pastikan email aktif dan dapat diakses",
-                  style: TextStyle(color: const Color(0xFFC95E36), fontSize: 12),
+                  style: TextStyle(color: AppColors.accent, fontSize: 12),
                 ),
               ],
             ),
-            
+
             const SizedBox(height: 24),
             // Info Box
             Container(
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
-                color: const Color(0xFFF0E5D3), // Cream yang lebih gelap sedikit
+                color: AppColors.cardCreamMedium,
                 borderRadius: BorderRadius.circular(12),
               ),
               child: Row(
@@ -166,10 +177,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
                 children: [
                   Container(
                     padding: const EdgeInsets.all(8),
-                    decoration: const BoxDecoration(
-                      color: Color(0xFF8B2B0F),
-                      shape: BoxShape.circle,
-                    ),
+                    decoration: const BoxDecoration(color: AppColors.primary, shape: BoxShape.circle),
                     child: const Icon(Icons.send_rounded, color: Colors.white, size: 16),
                   ),
                   const SizedBox(width: 12),
@@ -187,7 +195,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
                             style: TextStyle(color: Colors.black54, fontSize: 12, height: 1.4),
                             children: [
                               TextSpan(text: "Link reset password berlaku selama "),
-                              TextSpan(text: "15 menit", style: TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF8B2B0F))),
+                              TextSpan(text: "15 menit", style: TextStyle(fontWeight: FontWeight.bold, color: AppColors.primary)),
                               TextSpan(text: ". Periksa folder spam jika tidak ditemukan."),
                             ],
                           ),
@@ -198,7 +206,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
                 ],
               ),
             ),
-            
+
             const SizedBox(height: 32),
             // Tombol Kirim
             SizedBox(
@@ -212,16 +220,13 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
                   style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white),
                 ),
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF8B2B0F),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
+                  backgroundColor: AppColors.primary,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                 ),
               ),
             ),
-            
+
             const SizedBox(height: 40),
-            // Tombol Masuk
             GestureDetector(
               onTap: () => Navigator.pop(context),
               child: RichText(
@@ -229,10 +234,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
                   style: TextStyle(color: Colors.black54, fontSize: 14),
                   children: [
                     TextSpan(text: "Ingat password? "),
-                    TextSpan(
-                      text: "Masuk",
-                      style: TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF8B2B0F)),
-                    ),
+                    TextSpan(text: "Masuk", style: TextStyle(fontWeight: FontWeight.bold, color: AppColors.primary)),
                   ],
                 ),
               ),

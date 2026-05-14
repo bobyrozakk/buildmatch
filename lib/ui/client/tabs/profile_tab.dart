@@ -2,7 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../data/providers/auth_provider.dart';
-import '../../auth/role_screen.dart'; 
+import '../../auth/role_screen.dart';
+import '../../../core/constants/colors.dart';
 
 class ProfileTab extends StatefulWidget {
   const ProfileTab({super.key});
@@ -42,7 +43,7 @@ class _ProfileTabState extends State<ProfileTab> {
       builder: (dialogContext) { 
         return AlertDialog(
           backgroundColor: Colors.white,
-          title: const Text("Edit Profil", style: TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF8B2B0F))),
+          title: const Text("Edit Profil", style: TextStyle(fontWeight: FontWeight.bold, color: AppColors.primary)),
           content: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
@@ -99,7 +100,7 @@ class _ProfileTabState extends State<ProfileTab> {
                   }
                 }
               },
-              style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF8B2B0F)),
+              style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary),
               child: const Text("Simpan", style: TextStyle(color: Colors.white)),
             ),
           ],
@@ -117,7 +118,7 @@ class _ProfileTabState extends State<ProfileTab> {
       builder: (dialogContext) { // <-- Pakai dialogContext
         return AlertDialog(
           backgroundColor: Colors.white,
-          title: const Text("Ubah Password", style: TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF8B2B0F))),
+          title: const Text("Ubah Password", style: TextStyle(fontWeight: FontWeight.bold, color: AppColors.primary)),
           content: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
@@ -159,7 +160,7 @@ class _ProfileTabState extends State<ProfileTab> {
                   }
                 }
               },
-              style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF8B2B0F)),
+              style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary),
               child: const Text("Simpan", style: TextStyle(color: Colors.white)),
             ),
           ],
@@ -186,9 +187,9 @@ class _ProfileTabState extends State<ProfileTab> {
     }
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF7F4EF), // Background cream
+      backgroundColor: AppColors.backgroundCream, // Background cream
       body: _isLoading 
-        ? const Center(child: CircularProgressIndicator(color: Color(0xFF8B2B0F)))
+        ? const Center(child: CircularProgressIndicator(color: AppColors.primary))
         : SafeArea(
             child: SingleChildScrollView(
               physics: const BouncingScrollPhysics(),
@@ -204,8 +205,8 @@ class _ProfileTabState extends State<ProfileTab> {
                         child: IconButton(
                           icon: Container(
                             padding: const EdgeInsets.all(6),
-                            decoration: const BoxDecoration(color: Color(0xFFEFEBE4), shape: BoxShape.circle),
-                            child: const Icon(Icons.edit, size: 18, color: Color(0xFF8B2B0F)),
+                            decoration: const BoxDecoration(color: AppColors.cardCream, shape: BoxShape.circle),
+                            child: const Icon(Icons.edit, size: 18, color: AppColors.primary),
                           ),
                           onPressed: _showEditProfileDialog,
                         ),
@@ -214,8 +215,8 @@ class _ProfileTabState extends State<ProfileTab> {
                         children: [
                           CircleAvatar(
                             radius: 40,
-                            backgroundColor: const Color(0xFFEFEBE4),
-                            child: Text(initials, style: const TextStyle(fontSize: 28, fontWeight: FontWeight.bold, color: Color(0xFF8B2B0F))),
+                            backgroundColor: AppColors.cardCream,
+                            child: Text(initials, style: const TextStyle(fontSize: 28, fontWeight: FontWeight.bold, color: AppColors.primary)),
                           ),
                           const SizedBox(height: 12),
                           Text(userName, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.black87)),
@@ -224,13 +225,13 @@ class _ProfileTabState extends State<ProfileTab> {
                           const SizedBox(height: 12),
                           Container(
                             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-                            decoration: BoxDecoration(color: const Color(0xFFEFEBE4), borderRadius: BorderRadius.circular(20)),
+                            decoration: BoxDecoration(color: AppColors.cardCream, borderRadius: BorderRadius.circular(20)),
                             child: Row(
                               mainAxisSize: MainAxisSize.min,
                               children: const [
-                                Icon(Icons.shield_outlined, size: 14, color: Color(0xFF8B2B0F)),
+                                Icon(Icons.shield_outlined, size: 14, color: AppColors.primary),
                                 SizedBox(width: 6),
-                                Text("Member Sejak 2026", style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFF8B2B0F))),
+                                Text("Member Sejak 2026", style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: AppColors.primary)),
                               ],
                             ),
                           )
@@ -257,7 +258,7 @@ class _ProfileTabState extends State<ProfileTab> {
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: const [
                       Text("Proyek Saya", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.black87)),
-                      Text("Lihat Semua", style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFF8B2B0F))),
+                      Text("Lihat Semua", style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: AppColors.primary)),
                     ],
                   ),
                   const SizedBox(height: 16),
@@ -302,8 +303,8 @@ class _ProfileTabState extends State<ProfileTab> {
                     height: 55,
                     child: OutlinedButton.icon(
                       onPressed: _handleLogout,
-                      icon: const Icon(Icons.logout_rounded, color: Color(0xFF8B2B0F)),
-                      label: const Text("Keluar dari Akun", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF8B2B0F))),
+                      icon: const Icon(Icons.logout_rounded, color: AppColors.primary),
+                      label: const Text("Keluar dari Akun", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: AppColors.primary)),
                       style: OutlinedButton.styleFrom(
                         backgroundColor: Colors.white,
                         side: const BorderSide(color: Colors.transparent),

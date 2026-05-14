@@ -13,17 +13,6 @@ dependencies:
 
   cupertino_icons: ^1.0.8
 
-  # 🔥 FIREBASE CORE
-  firebase_core: ^2.30.0
-
-  # 🔐 AUTH (login/register)
-  firebase_auth: ^4.17.0
-
-  # 🗄️ DATABASE (project, user, dll)
-  cloud_firestore: ^4.15.0
-
-  # 🧠 OPTIONAL (RECOMMENDED BUAT BUILD MATCH)
-  
   # State management (simple & clean)
   provider: ^6.1.2
 
@@ -40,6 +29,9 @@ dependencies:
   file_picker: ^8.0.7
   flutter_map: ^8.3.0
   latlong2: ^0.9.1
+
+  # Buka URL eksternal (PDF referensi, Google Maps, dll)
+  url_launcher: ^6.3.1
 
 dev_dependencies:
   flutter_test:

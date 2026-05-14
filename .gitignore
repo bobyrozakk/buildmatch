@@ -1,3 +1,6 @@
+# Environment variables — JANGAN DI-COMMIT
+.env
+
 # Miscellaneous
 *.class
 *.log
