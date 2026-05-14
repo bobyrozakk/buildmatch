@@ -1,14 +1,17 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import '../models/project_model.dart';
 
+/// Provider khusus untuk CRUD proyek dan penawaran (bid).
+/// Vendor-related functions sudah dipindah ke VendorProvider.
 class ProjectProvider extends ChangeNotifier {
   final _supabase = Supabase.instance.client;
   bool _isLoading = false;
 
   bool get isLoading => _isLoading;
 
-  // --- FUNGSI 1: BUAT BIKIN PROYEK BARU (DENGAN UPLOAD FILE) ---
+  // --- BUAT PROYEK BARU (DENGAN UPLOAD FILE) ---
   Future<bool> createProject({
     required String title,
     required String description,
@@ -20,7 +23,7 @@ class ProjectProvider extends ChangeNotifier {
     required int bathrooms,
     required String houseStyle,
     required String location,
-    required double latitude, 
+    required double latitude,
     required double longitude,
     File? imageFile,
     File? pdfFile,
@@ -39,7 +42,6 @@ class ProjectProvider extends ChangeNotifier {
       if (imageFile != null) {
         final imageExt = imageFile.path.split('.').last;
         final imageName = '${userId}_${DateTime.now().millisecondsSinceEpoch}.$imageExt';
-        
         await _supabase.storage.from('project-renders').upload(imageName, imageFile);
         imageUrl = _supabase.storage.from('project-renders').getPublicUrl(imageName);
       }
@@ -48,12 +50,11 @@ class ProjectProvider extends ChangeNotifier {
       if (pdfFile != null) {
         final pdfExt = pdfFile.path.split('.').last;
         final pdfName = '${userId}_${DateTime.now().millisecondsSinceEpoch}_Reference.$pdfExt';
-        
         await _supabase.storage.from('documents').upload(pdfName, pdfFile);
         pdfUrl = _supabase.storage.from('documents').getPublicUrl(pdfName);
       }
 
-      // 3. INSERT KE DATABASE POSTGRESQL
+      // 3. INSERT KE DATABASE
       await _supabase.from('projects').insert({
         'title': title,
         'description': description,
@@ -64,12 +65,13 @@ class ProjectProvider extends ChangeNotifier {
         'bedrooms': bedrooms,
         'bathrooms': bathrooms,
         'house_style': houseStyle,
-        'location': location, 
+        'location': location,
         'latitude': latitude,
-        'longitude': longitude, 
+        'longitude': longitude,
         'client_id': userId,
-        'image_urls': imageUrl != null ? [imageUrl] : [], 
-        'reference_pdf_url': pdfUrl, 
+        'image_urls': imageUrl != null ? [imageUrl] : [],
+        'reference_pdf_url': pdfUrl,
+        'status': 'open',
       });
 
       _isLoading = false;
@@ -83,46 +85,44 @@ class ProjectProvider extends ChangeNotifier {
     }
   }
 
-  // --- FUNGSI 2: BUAT NGAMBIL DATA PROYEK (KLIEN) ---
-  Future<List<Map<String, dynamic>>> fetchProjects() async {
+  // --- AMBIL PROYEK KLIEN ---
+  Future<List<ProjectModel>> fetchProjects() async {
     try {
       final userId = _supabase.auth.currentUser?.id;
       if (userId == null) return [];
 
-      final response = await _supabase.from('projects').select('*').eq('client_id', userId).order('created_at', ascending: false);
-      return List<Map<String, dynamic>>.from(response);
+      final response = await _supabase
+          .from('projects')
+          .select('*')
+          .eq('client_id', userId)
+          .order('created_at', ascending: false);
+      return List<Map<String, dynamic>>.from(response)
+          .map((json) => ProjectModel.fromJson(json))
+          .toList();
     } catch (e) {
-      debugPrint("Error fetch: $e");
+      debugPrint("Error fetch projects: $e");
       return [];
     }
   }
 
-  // --- FUNGSI 3: TARIK DATA KONTRAKTOR ---
-  Future<List<Map<String, dynamic>>> fetchVendors() async {
-    try {
-      final response = await _supabase.from('profiles').select('*').eq('role', 'vendor').order('created_at', ascending: false);
-      return List<Map<String, dynamic>>.from(response);
-    } catch (e) {
-      debugPrint("Error fetch vendors: $e");
-      return [];
-    }
-  }
-
-  Future<List<Map<String, dynamic>>> fetchAvailableProjects() async {
+  // --- AMBIL PROYEK OPEN TENDER (UNTUK KONTRAKTOR) ---
+  Future<List<ProjectModel>> fetchAvailableProjects() async {
     try {
       final response = await _supabase
           .from('projects')
           .select('*, profiles:client_id(name)')
           .eq('status', 'open')
           .order('created_at', ascending: false);
-      return List<Map<String, dynamic>>.from(response);
+      return List<Map<String, dynamic>>.from(response)
+          .map((json) => ProjectModel.fromJson(json))
+          .toList();
     } catch (e) {
       debugPrint("Error fetch available projects: $e");
       return [];
     }
   }
 
-  // --- FUNGSI BARU: KIRIM PENAWARAN (BID) ---
+  // --- KIRIM PENAWARAN (BID) ---
   Future<bool> submitBid({
     required String projectId,
     required double price,
@@ -146,157 +146,6 @@ class ProjectProvider extends ChangeNotifier {
       return true;
     } catch (e) {
       debugPrint("Error submit bid: $e");
-      _isLoading = false;
-      notifyListeners();
-      return false;
-    }
-  }
-
-  // --- AMBIL DETAIL PROFIL VENDOR ---
-  Future<Map<String, dynamic>?> fetchVendorProfile() async {
-    try {
-      final userId = _supabase.auth.currentUser?.id;
-      if (userId == null) return null;
-
-      final response = await _supabase
-          .from('profiles')
-          .select()
-          .eq('id', userId)
-          .single();
-      return response;
-    } catch (e) {
-      debugPrint("Error fetch profile: $e");
-      return null;
-    }
-  }
-
-  // --- AMBIL DAFTAR PORTOFOLIO ---
-  Future<List<Map<String, dynamic>>> fetchPortfolios() async {
-    try {
-      final userId = _supabase.auth.currentUser?.id;
-      if (userId == null) return []; // <-- PERBAIKAN: NULL CHECKER AMAN
-
-      final response = await _supabase
-          .from('portfolios')
-          .select()
-          .eq('vendor_id', userId) // <-- PERBAIKAN: Hapus tanda "!" yang bikin crash
-          .order('created_at', ascending: false);
-      return List<Map<String, dynamic>>.from(response);
-    } catch (e) {
-      return [];
-    }
-  }
-
-  // --- AMBIL DAFTAR SERTIFIKASI ---
-  Future<List<Map<String, dynamic>>> fetchCertifications() async {
-    try {
-      final userId = _supabase.auth.currentUser?.id;
-      if (userId == null) return []; // <-- PERBAIKAN: NULL CHECKER AMAN
-
-      final response = await _supabase
-          .from('certifications')
-          .select()
-          .eq('vendor_id', userId) // <-- PERBAIKAN: Hapus tanda "!" yang bikin crash
-          .order('created_at', ascending: false);
-      return List<Map<String, dynamic>>.from(response);
-    } catch (e) {
-      return [];
-    }
-  }
-
-  // --- FUNGSI UPDATE PROFIL VENDOR ---
-  Future<bool> updateVendorProfile({
-    required String name,
-    required String companyName,
-  }) async {
-    _isLoading = true;
-    notifyListeners();
-    try {
-      final userId = _supabase.auth.currentUser?.id;
-      if (userId == null) throw Exception("Belum login");
-
-      await _supabase.from('profiles').update({
-        'name': name,
-        'company_name': companyName,
-      }).eq('id', userId);
-
-      await _supabase.auth.updateUser(UserAttributes(data: {
-        'name': name,
-        'company_name': companyName,
-      }));
-
-      _isLoading = false;
-      notifyListeners();
-      return true;
-    } catch (e) {
-      debugPrint("Error update profile: $e");
-      _isLoading = false;
-      notifyListeners();
-      return false;
-    }
-  }
-
-  // --- FUNGSI NAMBAH PORTOFOLIO BARU ---
-  Future<bool> addPortfolio({
-    required String title,
-    required String year,
-    File? imageFile, 
-  }) async {
-    _isLoading = true;
-    notifyListeners();
-    try {
-      final userId = _supabase.auth.currentUser?.id;
-      if (userId == null) throw Exception("Belum login");
-
-      String? imageUrl;
-      
-      if (imageFile != null) {
-        final ext = imageFile.path.split('.').last;
-        final fileName = '${userId}_${DateTime.now().millisecondsSinceEpoch}.$ext';
-        await _supabase.storage.from('portfolios').upload(fileName, imageFile);
-        imageUrl = _supabase.storage.from('portfolios').getPublicUrl(fileName);
-      }
-
-      await _supabase.from('portfolios').insert({
-        'vendor_id': userId,
-        'title': title,
-        'year': year,
-        'image_url': imageUrl,
-      });
-
-      _isLoading = false;
-      notifyListeners();
-      return true;
-    } catch (e) {
-      debugPrint("Error add porto: $e");
-      _isLoading = false;
-      notifyListeners();
-      return false;
-    }
-  }
-
-  // --- FUNGSI NAMBAH SERTIFIKASI BARU ---
-  Future<bool> addCertification({
-    required String title,
-    required String issuer,
-  }) async {
-    _isLoading = true;
-    notifyListeners();
-    try {
-      final userId = _supabase.auth.currentUser?.id;
-      if (userId == null) throw Exception("Belum login");
-
-      await _supabase.from('certifications').insert({
-        'vendor_id': userId,
-        'title': title,
-        'issuer': issuer,
-      });
-
-      _isLoading = false;
-      notifyListeners();
-      return true;
-    } catch (e) {
-      debugPrint("Error add sertif: $e");
       _isLoading = false;
       notifyListeners();
       return false;

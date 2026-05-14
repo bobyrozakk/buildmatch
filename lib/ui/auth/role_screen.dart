@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'login_screen.dart';
 import 'register_screen.dart';
+import '../../core/constants/colors.dart';
+import '../../core/widgets/buildmatch_appbar.dart';
 
 class RoleScreen extends StatefulWidget {
   const RoleScreen({super.key});
@@ -15,28 +17,8 @@ class _RoleScreenState extends State<RoleScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF7F4EF), // Warna cream background Figma
-      appBar: AppBar(
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: Colors.black87),
-          onPressed: () {}, // Nanti diarahin ke Onboarding
-        ),
-        title: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              padding: const EdgeInsets.all(6),
-              decoration: BoxDecoration(color: const Color(0xFF8B2B0F), borderRadius: BorderRadius.circular(8)),
-              child: const Icon(Icons.architecture, color: Colors.white, size: 16),
-            ),
-            const SizedBox(width: 8),
-            const Text("BuildMatch", style: TextStyle(color: Colors.black87, fontWeight: FontWeight.bold, fontSize: 18)),
-          ],
-        ),
-        centerTitle: true,
-      ),
+      backgroundColor: AppColors.backgroundCream,
+      appBar: BuildMatchAppBar(showBack: true, onBack: () => Navigator.pop(context)),
       body: Padding(
         padding: const EdgeInsets.all(24.0),
         child: Column(
@@ -60,10 +42,10 @@ class _RoleScreenState extends State<RoleScreen> {
             // Info Belum punya akun
             Container(
               padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(color: const Color(0xFFEFEBE4), borderRadius: BorderRadius.circular(12)),
+              decoration: BoxDecoration(color: AppColors.cardCream, borderRadius: BorderRadius.circular(12)),
               child: Row(
                 children: [
-                  const Icon(Icons.info_outline, color: Color(0xFF8B2B0F), size: 20),
+                  const Icon(Icons.info_outline, color: AppColors.primary, size: 20),
                   const SizedBox(width: 12),
                   Expanded(
                     child: GestureDetector(
@@ -78,7 +60,7 @@ class _RoleScreenState extends State<RoleScreen> {
                           style: TextStyle(color: Colors.black54, fontSize: 13),
                           children: [
                             TextSpan(text: "Belum mempunyai akun? daftar dengan cara "),
-                            TextSpan(text: "klik disini", style: TextStyle(color: Color(0xFF8B2B0F), fontStyle: FontStyle.italic, fontWeight: FontWeight.bold)),
+                            TextSpan(text: "klik disini", style: TextStyle(color: AppColors.primary, fontStyle: FontStyle.italic, fontWeight: FontWeight.bold)),
                           ],
                         ),
                       ),
@@ -102,7 +84,7 @@ class _RoleScreenState extends State<RoleScreen> {
                   ));
                 },
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF8B2B0F), // Terakota gelap Figma
+                  backgroundColor: AppColors.primary,
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                 ),
                 child: const Text("Lanjutkan ➔", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white)),
@@ -125,15 +107,15 @@ class _RoleScreenState extends State<RoleScreen> {
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: isSelected ? const Color(0xFF8B2B0F) : Colors.transparent, width: 2),
+          border: Border.all(color: isSelected ? AppColors.primary : Colors.transparent, width: 2),
           boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.03), blurRadius: 10, offset: const Offset(0, 4))],
         ),
         child: Row(
           children: [
             Container(
               padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(color: const Color(0xFFF3EBE1), borderRadius: BorderRadius.circular(12)),
-              child: Icon(icon, color: const Color(0xFF8B2B0F), size: 28),
+              decoration: BoxDecoration(color: AppColors.cardCreamLight, borderRadius: BorderRadius.circular(12)),
+              child: Icon(icon, color: AppColors.primary, size: 28),
             ),
             const SizedBox(width: 16),
             Expanded(
@@ -146,7 +128,7 @@ class _RoleScreenState extends State<RoleScreen> {
                 ],
               ),
             ),
-            Icon(isSelected ? Icons.radio_button_checked : Icons.radio_button_unchecked, color: isSelected ? const Color(0xFF8B2B0F) : Colors.grey.shade400),
+            Icon(isSelected ? Icons.radio_button_checked : Icons.radio_button_unchecked, color: isSelected ? AppColors.primary : Colors.grey.shade400),
           ],
         ),
       ),

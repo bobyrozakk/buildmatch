@@ -6,7 +6,9 @@ import 'package:image_picker/image_picker.dart';
 import 'package:file_picker/file_picker.dart';
 import '../../../data/providers/project_provider.dart';
 import 'package:latlong2/latlong.dart';
-import '../../shared/screens/map_picker_screen.dart'; // Sesuaikan path import lu
+import '../../shared/screens/map_picker_screen.dart';
+import '../../../core/constants/colors.dart';
+import '../../../core/utils/formatters.dart';
 
 class CreateProjectScreen extends StatefulWidget {
   const CreateProjectScreen({super.key});
@@ -49,8 +51,14 @@ class _CreateProjectScreenState extends State<CreateProjectScreen> {
   File? _selectedPdfFile;
   final ImagePicker _picker = ImagePicker();
 
-  String _formatRupiah(double amount) {
-    return 'Rp ${amount.toStringAsFixed(0).replaceAllMapped(RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (Match m) => '${m[1]}.')}';
+  @override
+  void dispose() {
+    _pageController.dispose();
+    _titleController.dispose();
+    _descController.dispose();
+    _buildingSizeController.dispose();
+    _locationController.dispose();
+    super.dispose();
   }
 
   void _onTemplateSelected(Map<String, dynamic>? template) {
@@ -92,8 +100,9 @@ class _CreateProjectScreenState extends State<CreateProjectScreen> {
   }
 
   void _submitData() async {
-    if (_titleController.text.isEmpty || _selectedLand == null || _selectedStyle == null || _selectedLocation == null) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Form, Template Tanah, Desain, dan Peta Lokasi wajib diisi!'), backgroundColor: Colors.redAccent));
+    if (!(_formKey.currentState?.validate() ?? false)) return;
+    if (_selectedLand == null || _selectedStyle == null || _selectedLocation == null) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Template Tanah, Desain, dan Peta Lokasi wajib diisi!'), backgroundColor: Colors.redAccent));
       return;
     }
 
@@ -150,7 +159,7 @@ class _CreateProjectScreenState extends State<CreateProjectScreen> {
     final isLoading = context.watch<ProjectProvider>().isLoading;
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF7F4EF), 
+      backgroundColor: AppColors.backgroundCream, 
       body: SafeArea(
         child: Column(
           children: [
@@ -193,10 +202,10 @@ class _CreateProjectScreenState extends State<CreateProjectScreen> {
           children: [
             Container(
               width: 32, height: 32,
-              decoration: BoxDecoration(color: isActive ? const Color(0xFF8B2B0F) : Colors.white, shape: BoxShape.circle, border: Border.all(color: isActive ? const Color(0xFF8B2B0F) : Colors.grey.shade300, width: 2)),
+              decoration: BoxDecoration(color: isActive ? AppColors.primary : Colors.white, shape: BoxShape.circle, border: Border.all(color: isActive ? AppColors.primary : Colors.grey.shade300, width: 2)),
               child: Center(child: index < _currentStep ? const Icon(Icons.check, color: Colors.white, size: 18) : Text("${index + 1}", style: TextStyle(color: isActive ? Colors.white : Colors.grey.shade400, fontWeight: FontWeight.bold))),
             ),
-            if (index < _totalSteps - 1) Container(width: 40, height: 2, color: isActive ? const Color(0xFF8B2B0F) : Colors.grey.shade300),
+            if (index < _totalSteps - 1) Container(width: 40, height: 2, color: isActive ? AppColors.primary : Colors.grey.shade300),
           ],
         );
       }),
@@ -217,7 +226,7 @@ class _CreateProjectScreenState extends State<CreateProjectScreen> {
             flex: 2,
             child: ElevatedButton(
               onPressed: isLoading ? null : _nextStep,
-              style: ElevatedButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 16), backgroundColor: const Color(0xFF8B2B0F), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16))),
+              style: ElevatedButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 16), backgroundColor: AppColors.primary, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16))),
               child: isLoading && _currentStep == _totalSteps - 1 ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2.5)) : Text(_currentStep == _totalSteps - 1 ? "Publikasikan ➔" : "Lanjut ➔", style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)),
             ),
           ),
@@ -234,7 +243,7 @@ class _CreateProjectScreenState extends State<CreateProjectScreen> {
         children: [
           const Text("Informasi Proyek", style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)), const SizedBox(height: 8),
           const Text("Lengkapi detail dasar untuk memulai perencanaan proyek Anda.", style: TextStyle(color: Colors.black54)), const SizedBox(height: 30),
-          _buildSectionTitle("Judul Proyek"), _buildSmoothTextField(_titleController, "Contoh: Rumah 2 Lantai Minimalis", Icons.home_work_outlined), const SizedBox(height: 24),
+          _buildSectionTitle("Judul Proyek"), _buildSmoothTextField(_titleController, "Contoh: Rumah 2 Lantai Minimalis", Icons.home_work_outlined, validator: (v) => (v == null || v.trim().isEmpty) ? 'Judul proyek wajib diisi' : null), const SizedBox(height: 24),
           _buildSectionTitle("Deskripsi Proyek"), _buildSmoothTextField(_descController, "Ceritakan detail keinginan Anda...", Icons.description_outlined, maxLines: 4),
         ],
       ),
@@ -276,9 +285,9 @@ class _CreateProjectScreenState extends State<CreateProjectScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Center(child: Text(_formatRupiah(_budget), style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 24, color: Color(0xFF8B2B0F)))), const SizedBox(height: 16),
-                  SliderTheme(data: SliderTheme.of(context).copyWith(trackHeight: 6.0, activeTrackColor: const Color(0xFF8B2B0F), inactiveTrackColor: Colors.grey.shade200, thumbColor: Colors.white, thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 12.0, elevation: 4)), child: Slider(value: _budget < _minBudget ? _minBudget : _budget, min: _minBudget > 0 ? _minBudget : 0, max: _maxBudget, divisions: 100, onChanged: _selectedLand != null ? (val) => setState(() => _budget = val) : null)),
-                  if (_selectedLand != null) Center(child: Text('Minimal harga pasaran: ${_formatRupiah(_minBudget)}', style: const TextStyle(fontSize: 12, color: Colors.black38, fontStyle: FontStyle.italic)))
+                  Center(child: Text(AppFormatters.formatRupiah(_budget), style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 24, color: AppColors.primary))), const SizedBox(height: 16),
+                  SliderTheme(data: SliderTheme.of(context).copyWith(trackHeight: 6.0, activeTrackColor: AppColors.primary, inactiveTrackColor: Colors.grey.shade200, thumbColor: Colors.white, thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 12.0, elevation: 4)), child: Slider(value: _budget < _minBudget ? _minBudget : _budget, min: _minBudget > 0 ? _minBudget : 0, max: _maxBudget, divisions: 100, onChanged: _selectedLand != null ? (val) => setState(() => _budget = val) : null)),
+                  if (_selectedLand != null) Center(child: Text('Minimal harga pasaran: ${AppFormatters.formatRupiah(_minBudget)}', style: const TextStyle(fontSize: 12, color: Colors.black38, fontStyle: FontStyle.italic)))
                 ],
               ),
             ),
@@ -327,7 +336,7 @@ class _CreateProjectScreenState extends State<CreateProjectScreen> {
                   image: NetworkImage(
                       _selectedLocation != null 
                         ? 'https://tile.openstreetmap.org/15/${((_selectedLocation!.longitude + 180) / 360 * 32768).floor()}/${((1 - (math.log(math.tan(_selectedLocation!.latitude * math.pi / 180) + 1 / math.cos(_selectedLocation!.latitude * math.pi / 180)) / math.pi)) / 2 * 32768).floor()}.png' 
-                        : 'https://maps.googleapis.com/maps/api/staticmap?center=-7.9666,112.6326&zoom=14&size=400x200&sensor=false'
+                        : 'https://tile.openstreetmap.org/13/6508/4055.png'
                       ), 
                     fit: BoxFit.cover
                   )
@@ -381,8 +390,8 @@ class _CreateProjectScreenState extends State<CreateProjectScreen> {
   // --- REUSABLE UI COMPONENTS ---
   Widget _buildSectionTitle(String title) { return Padding(padding: const EdgeInsets.only(bottom: 8), child: Text(title, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.black87))); }
   
-  Widget _buildSmoothTextField(TextEditingController controller, String hint, IconData icon, {int maxLines = 1, bool isNumber = false, String? suffix}) {
-    return TextFormField(controller: controller, maxLines: maxLines, keyboardType: isNumber ? TextInputType.number : TextInputType.text, decoration: InputDecoration(hintText: hint, hintStyle: const TextStyle(color: Colors.black38, fontSize: 14), prefixIcon: Icon(icon, color: const Color(0xFF8B2B0F).withOpacity(0.7)), suffixText: suffix, suffixStyle: const TextStyle(fontWeight: FontWeight.bold, color: Colors.black54), border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none), filled: true, fillColor: Colors.white));
+  Widget _buildSmoothTextField(TextEditingController controller, String hint, IconData icon, {int maxLines = 1, bool isNumber = false, String? suffix, String? Function(String?)? validator}) {
+    return TextFormField(controller: controller, maxLines: maxLines, keyboardType: isNumber ? TextInputType.number : TextInputType.text, validator: validator, decoration: InputDecoration(hintText: hint, hintStyle: const TextStyle(color: Colors.black38, fontSize: 14), prefixIcon: Icon(icon, color: const Color(0xFF8B2B0F).withOpacity(0.7)), suffixText: suffix, suffixStyle: const TextStyle(fontWeight: FontWeight.bold, color: Colors.black54), border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none), filled: true, fillColor: Colors.white));
   }
 
   Widget _buildCounterCard(String title, IconData icon, int value, Function(int) onChanged, {int min = 0}) {

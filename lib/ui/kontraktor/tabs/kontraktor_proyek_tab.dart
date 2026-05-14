@@ -1,14 +1,26 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:buildmatch/data/providers/project_provider.dart';
-import '../../shared/widgets/glass_card.dart'; 
+import 'package:buildmatch/data/models/project_model.dart';
+import '../../shared/widgets/glass_card.dart';
 import '../screens/kontraktor_detail_proyek_screen.dart';
+import '../../../core/constants/colors.dart';
+import '../../../core/utils/formatters.dart';
 
-class KontraktorProyekTab extends StatelessWidget {
+class KontraktorProyekTab extends StatefulWidget {
   const KontraktorProyekTab({super.key});
 
-  String _formatRupiah(double amount) {
-    return 'Rp ${amount.toStringAsFixed(0).replaceAllMapped(RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (Match m) => '${m[1]}.')}';
+  @override
+  State<KontraktorProyekTab> createState() => _KontraktorProyekTabState();
+}
+
+class _KontraktorProyekTabState extends State<KontraktorProyekTab> {
+  late Future<List<ProjectModel>> _projectsFuture;
+
+  @override
+  void initState() {
+    super.initState();
+    _projectsFuture = Provider.of<ProjectProvider>(context, listen: false).fetchAvailableProjects();
   }
 
   @override
@@ -27,13 +39,11 @@ class KontraktorProyekTab extends StatelessWidget {
                 child: const Text('Bursa Proyek (Tender)', style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Colors.black87)),
               ),
               Expanded(
-                child: Consumer<ProjectProvider>(
-                  builder: (context, provider, _) {
-                    return FutureBuilder<List<Map<String, dynamic>>>(
-                      future: provider.fetchAvailableProjects(),
+                child: FutureBuilder<List<ProjectModel>>(
+                      future: _projectsFuture,
                       builder: (context, snapshot) {
                         if (snapshot.connectionState == ConnectionState.waiting) {
-                          return const Center(child: CircularProgressIndicator(color: Color(0xFF8B2B0F)));
+                        return const Center(child: CircularProgressIndicator(color: AppColors.primary));
                         }
                         if (!snapshot.hasData || snapshot.data!.isEmpty) {
                           return const Center(child: Text("Belum ada proyek yang open tender."));
@@ -46,7 +56,7 @@ class KontraktorProyekTab extends StatelessWidget {
                           itemCount: projects.length,
                           itemBuilder: (context, i) {
                             final p = projects[i];
-                            final clientName = p['profiles']?['name'] ?? 'Klien';
+                            final clientName = p.clientName ?? 'Klien';
                             
                             return Padding(
                               padding: const EdgeInsets.only(bottom: 16),
@@ -62,19 +72,19 @@ class KontraktorProyekTab extends StatelessWidget {
                                         children: [
                                           Container(
                                             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                                            decoration: BoxDecoration(color: const Color(0xFF8B2B0F).withOpacity(0.1), borderRadius: BorderRadius.circular(8)),
-                                            child: Text("Budget: ${_formatRupiah(p['budget']?.toDouble() ?? 0)}", style: const TextStyle(color: Color(0xFF8B2B0F), fontSize: 12, fontWeight: FontWeight.bold)),
+                                            decoration: BoxDecoration(color: AppColors.primary.withOpacity(0.1), borderRadius: BorderRadius.circular(8)),
+                                            child: Text("Budget: ${AppFormatters.formatRupiah(p.budget)}", style: const TextStyle(color: AppColors.primary, fontSize: 12, fontWeight: FontWeight.bold)),
                                           ),
                                         ],
                                       ),
                                       const SizedBox(height: 12),
-                                      Text(p['title'], style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.black87)),
+                                      Text(p.title, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.black87)),
                                       const SizedBox(height: 4),
                                       Row(
                                         children: [
                                           const Icon(Icons.location_on_outlined, size: 14, color: Colors.black54),
                                           const SizedBox(width: 4),
-                                          Text(p['location'] ?? 'Lokasi tidak diketahui', style: const TextStyle(fontSize: 12, color: Colors.black54)),
+                                          Text(p.location ?? 'Lokasi tidak diketahui', style: const TextStyle(fontSize: 12, color: Colors.black54)),
                                         ],
                                       ),
                                       const SizedBox(height: 16),
@@ -88,7 +98,7 @@ class KontraktorProyekTab extends StatelessWidget {
                                               MaterialPageRoute(builder: (_) => KontraktorDetailProyekScreen(project: p)),
                                             ),
                                             style: ElevatedButton.styleFrom(
-                                              backgroundColor: const Color(0xFF8B2B0F),
+                                              backgroundColor: AppColors.primary,
                                               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
                                               padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 0),
                                             ),
@@ -104,8 +114,6 @@ class KontraktorProyekTab extends StatelessWidget {
                           },
                         );
                       },
-                    );
-                  },
                 ),
               ),
             ],

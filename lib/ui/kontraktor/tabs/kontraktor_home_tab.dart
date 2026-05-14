@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import '../../shared/widgets/glass_card.dart'; 
+import '../../shared/widgets/glass_card.dart';
+import '../../../core/constants/colors.dart';
 
 class KontraktorHomeTab extends StatelessWidget {
   const KontraktorHomeTab({super.key});
@@ -35,7 +36,7 @@ class KontraktorHomeTab extends StatelessWidget {
                       children: [
                         Container(
                           padding: const EdgeInsets.all(8),
-                          decoration: BoxDecoration(color: const Color(0xFF8B2B0F), borderRadius: BorderRadius.circular(10)),
+                          decoration: BoxDecoration(color: AppColors.primary, borderRadius: BorderRadius.circular(10)),
                           child: const Icon(Icons.architecture_rounded, color: Colors.white, size: 20),
                         ),
                         const SizedBox(width: 10),
@@ -43,7 +44,7 @@ class KontraktorHomeTab extends StatelessWidget {
                       ],
                     ),
                     IconButton(
-                      icon: const Icon(Icons.notifications_none_rounded, color: Color(0xFF8B2B0F)),
+                      icon: const Icon(Icons.notifications_none_rounded, color: AppColors.primary),
                       onPressed: () {},
                     ),
                   ],
@@ -55,9 +56,9 @@ class KontraktorHomeTab extends StatelessWidget {
                   width: double.infinity,
                   padding: const EdgeInsets.all(24),
                   decoration: BoxDecoration(
-                    gradient: const LinearGradient(colors: [Color(0xFFB53D1B), Color(0xFFD85A31)], begin: Alignment.topLeft, end: Alignment.bottomRight),
+                    gradient: AppColors.primaryGradient,
                     borderRadius: BorderRadius.circular(24),
-                    boxShadow: [BoxShadow(color: const Color(0xFFB53D1B).withOpacity(0.3), blurRadius: 15, offset: const Offset(0, 8))],
+                    boxShadow: [BoxShadow(color: AppColors.primaryDark.withOpacity(0.3), blurRadius: 15, offset: const Offset(0, 8))],
                   ),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -100,7 +101,7 @@ class KontraktorHomeTab extends StatelessWidget {
                       child: IOSGlassCard(
                         blur: 15,
                         child: ListTile(
-                          leading: const Icon(Icons.search_rounded, color: Color(0xFF8B2B0F)),
+                          leading: const Icon(Icons.search_rounded, color: AppColors.primary),
                           title: const Text("Cari Tender", style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
                           onTap: () {}, // Nanti arahin ke tab Proyek
                         ),
@@ -111,7 +112,7 @@ class KontraktorHomeTab extends StatelessWidget {
                       child: IOSGlassCard(
                         blur: 15,
                         child: ListTile(
-                          leading: const Icon(Icons.folder_shared_rounded, color: Color(0xFF8B2B0F)),
+                          leading: const Icon(Icons.folder_shared_rounded, color: AppColors.primary),
                           title: const Text("Update Portofolio", style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
                           onTap: () {}, 
                         ),
@@ -134,7 +135,7 @@ class KontraktorHomeTab extends StatelessWidget {
         padding: const EdgeInsets.symmetric(vertical: 16),
         child: Column(
           children: [
-            Icon(icon, color: const Color(0xFF8B2B0F), size: 24),
+            Icon(icon, color: AppColors.primary, size: 24),
             const SizedBox(height: 8),
             Text(value, style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 18, color: Colors.black87)),
             Text(label, style: const TextStyle(fontSize: 11, color: Colors.black54, fontWeight: FontWeight.bold)),

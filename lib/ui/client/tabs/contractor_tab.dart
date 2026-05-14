@@ -1,15 +1,28 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../shared/widgets/glass_card.dart';
-import '../../../data/providers/project_provider.dart';
+import '../../../data/providers/vendor_provider.dart';
+import '../../../data/models/profile_model.dart';
+import '../../../core/constants/colors.dart';
 
-class ContractorTab extends StatelessWidget {
+class ContractorTab extends StatefulWidget {
   const ContractorTab({super.key});
 
   @override
-  Widget build(BuildContext context) {
-    final provider = Provider.of<ProjectProvider>(context, listen: false);
+  State<ContractorTab> createState() => _ContractorTabState();
+}
 
+class _ContractorTabState extends State<ContractorTab> {
+  late Future<List<ProfileModel>> _vendorsFuture;
+
+  @override
+  void initState() {
+    super.initState();
+    _vendorsFuture = Provider.of<VendorProvider>(context, listen: false).fetchVendors();
+  }
+
+  @override
+  Widget build(BuildContext context) {
     return Scaffold(
       body: Container(
         decoration: const BoxDecoration(
@@ -40,7 +53,7 @@ class ContractorTab extends StatelessWidget {
                     decoration: InputDecoration(
                       hintText: "Cari nama kontraktor...",
                       hintStyle: const TextStyle(color: Colors.black45, fontSize: 14),
-                      prefixIcon: const Icon(Icons.search, color: Color(0xFFB53D1B)),
+                      prefixIcon: const Icon(Icons.search, color: AppColors.primaryDark),
                       border: InputBorder.none,
                       contentPadding: const EdgeInsets.symmetric(vertical: 15),
                     ),
@@ -52,11 +65,11 @@ class ContractorTab extends StatelessWidget {
 
               // LIST VENDOR DARI SUPABASE
               Expanded(
-                child: FutureBuilder<List<Map<String, dynamic>>>(
-                  future: provider.fetchVendors(),
+                child: FutureBuilder<List<ProfileModel>>(
+                  future: _vendorsFuture,
                   builder: (context, snapshot) {
                     if (snapshot.connectionState == ConnectionState.waiting) {
-                      return const Center(child: CircularProgressIndicator(color: Color(0xFFB53D1B)));
+                      return const Center(child: CircularProgressIndicator(color: AppColors.primaryDark));
                     }
 
                     if (!snapshot.hasData || snapshot.data!.isEmpty) {
@@ -85,7 +98,7 @@ class ContractorTab extends StatelessWidget {
     );
   }
 
-  Widget _buildVendorCard(Map<String, dynamic> vendor) {
+  Widget _buildVendorCard(ProfileModel vendor) {
     return IOSGlassCard(
       blur: 20,
       child: Padding(
@@ -97,7 +110,7 @@ class ContractorTab extends StatelessWidget {
               radius: 35,
               backgroundColor: Colors.grey.shade300,
               backgroundImage: NetworkImage(
-                'https://ui-avatars.com/api/?name=${vendor['name']}&background=B53D1B&color=fff&size=128',
+                'https://ui-avatars.com/api/?name=${vendor.name}&background=B53D1B&color=fff&size=128',
               ),
             ),
             const SizedBox(width: 16),
@@ -111,7 +124,7 @@ class ContractorTab extends StatelessWidget {
                     children: [
                       Flexible(
                         child: Text(
-                          vendor['name'] ?? 'Kontraktor Tanpa Nama',
+                          vendor.name.isNotEmpty ? vendor.name : 'Kontraktor Tanpa Nama',
                           style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.black87),
                           overflow: TextOverflow.ellipsis,
                         ),
@@ -129,7 +142,7 @@ class ContractorTab extends StatelessWidget {
                       const Text(" 4.9", style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
                       const SizedBox(width: 12),
                       const Icon(Icons.phone, color: Colors.black38, size: 14),
-                      Text(" ${vendor['phone'] ?? 'Tidak ada No. HP'}", style: const TextStyle(fontSize: 12, color: Colors.black54)),
+                      Text(" ${vendor.phone ?? 'Tidak ada No. HP'}", style: const TextStyle(fontSize: 12, color: Colors.black54)),
                     ],
                   ),
                 ],

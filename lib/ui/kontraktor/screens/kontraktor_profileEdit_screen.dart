@@ -3,7 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import '../../../data/providers/project_provider.dart'; // Sesuaikan path
+import '../../../data/providers/vendor_provider.dart';
+import '../../../core/constants/colors.dart';
 
 class EditProfileScreen extends StatefulWidget {
   const EditProfileScreen({super.key});
@@ -30,17 +31,17 @@ class _EditProfileScreenState extends State<EditProfileScreen> with SingleTicker
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF7F4EF),
+      backgroundColor: AppColors.backgroundCream,
       appBar: AppBar(
-        backgroundColor: const Color(0xFFF7F4EF),
+        backgroundColor: AppColors.backgroundCream,
         elevation: 0,
         leading: const BackButton(color: Colors.black87),
         title: const Text('Edit Profil & Portofolio', style: TextStyle(color: Colors.black87, fontWeight: FontWeight.bold)),
         bottom: TabBar(
           controller: _tabController,
-          labelColor: const Color(0xFF8B2B0F),
+          labelColor: AppColors.primary,
           unselectedLabelColor: Colors.grey,
-          indicatorColor: const Color(0xFF8B2B0F),
+          indicatorColor: AppColors.primary,
           tabs: const [
             Tab(text: 'Profil'),
             Tab(text: 'Portofolio'),
@@ -82,8 +83,15 @@ class _TabProfilFormState extends State<_TabProfilForm> {
     _companyCtrl.text = user?.userMetadata?['company_name'] ?? '';
   }
 
+  @override
+  void dispose() {
+    _nameCtrl.dispose();
+    _companyCtrl.dispose();
+    super.dispose();
+  }
+
   void _simpanProfil() async {
-    final provider = Provider.of<ProjectProvider>(context, listen: false);
+    final provider = Provider.of<VendorProvider>(context, listen: false);
     bool success = await provider.updateVendorProfile(name: _nameCtrl.text, companyName: _companyCtrl.text);
     
     if (!mounted) return;
@@ -96,7 +104,7 @@ class _TabProfilFormState extends State<_TabProfilForm> {
 
   @override
   Widget build(BuildContext context) {
-    final isLoading = context.watch<ProjectProvider>().isLoading;
+    final isLoading = context.watch<VendorProvider>().isLoading;
     return SingleChildScrollView(
       padding: const EdgeInsets.all(24),
       child: Column(
@@ -115,7 +123,7 @@ class _TabProfilFormState extends State<_TabProfilForm> {
             width: double.infinity, height: 55,
             child: ElevatedButton(
               onPressed: isLoading ? null : _simpanProfil,
-              style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF8B2B0F), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
+              style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
               child: isLoading ? const CircularProgressIndicator(color: Colors.white) : const Text('Simpan Profil', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
             ),
           )
@@ -139,6 +147,13 @@ class _TabPortoFormState extends State<_TabPortoForm> {
   final _yearCtrl = TextEditingController();
   File? _imageFile;
 
+  @override
+  void dispose() {
+    _titleCtrl.dispose();
+    _yearCtrl.dispose();
+    super.dispose();
+  }
+
   Future<void> _pickImage() async {
     final picker = ImagePicker();
     final pickedFile = await picker.pickImage(source: ImageSource.gallery, imageQuality: 60);
@@ -150,7 +165,7 @@ class _TabPortoFormState extends State<_TabPortoForm> {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Judul dan Gambar wajib diisi!')));
       return;
     }
-    final provider = Provider.of<ProjectProvider>(context, listen: false);
+    final provider = Provider.of<VendorProvider>(context, listen: false);
     bool success = await provider.addPortfolio(title: _titleCtrl.text, year: _yearCtrl.text, imageFile: _imageFile);
     
     if (!mounted) return;
@@ -162,7 +177,7 @@ class _TabPortoFormState extends State<_TabPortoForm> {
 
   @override
   Widget build(BuildContext context) {
-    final isLoading = context.watch<ProjectProvider>().isLoading;
+    final isLoading = context.watch<VendorProvider>().isLoading;
     return SingleChildScrollView(
       padding: const EdgeInsets.all(24),
       child: Column(
@@ -184,7 +199,7 @@ class _TabPortoFormState extends State<_TabPortoForm> {
             width: double.infinity, height: 55,
             child: ElevatedButton(
               onPressed: isLoading ? null : _simpanPorto,
-              style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF8B2B0F), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
+              style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
               child: isLoading ? const CircularProgressIndicator(color: Colors.white) : const Text('Tambah Portofolio', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
             ),
           )
@@ -207,12 +222,19 @@ class _TabSertifFormState extends State<_TabSertifForm> {
   final _titleCtrl = TextEditingController();
   final _issuerCtrl = TextEditingController();
 
+  @override
+  void dispose() {
+    _titleCtrl.dispose();
+    _issuerCtrl.dispose();
+    super.dispose();
+  }
+
   void _simpanSertif() async {
     if (_titleCtrl.text.isEmpty || _issuerCtrl.text.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Judul dan Penerbit wajib diisi!')));
       return;
     }
-    final provider = Provider.of<ProjectProvider>(context, listen: false);
+    final provider = Provider.of<VendorProvider>(context, listen: false);
     bool success = await provider.addCertification(title: _titleCtrl.text, issuer: _issuerCtrl.text);
     
     if (!mounted) return;
@@ -224,7 +246,7 @@ class _TabSertifFormState extends State<_TabSertifForm> {
 
   @override
   Widget build(BuildContext context) {
-    final isLoading = context.watch<ProjectProvider>().isLoading;
+    final isLoading = context.watch<VendorProvider>().isLoading;
     return SingleChildScrollView(
       padding: const EdgeInsets.all(24),
       child: Column(
@@ -237,7 +259,7 @@ class _TabSertifFormState extends State<_TabSertifForm> {
             width: double.infinity, height: 55,
             child: ElevatedButton(
               onPressed: isLoading ? null : _simpanSertif,
-              style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF8B2B0F), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
+              style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
               child: isLoading ? const CircularProgressIndicator(color: Colors.white) : const Text('Tambah Sertifikasi', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
             ),
           )

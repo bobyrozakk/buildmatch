@@ -1,9 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import '../../../data/providers/project_provider.dart';
-import '../screens/kontraktor_profileEdit_screen.dart'; // Sesuaikan path
+import '../../../data/providers/vendor_provider.dart';
+import '../../../data/models/profile_model.dart';
+import '../../../data/models/portfolio_model.dart';
+import '../../../data/models/certification_model.dart';
+import '../screens/kontraktor_profileEdit_screen.dart';
 import '../../shared/widgets/glass_card.dart';
+import '../../../core/constants/colors.dart';
 
 // UBAH JADI STATEFUL WIDGET BIAR BISA REFRESH
 class KontraktorProfileTab extends StatefulWidget {
@@ -14,34 +18,44 @@ class KontraktorProfileTab extends StatefulWidget {
 }
 
 class _KontraktorProfileTabState extends State<KontraktorProfileTab> {
+  late Future<List<dynamic>> _dataFuture;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadData();
+  }
+
+  void _loadData() {
+    final provider = Provider.of<VendorProvider>(context, listen: false);
+    _dataFuture = Future.wait([
+      provider.fetchVendorProfile(),
+      provider.fetchPortfolios(),
+      provider.fetchCertifications(),
+    ]);
+  }
+
   @override
   Widget build(BuildContext context) {
-    final provider = Provider.of<ProjectProvider>(context, listen: false);
-
     return Scaffold(
-      backgroundColor: const Color(0xFFF7F4EF),
+      backgroundColor: AppColors.backgroundCream,
       body: FutureBuilder(
-        // Ambil 3 data sekaligus biar efisien
-        future: Future.wait([
-          provider.fetchVendorProfile(),
-          provider.fetchPortfolios(),
-          provider.fetchCertifications(),
-        ]),
+        future: _dataFuture,
         builder: (context, AsyncSnapshot<List<dynamic>> snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Center(child: CircularProgressIndicator(color: Color(0xFF8B2B0F)));
+            return const Center(child: CircularProgressIndicator(color: AppColors.primary));
           }
 
-          final profile = snapshot.data?[0] as Map<String, dynamic>?;
-          final portfolios = snapshot.data?[1] as List<Map<String, dynamic>>? ?? [];
-          final certifications = snapshot.data?[2] as List<Map<String, dynamic>>? ?? [];
+          final profile = snapshot.data?[0] as ProfileModel?;
+          final portfolios = snapshot.data?[1] as List<PortfolioModel>? ?? [];
+          final certifications = snapshot.data?[2] as List<CertificationModel>? ?? [];
 
           return CustomScrollView(
             physics: const BouncingScrollPhysics(),
             slivers: [
               // HEADER
               SliverToBoxAdapter(
-                child: _buildHeader(context, profile),
+              child: _buildHeader(context, profile),
               ),
 
               // STATS
@@ -90,10 +104,10 @@ class _KontraktorProfileTabState extends State<KontraktorProfileTab> {
     );
   }
 
-  Widget _buildHeader(BuildContext context, Map<String, dynamic>? profile) {
+  Widget _buildHeader(BuildContext context, ProfileModel? profile) {
     return Stack(
       children: [
-        Container(height: 120, decoration: const BoxDecoration(color: Color(0xFF8B2B0F))),
+        Container(height: 120, decoration: const BoxDecoration(color: AppColors.primary)),
         Padding(
           padding: const EdgeInsets.fromLTRB(24, 60, 24, 0),
           child: IOSGlassCard(
@@ -104,24 +118,24 @@ class _KontraktorProfileTabState extends State<KontraktorProfileTab> {
                 children: [
                   CircleAvatar(
                     radius: 35,
-                    backgroundColor: const Color(0xFFEFEBE4),
-                    backgroundImage: profile?['avatar_url'] != null ? NetworkImage(profile!['avatar_url']) : null,
-                    child: profile?['avatar_url'] == null ? const Icon(Icons.person, size: 35, color: Color(0xFF8B2B0F)) : null,
+                    backgroundColor: AppColors.cardCream,
+                    backgroundImage: profile?.avatarUrl != null ? NetworkImage(profile!.avatarUrl!) : null,
+                    child: profile?.avatarUrl == null ? const Icon(Icons.person, size: 35, color: AppColors.primary) : null,
                   ),
                   const SizedBox(width: 16),
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(profile?['name'] ?? 'Vendor Name', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                        Text(profile?['company_name'] ?? 'Nama Perusahaan', style: const TextStyle(fontSize: 13, color: Colors.black54)),
-                        if (profile?['is_verified'] == true)
+                        Text(profile?.name ?? 'Vendor Name', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                        Text(profile?.companyName ?? 'Nama Perusahaan', style: const TextStyle(fontSize: 13, color: Colors.black54)),
+                        if (profile?.isVerified == true)
                           const Text('✓ Terverifikasi', style: TextStyle(color: Colors.green, fontSize: 11, fontWeight: FontWeight.bold)),
                       ],
                     ),
                   ),
                   IconButton(
-                    icon: const Icon(Icons.edit_note, color: Color(0xFF8B2B0F)),
+                    icon: const Icon(Icons.edit_note, color: AppColors.primary),
                     onPressed: () async {
                       // KUNCI REFRESH ADA DI SINI
                       await Navigator.push(context, MaterialPageRoute(builder: (_) => const EditProfileScreen()));
@@ -156,7 +170,7 @@ class _KontraktorProfileTabState extends State<KontraktorProfileTab> {
         decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16)),
         child: Column(
           children: [
-            Text(val, style: const TextStyle(fontWeight: FontWeight.w900, color: Color(0xFF8B2B0F))),
+            Text(val, style: const TextStyle(fontWeight: FontWeight.w900, color: AppColors.primary)),
             Text(label, style: const TextStyle(fontSize: 10, color: Colors.black45)),
           ],
         ),
@@ -173,38 +187,38 @@ class _KontraktorProfileTabState extends State<KontraktorProfileTab> {
     );
   }
 
-  Widget _buildPortoCard(Map<String, dynamic> data) {
+  Widget _buildPortoCard(PortfolioModel data) {
     return Container(
       width: 140,
       margin: const EdgeInsets.only(right: 12),
       decoration: BoxDecoration(
         color: Colors.grey.shade300,
         borderRadius: BorderRadius.circular(16),
-        image: data['image_url'] != null ? DecorationImage(image: NetworkImage(data['image_url']), fit: BoxFit.cover) : null,
+        image: data.imageUrl != null ? DecorationImage(image: NetworkImage(data.imageUrl!), fit: BoxFit.cover) : null,
       ),
       child: Container(
         padding: const EdgeInsets.all(12),
         decoration: BoxDecoration(borderRadius: BorderRadius.circular(16), gradient: LinearGradient(begin: Alignment.topCenter, end: Alignment.bottomCenter, colors: [Colors.transparent, Colors.black.withOpacity(0.7)])),
         child: Column(mainAxisAlignment: MainAxisAlignment.end, crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text(data['title'], style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold)),
-          Text(data['year'], style: const TextStyle(color: Colors.white70, fontSize: 9)),
+          Text(data.title, style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold)),
+          Text(data.year, style: const TextStyle(color: Colors.white70, fontSize: 9)),
         ]),
       ),
     );
   }
 
-  Widget _buildSertifCard(Map<String, dynamic> data) {
+  Widget _buildSertifCard(CertificationModel data) {
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16)),
       child: Row(
         children: [
-          const Icon(Icons.verified_outlined, color: Color(0xFF8B2B0F)),
+          const Icon(Icons.verified_outlined, color: AppColors.primary),
           const SizedBox(width: 12),
           Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text(data['title'], style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
-            Text(data['issuer'], style: const TextStyle(fontSize: 11, color: Colors.black54)),
+            Text(data.title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+            Text(data.issuer, style: const TextStyle(fontSize: 11, color: Colors.black54)),
           ])),
           const Icon(Icons.check_circle, color: Colors.green, size: 16),
         ],

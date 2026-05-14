@@ -1,13 +1,15 @@
 import 'package:flutter/material.dart';
+import '../../../core/constants/colors.dart';
+import '../../../data/models/project_model.dart';
 
 class ProjectDetailScreen extends StatelessWidget {
-  final Map<String, dynamic> project;
+  final ProjectModel project;
   const ProjectDetailScreen({super.key, required this.project});
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF7F4EF),
+      backgroundColor: AppColors.backgroundCream,
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
@@ -15,7 +17,7 @@ class ProjectDetailScreen extends StatelessWidget {
         title: const Text("Detail Proyek", style: TextStyle(color: Colors.black87, fontWeight: FontWeight.bold)),
         actions: [
           IconButton(
-            icon: const Icon(Icons.edit_outlined, color: Color(0xFF8B2B0F)),
+            icon: const Icon(Icons.edit_outlined, color: AppColors.primary),
             onPressed: () {
               ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Fungsi Edit segera hadir!")));
             },
@@ -31,11 +33,11 @@ class ProjectDetailScreen extends StatelessWidget {
             Container(
               padding: const EdgeInsets.all(20),
               decoration: BoxDecoration(
-                color: const Color(0xFF8B2B0F),
+                color: AppColors.primary,
                 borderRadius: BorderRadius.circular(24),
                 image: DecorationImage(
-                  image: NetworkImage(project['image_urls'] != null && project['image_urls'].isNotEmpty 
-                      ? project['image_urls'][0] 
+                  image: NetworkImage(project.imageUrls.isNotEmpty 
+                      ? project.imageUrls[0] 
                       : 'https://via.placeholder.com/400x200'),
                   fit: BoxFit.cover,
                   colorFilter: ColorFilter.mode(Colors.black.withOpacity(0.4), BlendMode.darken),
@@ -52,7 +54,7 @@ class ProjectDetailScreen extends StatelessWidget {
                     child: const Text("LIVE TENDER", style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold)),
                   ),
                   const SizedBox(height: 8),
-                  Text(project['title'] ?? '', style: const TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold)),
+                  Text(project.title, style: const TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold)),
                 ],
               ),
             ),
@@ -64,11 +66,11 @@ class ProjectDetailScreen extends StatelessWidget {
             // Grid Detail
             Row(
               children: [
-                _buildInfoChip(Icons.square_foot, "${project['building_size']} m²"),
+                _buildInfoChip(Icons.square_foot, "${project.buildingSize} m²"),
                 const SizedBox(width: 12),
-                _buildInfoChip(Icons.layers, "${project['floors']} Lantai"),
+                _buildInfoChip(Icons.layers, "${project.floors} Lantai"),
                 const SizedBox(width: 12),
-                _buildInfoChip(Icons.bed, "${project['bedrooms']} Kamar"),
+                _buildInfoChip(Icons.bed, "${project.bedrooms} Kamar"),
               ],
             ),
             
@@ -102,7 +104,7 @@ class ProjectDetailScreen extends StatelessWidget {
         decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16)),
         child: Column(
           children: [
-            Icon(icon, color: const Color(0xFF8B2B0F), size: 20),
+            Icon(icon, color: AppColors.primary, size: 20),
             const SizedBox(height: 4),
             Text(label, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
           ],
@@ -118,7 +120,7 @@ class ProjectDetailScreen extends StatelessWidget {
       decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(20)),
       child: Row(
         children: [
-          const CircleAvatar(backgroundColor: Color(0xFFEFEBE4), child: Icon(Icons.person, color: Color(0xFF8B2B0F))),
+          const CircleAvatar(backgroundColor: AppColors.cardCream, child: Icon(Icons.person, color: AppColors.primary)),
           const SizedBox(width: 16),
           Expanded(
             child: Column(

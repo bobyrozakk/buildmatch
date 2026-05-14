@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import '../../shared/widgets/glass_card.dart'; // Pastikan path ini sesuai dengan file IOSGlassCard lu
+import '../../shared/widgets/glass_card.dart';
 import '../screens/create_project_screen.dart';
+import '../../../core/constants/colors.dart';
 
 class BerandaTab extends StatelessWidget {
   const BerandaTab({super.key});
@@ -98,18 +99,11 @@ class BerandaTab extends StatelessWidget {
                   width: double.infinity,
                   padding: const EdgeInsets.all(24),
                   decoration: BoxDecoration(
-                    gradient: const LinearGradient(
-                      colors: [
-                        Color(0xFFB53D1B),
-                        Color(0xFFD85A31),
-                      ], // Terakota gradient
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                    ),
+                    gradient: AppColors.primaryGradient,
                     borderRadius: BorderRadius.circular(20),
                     boxShadow: [
                       BoxShadow(
-                        color: const Color(0xFFB53D1B).withOpacity(0.3),
+                        color: AppColors.primaryDark.withOpacity(0.3),
                         blurRadius: 15,
                         offset: const Offset(0, 8),
                       ),
@@ -139,7 +133,7 @@ class BerandaTab extends StatelessWidget {
                         },
                         style: ElevatedButton.styleFrom(
                           backgroundColor: Colors.white,
-                          foregroundColor: const Color(0xFFB53D1B),
+                          foregroundColor: AppColors.primaryDark,
                           elevation: 0,
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(20),
@@ -245,7 +239,7 @@ class BerandaTab extends StatelessWidget {
           "Lihat Semua",
           style: TextStyle(
             fontSize: 12,
-            color: Color(0xFFB53D1B),
+            color: AppColors.primaryDark,
             fontWeight: FontWeight.w600,
           ),
         ),

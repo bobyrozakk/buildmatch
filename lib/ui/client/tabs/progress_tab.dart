@@ -1,98 +1,118 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../../data/providers/project_provider.dart';
+import '../../../data/models/project_model.dart';
 import '../screens/project_detail_screen.dart';
+import '../../../core/constants/colors.dart';
 
-class ProgressTab extends StatelessWidget {
+class ProgressTab extends StatefulWidget {
   const ProgressTab({super.key});
+
+  @override
+  State<ProgressTab> createState() => _ProgressTabState();
+}
+
+class _ProgressTabState extends State<ProgressTab> {
+  late Future<List<ProjectModel>> _projectsFuture;
+
+  @override
+  void initState() {
+    super.initState();
+    _projectsFuture = Provider.of<ProjectProvider>(context, listen: false).fetchProjects();
+  }
+
+  void _refresh() {
+    setState(() {
+      _projectsFuture = Provider.of<ProjectProvider>(context, listen: false).fetchProjects();
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF7F4EF), // Warna Cream Figma
+      backgroundColor: AppColors.backgroundCream,
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
         title: const Text("Proyek Saya", style: TextStyle(color: Colors.black87, fontWeight: FontWeight.bold)),
         centerTitle: false,
+        actions: [
+          IconButton(icon: const Icon(Icons.refresh, color: AppColors.primary), onPressed: _refresh),
+        ],
       ),
-      body: Consumer<ProjectProvider>(
-        builder: (context, provider, _) {
-          return FutureBuilder<List<Map<String, dynamic>>>(
-            future: provider.fetchProjects(),
-            builder: (context, snapshot) {
-              if (snapshot.connectionState == ConnectionState.waiting) {
-                return const Center(child: CircularProgressIndicator(color: Color(0xFF8B2B0F)));
-              }
-              
-              if (!snapshot.hasData || snapshot.data!.isEmpty) {
-                return _buildEmptyState();
-              }
+      body: FutureBuilder<List<ProjectModel>>(
+        future: _projectsFuture,
+        builder: (context, snapshot) {
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return const Center(child: CircularProgressIndicator(color: AppColors.primary));
+          }
+          
+          if (!snapshot.hasData || snapshot.data!.isEmpty) {
+            return _buildEmptyState();
+          }
 
-              final projects = snapshot.data!;
+          final projects = snapshot.data!;
 
-              return ListView.builder(
-                padding: const EdgeInsets.all(20),
-                itemCount: projects.length,
-                itemBuilder: (context, index) {
-                  final item = projects[index];
-                  return GestureDetector(
-                    onTap: () => Navigator.push(
-                      context,
-                      MaterialPageRoute(builder: (_) => ProjectDetailScreen(project: item)),
-                    ),
-                    child: Container(
-                      margin: const EdgeInsets.only(bottom: 16),
-                      padding: const EdgeInsets.all(16),
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(20),
-                        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.03), blurRadius: 10, offset: const Offset(0, 4))],
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
+          return ListView.builder(
+            padding: const EdgeInsets.all(20),
+            itemCount: projects.length,
+            itemBuilder: (context, index) {
+              final item = projects[index];
+              return GestureDetector(
+                onTap: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => ProjectDetailScreen(project: item)),
+                ),
+                child: Container(
+                  margin: const EdgeInsets.only(bottom: 16),
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(20),
+                    boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.03), blurRadius: 10, offset: const Offset(0, 4))],
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: [
-                              Expanded(
-                                child: Text(item['title'] ?? 'Tanpa Judul', 
-                                  style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.black87)),
-                              ),
-                              _buildStatusTag(item['status']),
-                            ],
+                          Expanded(
+                            child: Text(item.title.isNotEmpty ? item.title : 'Tanpa Judul', 
+                              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.black87)),
                           ),
-                          const SizedBox(height: 8),
-                          Row(
-                            children: [
-                              const Icon(Icons.location_on_outlined, size: 14, color: Colors.black54),
-                              const SizedBox(width: 4),
-                              Text(item['location'] ?? 'Lokasi tidak set', style: const TextStyle(color: Colors.black54, fontSize: 13)),
-                            ],
-                          ),
-                          const SizedBox(height: 16),
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: [
-                              const Text("Progres Pembangunan", style: TextStyle(fontSize: 12, fontWeight: FontWeight.w500)),
-                              Text("${item['progress_percent'] ?? 0}%", style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFF8B2B0F))),
-                            ],
-                          ),
-                          const SizedBox(height: 8),
-                          ClipRRect(
-                            borderRadius: BorderRadius.circular(10),
-                            child: LinearProgressIndicator(
-                              value: (item['progress_percent'] ?? 0) / 100,
-                              backgroundColor: const Color(0xFFEFEBE4),
-                              color: const Color(0xFF8B2B0F),
-                              minHeight: 8,
-                            ),
-                          ),
+                          _buildStatusTag(item.status),
                         ],
                       ),
-                    ),
-                  );
-                },
+                      const SizedBox(height: 8),
+                      Row(
+                        children: [
+                          const Icon(Icons.location_on_outlined, size: 14, color: Colors.black54),
+                          const SizedBox(width: 4),
+                          Text(item.location ?? 'Lokasi tidak set', style: const TextStyle(color: Colors.black54, fontSize: 13)),
+                        ],
+                      ),
+                      const SizedBox(height: 16),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          const Text("Progres Pembangunan", style: TextStyle(fontSize: 12, fontWeight: FontWeight.w500)),
+                          Text("${item.progressPercent}%", style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: AppColors.primary)),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(10),
+                        child: LinearProgressIndicator(
+                          value: item.progressPercent / 100,
+                          backgroundColor: AppColors.cardCream,
+                          color: AppColors.primary,
+                          minHeight: 8,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
               );
             },
           );
