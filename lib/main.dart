@@ -9,7 +9,7 @@ import 'data/providers/vendor_provider.dart';
 
 // --- IMPORT SCREENS ---
 import 'ui/shared/screens/main_nav.dart';
-import 'ui/screens/onboarding_screen.dart';
+import 'ui/screens/splash_screen.dart';
 
 // --- IMPORT CONSTANTS ---
 import 'core/constants/colors.dart';
@@ -68,7 +68,7 @@ class BuildMatchApp extends StatelessWidget {
           // Auth check: jika belum login → Onboarding, sudah login → MainNav
           home: auth.currentUser != null
               ? const MainNavScreen()
-              : const OnboardingScreen(),
+              : const SplashScreen(),
         );
       },
     );

@@ -37,7 +37,7 @@ class KontraktorHomeTab extends StatelessWidget {
                         Container(
                           padding: const EdgeInsets.all(8),
                           decoration: BoxDecoration(color: AppColors.primary, borderRadius: BorderRadius.circular(10)),
-                          child: const Icon(Icons.architecture_rounded, color: Colors.white, size: 20),
+                          child: const Icon(Icons.hardware_rounded, color: Colors.white, size: 20),
                         ),
                         const SizedBox(width: 10),
                         const Text('BuildMatch Vendor', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: Colors.black87)),

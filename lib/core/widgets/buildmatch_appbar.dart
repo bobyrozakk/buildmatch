@@ -38,7 +38,7 @@ class BuildMatchAppBar extends StatelessWidget implements PreferredSizeWidget {
               color: AppColors.primary,
               borderRadius: BorderRadius.circular(8),
             ),
-            child: const Icon(Icons.architecture, color: Colors.white, size: 16),
+            child: const Icon(Icons.hardware_rounded, color: Colors.white, size: 16),
           ),
           const SizedBox(width: 8),
           const Text(

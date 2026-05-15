@@ -238,7 +238,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 borderRadius: BorderRadius.circular(8),
               ),
               child: const Icon(
-                Icons.architecture,
+                Icons.hardware_rounded,
                 color: Colors.white,
                 size: 16,
               ),
