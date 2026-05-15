@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 
 class ChatPage extends StatefulWidget {
   const ChatPage({super.key});
@@ -15,8 +14,8 @@ class _ChatPageState extends State<ChatPage> {
 
   // 🔥 GANTI INI BUAT TEST 2 USER
   String get currentUser {
-    final user = FirebaseAuth.instance.currentUser;
-    return user?.uid ?? "web_user";
+    final user = supabase.auth.currentUser;
+    return user?.id ?? "web_user";
   }
 
   // 📥 STREAM REALTIME MESSAGES

@@ -1,15 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../data/providers/vendor_provider.dart';
+import '../../../data/providers/auth_provider.dart';
 import '../../../data/models/profile_model.dart';
 import '../../../data/models/portfolio_model.dart';
 import '../../../data/models/certification_model.dart';
 import '../screens/kontraktor_profileEdit_screen.dart';
 import '../../shared/widgets/glass_card.dart';
+import '../../auth/role_screen.dart';
 import '../../../core/constants/colors.dart';
 
-// UBAH JADI STATEFUL WIDGET BIAR BISA REFRESH
 class KontraktorProfileTab extends StatefulWidget {
   const KontraktorProfileTab({super.key});
 
@@ -26,6 +26,8 @@ class _KontraktorProfileTabState extends State<KontraktorProfileTab> {
     _loadData();
   }
 
+  // --- ACTIONS ---
+
   void _loadData() {
     final provider = Provider.of<VendorProvider>(context, listen: false);
     _dataFuture = Future.wait([
@@ -34,6 +36,25 @@ class _KontraktorProfileTabState extends State<KontraktorProfileTab> {
       provider.fetchCertifications(),
     ]);
   }
+
+  Future<void> _handleLogout() async {
+    final provider = Provider.of<AuthProvider>(context, listen: false);
+    await provider.logout();
+    if (!mounted) return;
+    Navigator.pushAndRemoveUntil(
+      context,
+      MaterialPageRoute(builder: (_) => const RoleScreen()),
+      (route) => false,
+    );
+  }
+
+  Future<void> _navigateToEdit() async {
+    await Navigator.push(context, MaterialPageRoute(builder: (_) => const EditProfileScreen()));
+    _loadData();
+    setState(() {});
+  }
+
+  // --- BUILD ---
 
   @override
   Widget build(BuildContext context) {
@@ -53,50 +74,48 @@ class _KontraktorProfileTabState extends State<KontraktorProfileTab> {
           return CustomScrollView(
             physics: const BouncingScrollPhysics(),
             slivers: [
-              // HEADER
-              SliverToBoxAdapter(
-              child: _buildHeader(context, profile),
-              ),
-
-              // STATS
+              SliverToBoxAdapter(child: _buildHeader(profile)),
               SliverPadding(
                 padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
-                sliver: SliverToBoxAdapter(
-                  child: _buildStatsRow(portfolios.length),
-                ),
+                sliver: SliverToBoxAdapter(child: _buildStatsRow(portfolios.length)),
               ),
-
-              // PORTOFOLIO SECTION
               _buildSectionTitle("Portofolio Karyamu"),
               SliverToBoxAdapter(
                 child: SizedBox(
                   height: 160,
-                  child: portfolios.isEmpty 
-                    ? _buildEmptyState("Belum ada portofolio")
-                    : ListView.builder(
-                        padding: const EdgeInsets.symmetric(horizontal: 24),
-                        scrollDirection: Axis.horizontal,
-                        itemCount: portfolios.length,
-                        itemBuilder: (context, i) => _buildPortoCard(portfolios[i]),
-                      ),
+                  child: portfolios.isEmpty
+                      ? _buildEmptyState("Belum ada portofolio")
+                      : ListView.builder(
+                          padding: const EdgeInsets.symmetric(horizontal: 24),
+                          scrollDirection: Axis.horizontal,
+                          itemCount: portfolios.length,
+                          itemBuilder: (_, i) => _buildPortoCard(portfolios[i]),
+                        ),
                 ),
               ),
-
-              // SERTIFIKASI SECTION
               _buildSectionTitle("Sertifikasi & Keahlian"),
               certifications.isEmpty
-                ? SliverToBoxAdapter(child: _buildEmptyState("Belum ada sertifikat"))
-                : SliverPadding(
-                    padding: const EdgeInsets.symmetric(horizontal: 24),
-                    sliver: SliverList(
-                      delegate: SliverChildBuilderDelegate(
-                        (context, i) => _buildSertifCard(certifications[i]),
-                        childCount: certifications.length,
+                  ? SliverToBoxAdapter(child: _buildEmptyState("Belum ada sertifikat"))
+                  : SliverPadding(
+                      padding: const EdgeInsets.symmetric(horizontal: 24),
+                      sliver: SliverList(
+                        delegate: SliverChildBuilderDelegate(
+                          (_, i) => _buildSertifCard(certifications[i]),
+                          childCount: certifications.length,
+                        ),
                       ),
                     ),
+              SliverPadding(
+                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
+                sliver: SliverToBoxAdapter(
+                  child: TextButton.icon(
+                    onPressed: _handleLogout,
+                    icon: const Icon(Icons.logout_rounded, color: Colors.red),
+                    label: const Text('Keluar', style: TextStyle(color: Colors.red, fontWeight: FontWeight.w600)),
                   ),
-              
-              const SliverToBoxAdapter(child: SizedBox(height: 100)),
+                ),
+              ),
+              const SliverToBoxAdapter(child: SizedBox(height: 60)),
             ],
           );
         },
@@ -104,7 +123,9 @@ class _KontraktorProfileTabState extends State<KontraktorProfileTab> {
     );
   }
 
-  Widget _buildHeader(BuildContext context, ProfileModel? profile) {
+  // --- WIDGETS ---
+
+  Widget _buildHeader(ProfileModel? profile) {
     return Stack(
       children: [
         Container(height: 120, decoration: const BoxDecoration(color: AppColors.primary)),
@@ -120,7 +141,9 @@ class _KontraktorProfileTabState extends State<KontraktorProfileTab> {
                     radius: 35,
                     backgroundColor: AppColors.cardCream,
                     backgroundImage: profile?.avatarUrl != null ? NetworkImage(profile!.avatarUrl!) : null,
-                    child: profile?.avatarUrl == null ? const Icon(Icons.person, size: 35, color: AppColors.primary) : null,
+                    child: profile?.avatarUrl == null
+                        ? const Icon(Icons.person, size: 35, color: AppColors.primary)
+                        : null,
                   ),
                   const SizedBox(width: 16),
                   Expanded(
@@ -136,12 +159,8 @@ class _KontraktorProfileTabState extends State<KontraktorProfileTab> {
                   ),
                   IconButton(
                     icon: const Icon(Icons.edit_note, color: AppColors.primary),
-                    onPressed: () async {
-                      // KUNCI REFRESH ADA DI SINI
-                      await Navigator.push(context, MaterialPageRoute(builder: (_) => const EditProfileScreen()));
-                      setState(() {}); // Panggil build ulang setelah balik dari edit screen
-                    },
-                  )
+                    onPressed: _navigateToEdit,
+                  ),
                 ],
               ),
             ),
@@ -194,15 +213,28 @@ class _KontraktorProfileTabState extends State<KontraktorProfileTab> {
       decoration: BoxDecoration(
         color: Colors.grey.shade300,
         borderRadius: BorderRadius.circular(16),
-        image: data.imageUrl != null ? DecorationImage(image: NetworkImage(data.imageUrl!), fit: BoxFit.cover) : null,
+        image: data.imageUrl != null
+            ? DecorationImage(image: NetworkImage(data.imageUrl!), fit: BoxFit.cover)
+            : null,
       ),
       child: Container(
         padding: const EdgeInsets.all(12),
-        decoration: BoxDecoration(borderRadius: BorderRadius.circular(16), gradient: LinearGradient(begin: Alignment.topCenter, end: Alignment.bottomCenter, colors: [Colors.transparent, Colors.black.withOpacity(0.7)])),
-        child: Column(mainAxisAlignment: MainAxisAlignment.end, crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text(data.title, style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold)),
-          Text(data.year, style: const TextStyle(color: Colors.white70, fontSize: 9)),
-        ]),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(16),
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [Colors.transparent, Colors.black.withOpacity(0.7)],
+          ),
+        ),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.end,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(data.title, style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold)),
+            Text(data.year, style: const TextStyle(color: Colors.white70, fontSize: 9)),
+          ],
+        ),
       ),
     );
   }
@@ -216,10 +248,15 @@ class _KontraktorProfileTabState extends State<KontraktorProfileTab> {
         children: [
           const Icon(Icons.verified_outlined, color: AppColors.primary),
           const SizedBox(width: 12),
-          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text(data.title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
-            Text(data.issuer, style: const TextStyle(fontSize: 11, color: Colors.black54)),
-          ])),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(data.title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                Text(data.issuer, style: const TextStyle(fontSize: 11, color: Colors.black54)),
+              ],
+            ),
+          ),
           const Icon(Icons.check_circle, color: Colors.green, size: 16),
         ],
       ),
@@ -227,6 +264,8 @@ class _KontraktorProfileTabState extends State<KontraktorProfileTab> {
   }
 
   Widget _buildEmptyState(String text) {
-    return Center(child: Text(text, style: const TextStyle(fontStyle: FontStyle.italic, color: Colors.grey, fontSize: 12)));
+    return Center(
+      child: Text(text, style: const TextStyle(fontStyle: FontStyle.italic, color: Colors.grey, fontSize: 12)),
+    );
   }
 }

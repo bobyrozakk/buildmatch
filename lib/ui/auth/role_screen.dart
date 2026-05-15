@@ -18,7 +18,7 @@ class _RoleScreenState extends State<RoleScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppColors.backgroundCream,
-      appBar: BuildMatchAppBar(showBack: true, onBack: () => Navigator.pop(context)),
+      appBar: const BuildMatchAppBar(showBack: false),
       body: Padding(
         padding: const EdgeInsets.all(24.0),
         child: Column(

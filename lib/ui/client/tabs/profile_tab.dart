@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../data/providers/auth_provider.dart';
 import '../../auth/role_screen.dart';
+import '../../shared/widgets/glass_card.dart';
 import '../../../core/constants/colors.dart';
 
 class ProfileTab extends StatefulWidget {
@@ -16,11 +17,11 @@ class _ProfileTabState extends State<ProfileTab> {
   final _supabase = Supabase.instance.client;
   bool _isLoading = false;
 
-  // --- LOGIC: LOGOUT ---
-  void _handleLogout() async {
+  // --- ACTIONS ---
+
+  Future<void> _handleLogout() async {
     final provider = Provider.of<AuthProvider>(context, listen: false);
     await provider.logout();
-    
     if (!mounted) return;
     Navigator.pushAndRemoveUntil(
       context,
@@ -29,312 +30,274 @@ class _ProfileTabState extends State<ProfileTab> {
     );
   }
 
-  // --- LOGIC: EDIT PROFILE ---
   void _showEditProfileDialog() {
     final user = _supabase.auth.currentUser;
-    final currentName = user?.userMetadata?['name'] ?? '';
-    final currentPhone = user?.userMetadata?['phone'] ?? '';
-
-    final nameController = TextEditingController(text: currentName);
-    final phoneController = TextEditingController(text: currentPhone);
+    final nameController = TextEditingController(text: user?.userMetadata?['name'] ?? '');
+    final phoneController = TextEditingController(text: user?.userMetadata?['phone'] ?? '');
 
     showDialog(
       context: context,
-      builder: (dialogContext) { 
-        return AlertDialog(
-          backgroundColor: Colors.white,
-          title: const Text("Edit Profil", style: TextStyle(fontWeight: FontWeight.bold, color: AppColors.primary)),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextField(
-                controller: nameController,
-                decoration: const InputDecoration(labelText: "Nama Lengkap", prefixIcon: Icon(Icons.person_outline)),
-              ),
-              const SizedBox(height: 10),
-              TextField(
-                controller: phoneController,
-                keyboardType: TextInputType.phone,
-                decoration: const InputDecoration(labelText: "No. Telepon", prefixIcon: Icon(Icons.phone_outlined)),
-              ),
-            ],
-          ),
-          actions: [
-            TextButton(onPressed: () => Navigator.pop(dialogContext), child: const Text("Batal", style: TextStyle(color: Colors.black54))),
-            ElevatedButton(
-              onPressed: () async {
-                // 1. Simpan nilai dari textfield DULU
-                final newName = nameController.text;
-                final newPhone = phoneController.text;
-
-                // 2. Tutup dialognya
-                Navigator.pop(dialogContext);
-                
-                // 3. Mulai proses loading
-                if (!mounted) return;
-                setState(() => _isLoading = true);
-                
-                try {
-                  // Update di Auth Metadata
-                  await _supabase.auth.updateUser(UserAttributes(
-                    data: {'name': newName, 'phone': newPhone},
-                  ));
-                  
-                  // Update di Tabel Profiles
-                  if (user != null) {
-                    await _supabase.from('profiles').update({
-                      'name': newName,
-                      'phone': newPhone,
-                    }).eq('id', user.id);
-                  }
-                  
-                  if (!mounted) return;
-                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Profil berhasil diperbarui!', style: TextStyle(color: Colors.white)), backgroundColor: Colors.green));
-                } catch (e) {
-                  if (!mounted) return;
-                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Gagal update profil.'), backgroundColor: Colors.red));
-                } finally {
-                  // 4. Pastikan loading berhenti & layar ter-refresh
-                  if (mounted) {
-                    setState(() => _isLoading = false);
-                  }
-                }
-              },
-              style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary),
-              child: const Text("Simpan", style: TextStyle(color: Colors.white)),
+      builder: (ctx) => AlertDialog(
+        backgroundColor: Colors.white,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Text("Edit Profil", style: TextStyle(fontWeight: FontWeight.bold, color: AppColors.primary)),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: nameController,
+              decoration: const InputDecoration(labelText: "Nama Lengkap", prefixIcon: Icon(Icons.person_outline)),
+            ),
+            const SizedBox(height: 10),
+            TextField(
+              controller: phoneController,
+              keyboardType: TextInputType.phone,
+              decoration: const InputDecoration(labelText: "No. Telepon", prefixIcon: Icon(Icons.phone_outlined)),
             ),
           ],
-        );
-      },
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text("Batal", style: TextStyle(color: Colors.black54)),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              final newName = nameController.text;
+              final newPhone = phoneController.text;
+              Navigator.pop(ctx);
+              if (!mounted) return;
+              setState(() => _isLoading = true);
+              try {
+                await _supabase.auth.updateUser(UserAttributes(data: {'name': newName, 'phone': newPhone}));
+                if (user != null) {
+                  await _supabase.from('profiles').update({'name': newName, 'phone': newPhone}).eq('id', user.id);
+                }
+                if (!mounted) return;
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Profil berhasil diperbarui!'), backgroundColor: Colors.green),
+                );
+              } catch (_) {
+                if (!mounted) return;
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Gagal update profil.'), backgroundColor: Colors.red),
+                );
+              } finally {
+                if (mounted) setState(() => _isLoading = false);
+              }
+            },
+            style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary),
+            child: const Text("Simpan", style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
     );
   }
 
-  // --- LOGIC: UBAH PASSWORD ---
   void _showEditPasswordDialog() {
     final passwordController = TextEditingController();
 
     showDialog(
       context: context,
-      builder: (dialogContext) { // <-- Pakai dialogContext
-        return AlertDialog(
-          backgroundColor: Colors.white,
-          title: const Text("Ubah Password", style: TextStyle(fontWeight: FontWeight.bold, color: AppColors.primary)),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Text("Masukkan password baru Anda (Min. 6 karakter)", style: TextStyle(fontSize: 12, color: Colors.black54)),
-              const SizedBox(height: 10),
-              TextField(
-                controller: passwordController,
-                obscureText: true,
-                decoration: const InputDecoration(labelText: "Password Baru", prefixIcon: Icon(Icons.lock_outline)),
-              ),
-            ],
-          ),
-          actions: [
-            TextButton(onPressed: () => Navigator.pop(dialogContext), child: const Text("Batal", style: TextStyle(color: Colors.black54))),
-            ElevatedButton(
-              onPressed: () async {
-                if (passwordController.text.length < 6) {
-                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Password minimal 6 karakter!'), backgroundColor: Colors.red));
-                  return;
-                }
-                
-                final newPassword = passwordController.text;
-                Navigator.pop(dialogContext);
-                
-                if (!mounted) return;
-                setState(() => _isLoading = true);
-                
-                try {
-                  await _supabase.auth.updateUser(UserAttributes(password: newPassword));
-                  
-                  if (!mounted) return;
-                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Password berhasil diubah!', style: TextStyle(color: Colors.white)), backgroundColor: Colors.green));
-                } catch (e) {
-                  if (!mounted) return;
-                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Gagal ubah password.'), backgroundColor: Colors.red));
-                } finally {
-                  if (mounted) {
-                    setState(() => _isLoading = false);
-                  }
-                }
-              },
-              style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary),
-              child: const Text("Simpan", style: TextStyle(color: Colors.white)),
+      builder: (ctx) => AlertDialog(
+        backgroundColor: Colors.white,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Text("Ubah Password", style: TextStyle(fontWeight: FontWeight.bold, color: AppColors.primary)),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text("Masukkan password baru (Min. 6 karakter)", style: TextStyle(fontSize: 12, color: Colors.black54)),
+            const SizedBox(height: 10),
+            TextField(
+              controller: passwordController,
+              obscureText: true,
+              decoration: const InputDecoration(labelText: "Password Baru", prefixIcon: Icon(Icons.lock_outline)),
             ),
           ],
-        );
-      },
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text("Batal", style: TextStyle(color: Colors.black54)),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              if (passwordController.text.length < 6) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Password minimal 6 karakter!'), backgroundColor: Colors.red),
+                );
+                return;
+              }
+              final newPassword = passwordController.text;
+              Navigator.pop(ctx);
+              if (!mounted) return;
+              setState(() => _isLoading = true);
+              try {
+                await _supabase.auth.updateUser(UserAttributes(password: newPassword));
+                if (!mounted) return;
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Password berhasil diubah!'), backgroundColor: Colors.green),
+                );
+              } catch (_) {
+                if (!mounted) return;
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Gagal ubah password.'), backgroundColor: Colors.red),
+                );
+              } finally {
+                if (mounted) setState(() => _isLoading = false);
+              }
+            },
+            style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary),
+            child: const Text("Simpan", style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
     );
   }
 
+  // --- BUILD ---
+
   @override
   Widget build(BuildContext context) {
+    if (_isLoading) {
+      return const Scaffold(
+        backgroundColor: AppColors.backgroundCream,
+        body: Center(child: CircularProgressIndicator(color: AppColors.primary)),
+      );
+    }
+
     final user = _supabase.auth.currentUser;
     final userName = user?.userMetadata?['name'] ?? 'Klien';
     final userEmail = user?.email ?? '';
-    
-    // Ambil inisial nama untuk avatar
-    String initials = "BS";
-    if (userName.isNotEmpty && userName != 'Klien') {
-      List<String> nameParts = userName.split(" ");
-      if (nameParts.length > 1) {
-        initials = nameParts[0][0].toUpperCase() + nameParts[1][0].toUpperCase();
-      } else {
-        initials = userName.substring(0, userName.length > 1 ? 2 : 1).toUpperCase();
-      }
-    }
 
     return Scaffold(
-      backgroundColor: AppColors.backgroundCream, // Background cream
-      body: _isLoading 
-        ? const Center(child: CircularProgressIndicator(color: AppColors.primary))
-        : SafeArea(
-            child: SingleChildScrollView(
-              physics: const BouncingScrollPhysics(),
-              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
-              child: Column(
+      backgroundColor: AppColors.backgroundCream,
+      body: CustomScrollView(
+        physics: const BouncingScrollPhysics(),
+        slivers: [
+          SliverToBoxAdapter(child: _buildHeader(userName, userEmail)),
+          SliverPadding(
+            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
+            sliver: SliverToBoxAdapter(child: _buildStatsRow()),
+          ),
+          _buildSectionTitle("Proyek Saya"),
+          SliverPadding(
+            padding: const EdgeInsets.symmetric(horizontal: 24),
+            sliver: SliverToBoxAdapter(child: _buildProjectCard()),
+          ),
+          _buildSectionTitle("Pengaturan Akun"),
+          SliverPadding(
+            padding: const EdgeInsets.symmetric(horizontal: 24),
+            sliver: SliverToBoxAdapter(child: _buildSettingsCard()),
+          ),
+          SliverPadding(
+            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
+            sliver: SliverToBoxAdapter(
+              child: TextButton.icon(
+                onPressed: _handleLogout,
+                icon: const Icon(Icons.logout_rounded, color: Colors.red),
+                label: const Text('Keluar', style: TextStyle(color: Colors.red, fontWeight: FontWeight.w600)),
+              ),
+            ),
+          ),
+          const SliverToBoxAdapter(child: SizedBox(height: 60)),
+        ],
+      ),
+    );
+  }
+
+  // --- WIDGETS ---
+
+  Widget _buildHeader(String name, String email) {
+    return Stack(
+      children: [
+        Container(height: 120, decoration: const BoxDecoration(color: AppColors.primary)),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(24, 60, 24, 0),
+          child: IOSGlassCard(
+            blur: 20,
+            child: Padding(
+              padding: const EdgeInsets.all(20),
+              child: Row(
                 children: [
-                  // --- HEADER: AVATAR & INFO ---
-                  Stack(
-                    alignment: Alignment.center,
-                    children: [
-                      Align(
-                        alignment: Alignment.topRight,
-                        child: IconButton(
-                          icon: Container(
-                            padding: const EdgeInsets.all(6),
-                            decoration: const BoxDecoration(color: AppColors.cardCream, shape: BoxShape.circle),
-                            child: const Icon(Icons.edit, size: 18, color: AppColors.primary),
-                          ),
-                          onPressed: _showEditProfileDialog,
-                        ),
-                      ),
-                      Column(
-                        children: [
-                          CircleAvatar(
-                            radius: 40,
-                            backgroundColor: AppColors.cardCream,
-                            child: Text(initials, style: const TextStyle(fontSize: 28, fontWeight: FontWeight.bold, color: AppColors.primary)),
-                          ),
-                          const SizedBox(height: 12),
-                          Text(userName, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.black87)),
-                          const SizedBox(height: 4),
-                          Text(userEmail, style: const TextStyle(fontSize: 14, color: Colors.black54)),
-                          const SizedBox(height: 12),
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-                            decoration: BoxDecoration(color: AppColors.cardCream, borderRadius: BorderRadius.circular(20)),
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: const [
-                                Icon(Icons.shield_outlined, size: 14, color: AppColors.primary),
-                                SizedBox(width: 6),
-                                Text("Member Sejak 2026", style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: AppColors.primary)),
-                              ],
-                            ),
-                          )
-                        ],
-                      ),
-                    ],
+                  CircleAvatar(
+                    radius: 35,
+                    backgroundColor: AppColors.cardCream,
+                    child: Text(
+                      _getInitials(name),
+                      style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: AppColors.primary),
+                    ),
                   ),
-                  const SizedBox(height: 30),
-
-                  // --- STATS ROW ---
-                  Row(
-                    children: [
-                      Expanded(child: _buildStatCard("2", "Proyek Aktif")),
-                      const SizedBox(width: 12),
-                      Expanded(child: _buildStatCard("3", "Proyek Selesai")),
-                      const SizedBox(width: 12),
-                      Expanded(child: _buildStatCard("4", "Ulasan\nDiberikan")),
-                    ],
-                  ),
-                  const SizedBox(height: 30),
-
-                  // --- PROYEK SAYA (Dummy UI Sesuai Figma) ---
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: const [
-                      Text("Proyek Saya", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.black87)),
-                      Text("Lihat Semua", style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: AppColors.primary)),
-                    ],
-                  ),
-                  const SizedBox(height: 16),
-                  Container(
-                    decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(20), boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.02), blurRadius: 10, offset: const Offset(0, 4))]),
+                  const SizedBox(width: 16),
+                  Expanded(
                     child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        _buildProjectItem(Icons.home_rounded, "Renovasi Rumah Induk", "PT Bangun Jaya", "Selesai", Colors.green),
-                        _buildDivider(),
-                        _buildProjectItem(Icons.architecture_rounded, "Desain Interior Dapur", "Studio Arsitek A", "Berjalan", const Color(0xFFD85A31)),
-                        _buildDivider(),
-                        _buildProjectItem(Icons.business_rounded, "Pembangunan Pagar", "CV Karya Mandiri", "Menunggu", Colors.grey.shade600),
+                        Text(name, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                        const SizedBox(height: 4),
+                        Text(email, style: const TextStyle(fontSize: 13, color: Colors.black54)),
                       ],
                     ),
                   ),
-                  const SizedBox(height: 30),
-
-                  // --- PENGATURAN AKUN ---
-                  const Align(alignment: Alignment.centerLeft, child: Text("Pengaturan Akun", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.black87))),
-                  const SizedBox(height: 16),
-                  Container(
-                    decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(20), boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.02), blurRadius: 10, offset: const Offset(0, 4))]),
-                    child: Column(
-                      children: [
-                        _buildSettingItem(Icons.lock_outline, "Ubah Password", onTap: _showEditPasswordDialog),
-                        _buildDivider(),
-                        _buildSettingItem(Icons.notifications_none_rounded, "Notifikasi", onTap: () {}), // UI Only
-                        _buildDivider(),
-                        _buildSettingItem(Icons.help_outline_rounded, "Bantuan & FAQ", onTap: () {
-                          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Menghubungi Customer Service...')));
-                        }),
-                        _buildDivider(),
-                        _buildSettingItem(Icons.description_outlined, "Syarat & Ketentuan", onTap: () {}),
-                      ],
-                    ),
+                  IconButton(
+                    icon: const Icon(Icons.edit_note, color: AppColors.primary),
+                    onPressed: _showEditProfileDialog,
                   ),
-                  const SizedBox(height: 30),
-
-                  // --- LOGOUT BUTTON ---
-                  SizedBox(
-                    width: double.infinity,
-                    height: 55,
-                    child: OutlinedButton.icon(
-                      onPressed: _handleLogout,
-                      icon: const Icon(Icons.logout_rounded, color: AppColors.primary),
-                      label: const Text("Keluar dari Akun", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: AppColors.primary)),
-                      style: OutlinedButton.styleFrom(
-                        backgroundColor: Colors.white,
-                        side: const BorderSide(color: Colors.transparent),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                        elevation: 2,
-                        shadowColor: Colors.black.withOpacity(0.1),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 20),
-                  const Text("BuildMatch v1.0.0", style: TextStyle(fontSize: 12, color: Colors.black38)),
-                  const SizedBox(height: 20),
                 ],
               ),
             ),
           ),
+        ),
+      ],
     );
   }
 
-  // --- HELPER WIDGETS ---
+  Widget _buildStatsRow() {
+    return Row(
+      children: [
+        _buildStatItem("2", "Proyek Aktif"),
+        const SizedBox(width: 12),
+        _buildStatItem("3", "Selesai"),
+        const SizedBox(width: 12),
+        _buildStatItem("4", "Ulasan"),
+      ],
+    );
+  }
 
-  Widget _buildStatCard(String value, String label) {
+  Widget _buildStatItem(String val, String label) {
+    return Expanded(
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 12),
+        decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16)),
+        child: Column(
+          children: [
+            Text(val, style: const TextStyle(fontWeight: FontWeight.w900, color: AppColors.primary)),
+            Text(label, style: const TextStyle(fontSize: 10, color: Colors.black45)),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSectionTitle(String title) {
+    return SliverPadding(
+      padding: const EdgeInsets.fromLTRB(24, 32, 24, 16),
+      sliver: SliverToBoxAdapter(
+        child: Text(title, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+      ),
+    );
+  }
+
+  Widget _buildProjectCard() {
     return Container(
-      padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 8),
-      decoration: BoxDecoration(color: const Color(0xFFEFEBE4), borderRadius: BorderRadius.circular(16)),
+      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(20)),
       child: Column(
         children: [
-          Text(value, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w900, color: Color(0xFF8B2B0F))),
-          const SizedBox(height: 4),
-          Text(label, textAlign: TextAlign.center, style: const TextStyle(fontSize: 11, color: Colors.black87, fontWeight: FontWeight.w500)),
+          _buildProjectItem(Icons.home_rounded, "Renovasi Rumah Induk", "PT Bangun Jaya", "Selesai", Colors.green),
+          _divider(),
+          _buildProjectItem(Icons.architecture_rounded, "Desain Interior Dapur", "Studio Arsitek A", "Berjalan", const Color(0xFFD85A31)),
+          _divider(),
+          _buildProjectItem(Icons.business_rounded, "Pembangunan Pagar", "CV Karya Mandiri", "Menunggu", Colors.grey.shade600),
         ],
       ),
     );
@@ -345,10 +308,10 @@ class _ProfileTabState extends State<ProfileTab> {
       contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       leading: Container(
         padding: const EdgeInsets.all(10),
-        decoration: const BoxDecoration(color: Color(0xFFF7F4EF), shape: BoxShape.circle),
-        child: Icon(icon, color: const Color(0xFF8B2B0F), size: 24),
+        decoration: const BoxDecoration(color: AppColors.backgroundCream, shape: BoxShape.circle),
+        child: Icon(icon, color: AppColors.primary, size: 24),
       ),
-      title: Text(title, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.black87)),
+      title: Text(title, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold)),
       subtitle: Text(subtitle, style: const TextStyle(fontSize: 12, color: Colors.black54)),
       trailing: Container(
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
@@ -358,23 +321,49 @@ class _ProfileTabState extends State<ProfileTab> {
     );
   }
 
+  Widget _buildSettingsCard() {
+    return Container(
+      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(20)),
+      child: Column(
+        children: [
+          _buildSettingItem(Icons.lock_outline, "Ubah Password", onTap: _showEditPasswordDialog),
+          _divider(),
+          _buildSettingItem(Icons.notifications_none_rounded, "Notifikasi", onTap: () {}),
+          _divider(),
+          _buildSettingItem(Icons.help_outline_rounded, "Bantuan & FAQ", onTap: () {
+            ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Menghubungi Customer Service...')));
+          }),
+          _divider(),
+          _buildSettingItem(Icons.description_outlined, "Syarat & Ketentuan", onTap: () {}),
+        ],
+      ),
+    );
+  }
+
   Widget _buildSettingItem(IconData icon, String title, {required VoidCallback onTap}) {
     return ListTile(
       onTap: onTap,
       leading: Container(
         padding: const EdgeInsets.all(8),
-        decoration: const BoxDecoration(color: Color(0xFFF7F4EF), shape: BoxShape.circle),
-        child: Icon(icon, color: const Color(0xFF8B2B0F), size: 20),
+        decoration: const BoxDecoration(color: AppColors.backgroundCream, shape: BoxShape.circle),
+        child: Icon(icon, color: AppColors.primary, size: 20),
       ),
-      title: Text(title, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: Colors.black87)),
+      title: Text(title, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
       trailing: const Icon(Icons.chevron_right_rounded, color: Colors.black38),
     );
   }
 
-  Widget _buildDivider() {
+  Widget _divider() {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16),
-      child: Divider(color: Colors.grey.shade100, height: 1, thickness: 1),
+      child: Divider(color: Colors.grey.shade100, height: 1),
     );
+  }
+
+  String _getInitials(String name) {
+    if (name.isEmpty || name == 'Klien') return "BS";
+    final parts = name.split(" ");
+    if (parts.length > 1) return '${parts[0][0]}${parts[1][0]}'.toUpperCase();
+    return name.substring(0, name.length > 1 ? 2 : 1).toUpperCase();
   }
 }
