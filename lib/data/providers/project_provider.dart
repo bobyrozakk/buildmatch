@@ -2,6 +2,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/project_model.dart';
+import '../models/bid_model.dart';
 
 /// Provider khusus untuk CRUD proyek dan penawaran (bid).
 /// Vendor-related functions sudah dipindah ke VendorProvider.
@@ -141,6 +142,31 @@ class ProjectProvider extends ChangeNotifier {
           .toList();
     } catch (e) {
       debugPrint("Error fetch vendor active projects: $e");
+      return [];
+    }
+  }
+
+  // --- AMBIL DAFTAR PENAWARAN VENDOR (BIDS) ---
+  /// Mengambil semua bid yang diajukan vendor login. Optional filter status.
+  /// Setiap bid sudah join ke tabel `projects` (+ profil klien) untuk display.
+  Future<List<BidModel>> fetchVendorBids({String? status}) async {
+    try {
+      final vendorId = _supabase.auth.currentUser?.id;
+      if (vendorId == null) return [];
+
+      var query = _supabase
+          .from('bids')
+          .select('*, projects:project_id(*, profiles:client_id(name))')
+          .eq('vendor_id', vendorId);
+      if (status != null) {
+        query = query.eq('status', status);
+      }
+      final response = await query.order('created_at', ascending: false);
+      return List<Map<String, dynamic>>.from(response)
+          .map((json) => BidModel.fromJson(json))
+          .toList();
+    } catch (e) {
+      debugPrint("Error fetch vendor bids: $e");
       return [];
     }
   }

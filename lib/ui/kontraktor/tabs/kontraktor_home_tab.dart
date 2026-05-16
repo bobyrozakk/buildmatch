@@ -5,6 +5,7 @@ import '../../../core/constants/colors.dart';
 import '../../../core/utils/formatters.dart';
 import '../../../data/models/profile_model.dart';
 import '../../../data/models/project_model.dart';
+import '../../../data/models/bid_model.dart';
 import '../../../data/providers/vendor_provider.dart';
 import '../../../data/providers/project_provider.dart';
 import '../screens/kontraktor_profileEdit_screen.dart';
@@ -39,6 +40,7 @@ class _KontraktorHomeTabState extends State<KontraktorHomeTab> {
       vendor.fetchVendorProfile(),
       project.fetchAvailableProjects(),
       project.fetchVendorActiveProjects(),
+      project.fetchVendorBids(status: 'pending'),
     ]);
   }
 
@@ -67,14 +69,6 @@ class _KontraktorHomeTabState extends State<KontraktorHomeTab> {
 
   void _goToProgressTab() {
     widget.onSwitchTab?.call(3);
-  }
-
-  void _handleNotifTap(int index) {
-    setState(() => _notifications.removeAt(index));
-    Navigator.pop(context);
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Notifikasi dibaca'), duration: Duration(seconds: 1)),
-    );
   }
 
   void _showNotifSheet() {
@@ -181,6 +175,7 @@ class _KontraktorHomeTabState extends State<KontraktorHomeTab> {
               final profile = snapshot.data?[0] as ProfileModel?;
               final tenders = (snapshot.data?[1] as List<ProjectModel>? ?? []);
               final activeProjects = (snapshot.data?[2] as List<ProjectModel>? ?? []);
+              final submittedBids = (snapshot.data?[3] as List<BidModel>? ?? []);
 
               return SingleChildScrollView(
                 physics: const AlwaysScrollableScrollPhysics(parent: BouncingScrollPhysics()),
@@ -197,6 +192,10 @@ class _KontraktorHomeTabState extends State<KontraktorHomeTab> {
                     _buildSectionHeader('Penawaran Masuk', onTap: _goToProyekTab),
                     const SizedBox(height: 12),
                     _buildPenawaranList(tenders),
+                    const SizedBox(height: 28),
+                    _buildSectionHeader('Penawaran Diajukan', onTap: _goToProyekTab),
+                    const SizedBox(height: 12),
+                    _buildPenawaranDiajukanList(submittedBids),
                     const SizedBox(height: 28),
                     _buildSectionHeader('Proyek Berjalan', onTap: _goToProgressTab),
                     const SizedBox(height: 12),
@@ -518,6 +517,71 @@ class _KontraktorHomeTabState extends State<KontraktorHomeTab> {
           ),
         ),
       ],
+    );
+  }
+
+  // --- PENAWARAN DIAJUKAN ---
+
+  Widget _buildPenawaranDiajukanList(List<BidModel> bids) {
+    if (bids.isEmpty) {
+      return _buildEmptyCard('Belum ada penawaran diajukan');
+    }
+    final list = bids.take(5).toList();
+    return SizedBox(
+      height: 180,
+      child: ListView.builder(
+        scrollDirection: Axis.horizontal,
+        itemCount: list.length,
+        itemBuilder: (_, i) {
+          final b = list[i];
+          final p = b.project;
+          return GestureDetector(
+            onTap: p == null ? null : () => _openProjectDetail(p),
+            child: Container(
+              width: 220,
+              margin: EdgeInsets.only(right: i < list.length - 1 ? 12 : 0),
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: Colors.grey.shade200),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                    decoration: BoxDecoration(color: Colors.orange.withOpacity(0.1), borderRadius: BorderRadius.circular(8)),
+                    child: const Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.access_time_rounded, size: 11, color: Colors.orange),
+                        SizedBox(width: 4),
+                        Text('Menunggu', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.orange)),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    p?.title ?? 'Proyek tidak tersedia',
+                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  const SizedBox(height: 6),
+                  _infoRow(Icons.person_outline, p?.clientName ?? 'Klien'),
+                  const SizedBox(height: 3),
+                  _infoRow(Icons.location_on_outlined, p?.location ?? '-'),
+                  const SizedBox(height: 3),
+                  _infoRow(Icons.monetization_on_outlined, AppFormatters.formatRupiah(b.price), color: AppColors.primary, bold: true),
+                  const Spacer(),
+                  Text(_timeAgo(b.createdAt), style: const TextStyle(fontSize: 10, color: Colors.black38)),
+                ],
+              ),
+            ),
+          );
+        },
+      ),
     );
   }
 

@@ -8,7 +8,6 @@ import '../../client/tabs/contractor_tab.dart';
 import '../../client/tabs/profile_tab.dart'; 
 
 // --- IMPORT TAB KONTRAKTOR ---
-// Sesuaikan nama folder 'tabs' atau 'screens' tempat lu nyimpen file ini
 import '../../kontraktor/tabs/kontraktor_home_tab.dart';
 import '../../kontraktor/tabs/kontraktor_proyek_tab.dart';
 import '../../kontraktor/tabs/kontraktor_profile_tab.dart'; 

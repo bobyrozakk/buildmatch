@@ -39,7 +39,7 @@ class BerandaTab extends StatelessWidget {
                           style: TextStyle(fontSize: 14, color: Colors.black54),
                         ),
                         Text(
-                          // NANGKEP NAMA ASLI DARI DATABASE AUTH SUPABASE
+                          // Nama user dari auth metadata
                           Supabase.instance.client.auth.currentUser?.userMetadata?['name'] ?? 'Klien',
                           style: const TextStyle(
                             fontSize: 22,
@@ -60,8 +60,6 @@ class BerandaTab extends StatelessWidget {
                           color: Colors.deepOrangeAccent,
                         ),
                         onPressed: () {
-                          // BISA BUAT LOGOUT SEMENTARA BUAT NGETES
-                          // Supabase.instance.client.auth.signOut();
                         },
                       ),
                     ),

@@ -1,3 +1,5 @@
+import 'project_model.dart';
+
 /// Data model for contractor bids on projects.
 class BidModel {
   final String? id;
@@ -5,7 +7,9 @@ class BidModel {
   final String vendorId;
   final double price;
   final String? message;
+  final String status; // 'pending' | 'accepted' | 'rejected'
   final DateTime? createdAt;
+  final ProjectModel? project; // joined project (optional)
 
   const BidModel({
     this.id,
@@ -13,7 +17,9 @@ class BidModel {
     required this.vendorId,
     required this.price,
     this.message,
+    this.status = 'pending',
     this.createdAt,
+    this.project,
   });
 
   factory BidModel.fromJson(Map<String, dynamic> json) {
@@ -23,8 +29,12 @@ class BidModel {
       vendorId: json['vendor_id'] as String? ?? '',
       price: (json['price'] as num?)?.toDouble() ?? 0,
       message: json['message'] as String?,
+      status: (json['status'] as String?) ?? 'pending',
       createdAt: json['created_at'] != null
           ? DateTime.tryParse(json['created_at'] as String)
+          : null,
+      project: json['projects'] is Map
+          ? ProjectModel.fromJson(Map<String, dynamic>.from(json['projects'] as Map))
           : null,
     );
   }
