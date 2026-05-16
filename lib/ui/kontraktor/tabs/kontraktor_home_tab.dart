@@ -1,147 +1,627 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import '../../shared/widgets/glass_card.dart';
 import '../../../core/constants/colors.dart';
+import '../../../core/utils/formatters.dart';
+import '../../../data/models/profile_model.dart';
+import '../../../data/models/project_model.dart';
+import '../../../data/providers/vendor_provider.dart';
+import '../../../data/providers/project_provider.dart';
+import '../screens/kontraktor_profileEdit_screen.dart';
+import '../screens/kontraktor_detail_proyek_screen.dart';
 
-class KontraktorHomeTab extends StatelessWidget {
-  const KontraktorHomeTab({super.key});
+class KontraktorHomeTab extends StatefulWidget {
+  final ValueChanged<int>? onSwitchTab;
+  const KontraktorHomeTab({super.key, this.onSwitchTab});
 
   @override
-  Widget build(BuildContext context) {
-    final user = Supabase.instance.client.auth.currentUser;
-    final name = user?.userMetadata?['name'] ?? 'Kontraktor';
-    final company = user?.userMetadata?['company_name'] ?? 'Vendor BuildMatch';
+  State<KontraktorHomeTab> createState() => _KontraktorHomeTabState();
+}
 
-    return Scaffold(
-      body: Container(
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            colors: [Color(0xFFF3F8FF), Color(0xFFFFF0F5)],
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-          ),
-        ),
-        child: SafeArea(
-          child: SingleChildScrollView(
-            physics: const BouncingScrollPhysics(),
-            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+class _KontraktorHomeTabState extends State<KontraktorHomeTab> {
+  late Future<List<dynamic>> _dataFuture;
+  final List<_NotifItem> _notifications = [
+    _NotifItem(Icons.mail_outline_rounded, 'Penawaran baru masuk untuk Proyek Renovasi Minimalis', '2 menit yang lalu', AppColors.primary),
+    _NotifItem(Icons.chat_bubble_outline_rounded, 'Pesan baru dari Klien Agus Prasetyo', '30 menit yang lalu', AppColors.primary),
+    _NotifItem(Icons.warning_amber_rounded, 'Ingat: Update progres Proyek Villa Tropis Bali', '1 jam yang lalu', Colors.orange),
+  ];
+
+  @override
+  void initState() {
+    super.initState();
+    _loadData();
+  }
+
+  void _loadData() {
+    final vendor = Provider.of<VendorProvider>(context, listen: false);
+    final project = Provider.of<ProjectProvider>(context, listen: false);
+    _dataFuture = Future.wait([
+      vendor.fetchVendorProfile(),
+      project.fetchAvailableProjects(),
+      project.fetchVendorActiveProjects(),
+    ]);
+  }
+
+  Future<void> _refresh() async {
+    setState(_loadData);
+    await _dataFuture;
+  }
+
+  // --- ACTIONS ---
+
+  Future<void> _openEditProfile() async {
+    await Navigator.push(context, MaterialPageRoute(builder: (_) => const EditProfileScreen()));
+    setState(_loadData);
+  }
+
+  void _openProjectDetail(ProjectModel project) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => KontraktorDetailProyekScreen(project: project)),
+    );
+  }
+
+  void _goToProyekTab() {
+    widget.onSwitchTab?.call(1);
+  }
+
+  void _goToProgressTab() {
+    widget.onSwitchTab?.call(3);
+  }
+
+  void _handleNotifTap(int index) {
+    setState(() => _notifications.removeAt(index));
+    Navigator.pop(context);
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Notifikasi dibaca'), duration: Duration(seconds: 1)),
+    );
+  }
+
+  void _showNotifSheet() {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (_) => StatefulBuilder(
+        builder: (ctx, setSheetState) {
+          return Container(
+            constraints: BoxConstraints(maxHeight: MediaQuery.of(context).size.height * 0.55),
+            decoration: const BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+            ),
             child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
               children: [
-                // HEADER
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Row(
-                      children: [
-                        Container(
-                          padding: const EdgeInsets.all(8),
-                          decoration: BoxDecoration(color: AppColors.primary, borderRadius: BorderRadius.circular(10)),
-                          child: const Icon(Icons.hardware_rounded, color: Colors.white, size: 20),
-                        ),
-                        const SizedBox(width: 10),
-                        const Text('BuildMatch Vendor', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: Colors.black87)),
-                      ],
-                    ),
-                    IconButton(
-                      icon: const Icon(Icons.notifications_none_rounded, color: AppColors.primary),
-                      onPressed: () {},
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 24),
-
-                // HERO CARD
-                Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.all(24),
-                  decoration: BoxDecoration(
-                    gradient: AppColors.primaryGradient,
-                    borderRadius: BorderRadius.circular(24),
-                    boxShadow: [BoxShadow(color: AppColors.primaryDark.withOpacity(0.3), blurRadius: 15, offset: const Offset(0, 8))],
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+                const SizedBox(height: 12),
+                Container(width: 40, height: 4, decoration: BoxDecoration(color: Colors.grey.shade300, borderRadius: BorderRadius.circular(2))),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
+                  child: Row(
                     children: [
-                      const Text('Selamat datang,', style: TextStyle(color: Colors.white70, fontSize: 14)),
-                      Text(name, style: const TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.bold)),
-                      const SizedBox(height: 4),
-                      Text(company, style: const TextStyle(color: Colors.white70, fontSize: 14)),
-                      const SizedBox(height: 20),
-                      Row(
-                        children: [
-                          const Icon(Icons.verified, color: Colors.white, size: 16),
-                          const SizedBox(width: 8),
-                          const Text('Akun Terverifikasi', style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold)),
-                        ],
-                      ),
+                      const Text('Notifikasi', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                      const SizedBox(width: 8),
+                      if (_notifications.isNotEmpty)
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                          decoration: BoxDecoration(color: AppColors.primary, borderRadius: BorderRadius.circular(10)),
+                          child: Text('${_notifications.length} Baru', style: const TextStyle(fontSize: 10, color: Colors.white, fontWeight: FontWeight.bold)),
+                        ),
+                      const Spacer(),
+                      if (_notifications.isNotEmpty)
+                        GestureDetector(
+                          onTap: () {
+                            setState(() => _notifications.clear());
+                            setSheetState(() {});
+                          },
+                          child: const Text('Hapus Semua', style: TextStyle(fontSize: 12, color: Colors.red, fontWeight: FontWeight.w600)),
+                        ),
                     ],
                   ),
                 ),
-                const SizedBox(height: 24),
-
-                // STATISTIK GLASSMORPHISM
-                Row(
-                  children: [
-                    Expanded(child: _buildGlassStat('3', 'Proyek Aktif', Icons.handshake_rounded)),
-                    const SizedBox(width: 12),
-                    Expanded(child: _buildGlassStat('12', 'Selesai', Icons.task_alt_rounded)),
-                    const SizedBox(width: 12),
-                    Expanded(child: _buildGlassStat('4.9', 'Rating', Icons.star_rounded)),
-                  ],
-                ),
-                const SizedBox(height: 30),
-
-                // PINTASAN AKSI
-                const Text('Pintasan Aksi', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.black87)),
-                const SizedBox(height: 16),
-                Row(
-                  children: [
-                    Expanded(
-                      child: IOSGlassCard(
-                        blur: 15,
-                        child: ListTile(
-                          leading: const Icon(Icons.search_rounded, color: AppColors.primary),
-                          title: const Text("Cari Tender", style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
-                          onTap: () {}, // Nanti arahin ke tab Proyek
-                        ),
-                      ),
+                const Divider(height: 1),
+                if (_notifications.isEmpty)
+                  const Padding(
+                    padding: EdgeInsets.all(40),
+                    child: Text('Tidak ada notifikasi baru', style: TextStyle(color: Colors.grey, fontStyle: FontStyle.italic)),
+                  )
+                else
+                  Flexible(
+                    child: ListView.separated(
+                      shrinkWrap: true,
+                      padding: const EdgeInsets.symmetric(vertical: 8),
+                      itemCount: _notifications.length,
+                      separatorBuilder: (_, __) => const Divider(height: 1, indent: 16, endIndent: 16),
+                      itemBuilder: (_, i) {
+                        final n = _notifications[i];
+                        return ListTile(
+                          leading: Container(
+                            padding: const EdgeInsets.all(8),
+                            decoration: BoxDecoration(color: n.color.withOpacity(0.1), borderRadius: BorderRadius.circular(10)),
+                            child: Icon(n.icon, size: 18, color: n.color),
+                          ),
+                          title: Text(n.text, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
+                          subtitle: Text(n.time, style: const TextStyle(fontSize: 10, color: Colors.black38)),
+                          trailing: Container(width: 8, height: 8, decoration: const BoxDecoration(color: AppColors.primary, shape: BoxShape.circle)),
+                          onTap: () {
+                            setState(() => _notifications.removeAt(i));
+                            setSheetState(() {});
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(content: Text('Notifikasi dibaca'), duration: Duration(seconds: 1)),
+                            );
+                          },
+                        );
+                      },
                     ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: IOSGlassCard(
-                        blur: 15,
-                        child: ListTile(
-                          leading: const Icon(Icons.folder_shared_rounded, color: AppColors.primary),
-                          title: const Text("Update Portofolio", style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
-                          onTap: () {}, 
-                        ),
-                      ),
-                    ),
-                  ],
-                )
+                  ),
               ],
             ),
+          );
+        },
+      ),
+    );
+  }
+
+  // --- BUILD ---
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: AppColors.backgroundCream,
+      body: SafeArea(
+        child: RefreshIndicator(
+          color: AppColors.primary,
+          onRefresh: _refresh,
+          child: FutureBuilder<List<dynamic>>(
+            future: _dataFuture,
+            builder: (context, snapshot) {
+              if (snapshot.connectionState == ConnectionState.waiting) {
+                return const Center(child: CircularProgressIndicator(color: AppColors.primary));
+              }
+              final profile = snapshot.data?[0] as ProfileModel?;
+              final tenders = (snapshot.data?[1] as List<ProjectModel>? ?? []);
+              final activeProjects = (snapshot.data?[2] as List<ProjectModel>? ?? []);
+
+              return SingleChildScrollView(
+                physics: const AlwaysScrollableScrollPhysics(parent: BouncingScrollPhysics()),
+                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _buildAppBar(profile),
+                    const SizedBox(height: 20),
+                    _buildWelcomeCard(profile),
+                    const SizedBox(height: 24),
+                    _buildStatsRow(activeProjects.length),
+                    const SizedBox(height: 28),
+                    _buildSectionHeader('Penawaran Masuk', onTap: _goToProyekTab),
+                    const SizedBox(height: 12),
+                    _buildPenawaranList(tenders),
+                    const SizedBox(height: 28),
+                    _buildSectionHeader('Proyek Berjalan', onTap: _goToProgressTab),
+                    const SizedBox(height: 12),
+                    _buildProyekBerjalan(activeProjects),
+                    const SizedBox(height: 100),
+                  ],
+                ),
+              );
+            },
           ),
         ),
       ),
     );
   }
 
-  Widget _buildGlassStat(String value, String label, IconData icon) {
-    return IOSGlassCard(
-      blur: 20,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 16),
+  // --- APP BAR (ORIGINAL LOGO) ---
+
+  Widget _buildAppBar(ProfileModel? profile) {
+    return Row(
+      children: [
+        Container(
+          padding: const EdgeInsets.all(8),
+          decoration: BoxDecoration(color: AppColors.primary, borderRadius: BorderRadius.circular(10)),
+          child: const Icon(Icons.hardware_rounded, color: Colors.white, size: 20),
+        ),
+        const SizedBox(width: 10),
+        const Text('BuildMatch Vendor', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: Colors.black87)),
+        const Spacer(),
+        _buildIconBtn(Icons.chat_bubble_outline_rounded, onTap: () {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Fitur chat akan segera hadir')),
+          );
+        }),
+        const SizedBox(width: 8),
+        _buildIconBtn(Icons.notifications_none_rounded, badge: _notifications.length, onTap: _showNotifSheet),
+        const SizedBox(width: 8),
+        GestureDetector(
+          onTap: _openEditProfile,
+          child: CircleAvatar(
+            radius: 18,
+            backgroundColor: AppColors.cardCream,
+            backgroundImage: profile?.avatarUrl != null ? NetworkImage(profile!.avatarUrl!) : null,
+            child: profile?.avatarUrl == null
+                ? const Icon(Icons.person, size: 20, color: AppColors.primary)
+                : null,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildIconBtn(IconData icon, {VoidCallback? onTap, int badge = 0}) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(color: AppColors.cardCream, borderRadius: BorderRadius.circular(12)),
+            child: Icon(icon, size: 20, color: AppColors.primary),
+          ),
+          if (badge > 0)
+            Positioned(
+              top: -2,
+              right: -2,
+              child: Container(
+                padding: const EdgeInsets.all(4),
+                decoration: const BoxDecoration(color: Colors.red, shape: BoxShape.circle),
+                constraints: const BoxConstraints(minWidth: 16, minHeight: 16),
+                child: Text(
+                  '$badge',
+                  style: const TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.bold),
+                  textAlign: TextAlign.center,
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  // --- WELCOME CARD ---
+
+  Widget _buildWelcomeCard(ProfileModel? profile) {
+    final user = Supabase.instance.client.auth.currentUser;
+    final name = profile?.name.isNotEmpty == true
+        ? profile!.name
+        : (user?.userMetadata?['name'] ?? 'Kontraktor');
+    final company = profile?.companyName ?? 'Vendor BuildMatch';
+    final completion = _profileCompletion(profile);
+
+    return GestureDetector(
+      onTap: _openEditProfile,
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(20),
+        decoration: BoxDecoration(
+          gradient: AppColors.primaryGradient,
+          borderRadius: BorderRadius.circular(20),
+          boxShadow: [BoxShadow(color: AppColors.primaryDark.withOpacity(0.2), blurRadius: 12, offset: const Offset(0, 6))],
+        ),
         child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Icon(icon, color: AppColors.primary, size: 24),
+            const Text('Selamat datang,', style: TextStyle(color: Colors.white70, fontSize: 13)),
+            const SizedBox(height: 4),
+            Text(name, style: const TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.bold)),
+            const SizedBox(height: 4),
+            Row(
+              children: [
+                const Icon(Icons.business, color: Colors.white70, size: 14),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: Text(company, style: const TextStyle(color: Colors.white70, fontSize: 13), overflow: TextOverflow.ellipsis),
+                ),
+                if (profile?.isVerified == true) ...[
+                  const Icon(Icons.verified, color: Colors.white, size: 14),
+                ],
+              ],
+            ),
+            const SizedBox(height: 16),
+            Row(
+              children: [
+                Text('Profil ${(completion * 100).toInt()}% lengkap', style: const TextStyle(color: Colors.white70, fontSize: 12)),
+                const Spacer(),
+                Text('${(completion * 100).toInt()}%', style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold)),
+              ],
+            ),
             const SizedBox(height: 8),
-            Text(value, style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 18, color: Colors.black87)),
-            Text(label, style: const TextStyle(fontSize: 11, color: Colors.black54, fontWeight: FontWeight.bold)),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(10),
+              child: LinearProgressIndicator(
+                value: completion,
+                minHeight: 6,
+                backgroundColor: Colors.white24,
+                valueColor: const AlwaysStoppedAnimation<Color>(Colors.white),
+              ),
+            ),
+            const SizedBox(height: 14),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+              decoration: BoxDecoration(color: Colors.white.withOpacity(0.2), borderRadius: BorderRadius.circular(20)),
+              child: const Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text('Lengkapi Sekarang', style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w600)),
+                  SizedBox(width: 4),
+                  Icon(Icons.arrow_forward, color: Colors.white, size: 14),
+                ],
+              ),
+            ),
           ],
         ),
       ),
     );
   }
+
+  double _profileCompletion(ProfileModel? p) {
+    if (p == null) return 0.0;
+    int filled = 0;
+    const total = 6;
+    if (p.name.isNotEmpty) filled++;
+    if (p.companyName?.isNotEmpty == true) filled++;
+    if (p.phone?.isNotEmpty == true) filled++;
+    if (p.npwp?.isNotEmpty == true) filled++;
+    if (p.straNumber?.isNotEmpty == true) filled++;
+    if (p.avatarUrl?.isNotEmpty == true) filled++;
+    return filled / total;
+  }
+
+  // --- STATS ---
+
+  Widget _buildStatsRow(int activeCount) {
+    return Row(
+      children: [
+        _buildStatItem('$activeCount', 'Proyek Aktif'),
+        const SizedBox(width: 10),
+        _buildStatItem('12', 'Selesai'),
+        const SizedBox(width: 10),
+        _buildStatItem('45jt', 'Pendapatan'),
+        const SizedBox(width: 10),
+        _buildStatItemWithIcon('4.9', 'Rating', Icons.star_rounded),
+      ],
+    );
+  }
+
+  Widget _buildStatItem(String val, String label) {
+    return Expanded(
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 14),
+        decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(14)),
+        child: Column(
+          children: [
+            Text(val, style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 16, color: AppColors.primary)),
+            const SizedBox(height: 2),
+            Text(label, style: const TextStyle(fontSize: 10, color: Colors.black54), textAlign: TextAlign.center),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildStatItemWithIcon(String val, String label, IconData icon) {
+    return Expanded(
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 14),
+        decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(14)),
+        child: Column(
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Text(val, style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 16, color: AppColors.primary)),
+                const SizedBox(width: 2),
+                Icon(icon, color: Colors.amber, size: 16),
+              ],
+            ),
+            const SizedBox(height: 2),
+            Text(label, style: const TextStyle(fontSize: 10, color: Colors.black54)),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // --- SECTION HEADER ---
+
+  Widget _buildSectionHeader(String title, {VoidCallback? onTap}) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Text(title, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+        GestureDetector(
+          onTap: onTap,
+          child: const Text('Lihat Semua', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.primary)),
+        ),
+      ],
+    );
+  }
+
+  // --- PENAWARAN MASUK ---
+
+  Widget _buildPenawaranList(List<ProjectModel> tenders) {
+    if (tenders.isEmpty) {
+      return _buildEmptyCard('Belum ada penawaran masuk');
+    }
+    final list = tenders.take(5).toList();
+    return SizedBox(
+      height: 200,
+      child: ListView.builder(
+        scrollDirection: Axis.horizontal,
+        itemCount: list.length,
+        itemBuilder: (_, i) {
+          final p = list[i];
+          return GestureDetector(
+            onTap: () => _openProjectDetail(p),
+            child: Container(
+              width: 220,
+              margin: EdgeInsets.only(right: i < list.length - 1 ? 12 : 0),
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: Colors.grey.shade200),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                    decoration: BoxDecoration(color: AppColors.primary.withOpacity(0.1), borderRadius: BorderRadius.circular(8)),
+                    child: const Text('Baru', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: AppColors.primary)),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(p.title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13), maxLines: 2, overflow: TextOverflow.ellipsis),
+                  const SizedBox(height: 6),
+                  _infoRow(Icons.person_outline, p.clientName ?? 'Klien'),
+                  const SizedBox(height: 3),
+                  _infoRow(Icons.location_on_outlined, p.location ?? 'Lokasi tidak diketahui'),
+                  const SizedBox(height: 3),
+                  _infoRow(Icons.monetization_on_outlined, AppFormatters.formatRupiah(p.budget), color: AppColors.primary, bold: true),
+                  const Spacer(),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(_timeAgo(p.createdAt), style: const TextStyle(fontSize: 10, color: Colors.black38)),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                        decoration: BoxDecoration(color: AppColors.primary, borderRadius: BorderRadius.circular(8)),
+                        child: const Text('Lihat Detail', style: TextStyle(fontSize: 10, color: Colors.white, fontWeight: FontWeight.w600)),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _infoRow(IconData icon, String text, {Color? color, bool bold = false}) {
+    return Row(
+      children: [
+        Icon(icon, size: 12, color: color ?? Colors.black54),
+        const SizedBox(width: 4),
+        Expanded(
+          child: Text(
+            text,
+            style: TextStyle(fontSize: 11, color: color ?? Colors.black54, fontWeight: bold ? FontWeight.w600 : FontWeight.normal),
+            overflow: TextOverflow.ellipsis,
+          ),
+        ),
+      ],
+    );
+  }
+
+  // --- PROYEK BERJALAN ---
+
+  Widget _buildProyekBerjalan(List<ProjectModel> projects) {
+    if (projects.isEmpty) {
+      return _buildEmptyCard('Belum ada proyek berjalan');
+    }
+    final list = projects.take(3).toList();
+    return Column(
+      children: list.map((p) {
+        final progress = (p.progressPercent / 100).clamp(0.0, 1.0);
+        return GestureDetector(
+          onTap: () => _openProjectDetail(p),
+          child: Container(
+            margin: const EdgeInsets.only(bottom: 12),
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: Colors.grey.shade200),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Expanded(child: Text(p.title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14))),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                      decoration: BoxDecoration(color: AppColors.primary.withOpacity(0.1), borderRadius: BorderRadius.circular(8)),
+                      child: Text(
+                        _formatDate(p.createdAt),
+                        style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w600, color: AppColors.primary),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 4),
+                Row(children: [
+                  const Icon(Icons.person_outline, size: 13, color: Colors.black54),
+                  const SizedBox(width: 4),
+                  Text(p.clientName ?? 'Klien', style: const TextStyle(fontSize: 12, color: Colors.black54)),
+                ]),
+                const SizedBox(height: 12),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    const Text('Progres', style: TextStyle(fontSize: 12, color: Colors.black54)),
+                    Text('${p.progressPercent}%', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                  ],
+                ),
+                const SizedBox(height: 6),
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(10),
+                  child: LinearProgressIndicator(
+                    value: progress,
+                    minHeight: 7,
+                    backgroundColor: Colors.grey.shade200,
+                    valueColor: const AlwaysStoppedAnimation<Color>(AppColors.primary),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      }).toList(),
+    );
+  }
+
+  // --- HELPERS ---
+
+  Widget _buildEmptyCard(String text) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(24),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.grey.shade200),
+      ),
+      child: Center(
+        child: Text(text, style: const TextStyle(fontStyle: FontStyle.italic, color: Colors.grey, fontSize: 12)),
+      ),
+    );
+  }
+
+  String _timeAgo(DateTime? date) {
+    if (date == null) return '';
+    final diff = DateTime.now().difference(date);
+    if (diff.inMinutes < 60) return '${diff.inMinutes} menit yang lalu';
+    if (diff.inHours < 24) return '${diff.inHours} jam yang lalu';
+    if (diff.inDays < 30) return '${diff.inDays} hari yang lalu';
+    return _formatDate(date);
+  }
+
+  String _formatDate(DateTime? date) {
+    if (date == null) return '-';
+    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'];
+    return '${date.day} ${months[date.month - 1]} ${date.year}';
+  }
+}
+
+class _NotifItem {
+  final IconData icon;
+  final String text;
+  final String time;
+  final Color color;
+  _NotifItem(this.icon, this.text, this.time, this.color);
 }

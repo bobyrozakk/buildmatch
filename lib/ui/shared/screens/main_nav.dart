@@ -43,7 +43,7 @@ class _MainNavScreenState extends State<MainNavScreen> {
     ];
 
     final List<Widget> vendorTabs = [
-      const KontraktorHomeTab(),
+      KontraktorHomeTab(onSwitchTab: (i) => setState(() => _currentIndex = i)),
       const KontraktorProyekTab(),
       const Center(child: Text('Arsitek')), // Placeholder sementara
       const Center(child: Text('Progress Kontraktor')), // Placeholder sementara

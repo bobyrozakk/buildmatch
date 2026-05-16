@@ -122,6 +122,29 @@ class ProjectProvider extends ChangeNotifier {
     }
   }
 
+  // --- AMBIL PROYEK BERJALAN UNTUK VENDOR ---
+  /// Mengambil proyek yang dimiliki/dikerjakan vendor saat ini (status != 'open' atau progress > 0).
+  /// Saat ini menggunakan filter status != 'open' dari semua proyek.
+  Future<List<ProjectModel>> fetchVendorActiveProjects() async {
+    try {
+      final vendorId = _supabase.auth.currentUser?.id;
+      if (vendorId == null) return [];
+
+      // Ambil proyek yang sudah tidak open (in_progress/completed) dengan join client name
+      final response = await _supabase
+          .from('projects')
+          .select('*, profiles:client_id(name)')
+          .neq('status', 'open')
+          .order('created_at', ascending: false);
+      return List<Map<String, dynamic>>.from(response)
+          .map((json) => ProjectModel.fromJson(json))
+          .toList();
+    } catch (e) {
+      debugPrint("Error fetch vendor active projects: $e");
+      return [];
+    }
+  }
+
   // --- KIRIM PENAWARAN (BID) ---
   Future<bool> submitBid({
     required String projectId,
