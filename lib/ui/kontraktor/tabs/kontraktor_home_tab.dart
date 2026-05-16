@@ -223,7 +223,12 @@ class _KontraktorHomeTabState extends State<KontraktorHomeTab> {
           child: const Icon(Icons.hardware_rounded, color: Colors.white, size: 20),
         ),
         const SizedBox(width: 10),
-        const Text('BuildMatch Vendor', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: Colors.black87)),
+        RichText(
+          text: const TextSpan(children: [
+            TextSpan(text: 'Build', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: AppColors.primary)),
+            TextSpan(text: 'Match', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: Colors.black87)),
+          ]),
+        ),
         const Spacer(),
         _buildIconBtn(Icons.chat_bubble_outline_rounded, onTap: () {
           ScaffoldMessenger.of(context).showSnackBar(

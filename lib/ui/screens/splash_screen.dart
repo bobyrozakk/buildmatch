@@ -75,14 +75,27 @@ class _SplashScreenState extends State<SplashScreen>
               const SizedBox(height: 20),
 
               // App Name
-              const Text(
-                'BuildMatch',
-                style: TextStyle(
-                  fontSize: 32,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.white,
-                  letterSpacing: 0.5,
-                ),
+              RichText(
+                text: TextSpan(children: [
+                  TextSpan(
+                    text: 'Build',
+                    style: TextStyle(
+                      fontSize: 32,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.white.withOpacity(0.95),
+                      letterSpacing: 0.5,
+                    ),
+                  ),
+                  TextSpan(
+                    text: 'Match',
+                    style: TextStyle(
+                      fontSize: 32,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.white.withOpacity(0.7),
+                      letterSpacing: 0.5,
+                    ),
+                  ),
+                ]),
               ),
               const SizedBox(height: 8),
 
