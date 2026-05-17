@@ -37,6 +37,24 @@ class KontraktorDetailProyekScreen extends StatefulWidget {
 class _KontraktorDetailProyekScreenState extends State<KontraktorDetailProyekScreen> {
   final _priceController = TextEditingController();
   final _messageController = TextEditingController();
+  bool _alreadyBid = false;
+  bool _checkingBid = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _checkExistingBid();
+  }
+
+  Future<void> _checkExistingBid() async {
+    final provider = Provider.of<ProjectProvider>(context, listen: false);
+    final result = await provider.hasVendorBidOnProject(widget.project.id ?? '');
+    if (!mounted) return;
+    setState(() {
+      _alreadyBid = result;
+      _checkingBid = false;
+    });
+  }
 
   @override
   void dispose() {
@@ -46,6 +64,7 @@ class _KontraktorDetailProyekScreenState extends State<KontraktorDetailProyekScr
   }
 
   void _submitBid() async {
+    if (_alreadyBid) return;
     if (_priceController.text.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Harga penawaran wajib diisi!')));
       return;
@@ -60,6 +79,7 @@ class _KontraktorDetailProyekScreenState extends State<KontraktorDetailProyekScr
 
     if (!mounted) return;
     if (success) {
+      setState(() => _alreadyBid = true);
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Penawaran (Bid) berhasil dikirim!'), backgroundColor: Colors.green));
       Navigator.pop(context);
     } else {
@@ -289,6 +309,7 @@ class _KontraktorDetailProyekScreenState extends State<KontraktorDetailProyekScr
                     TextField(
                       controller: _priceController,
                       keyboardType: TextInputType.number,
+                      enabled: !_alreadyBid,
                       style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
                       inputFormatters: [
                         FilteringTextInputFormatter.digitsOnly,
@@ -308,6 +329,7 @@ class _KontraktorDetailProyekScreenState extends State<KontraktorDetailProyekScr
                     TextField(
                       controller: _messageController,
                       maxLines: 3,
+                      enabled: !_alreadyBid,
                       decoration: InputDecoration(
                         labelText: 'Pesan / Catatan ke Klien',
                         hintText: 'Contoh: Estimasi waktu 4 bulan, sudah termasuk material premium...',
@@ -329,19 +351,23 @@ class _KontraktorDetailProyekScreenState extends State<KontraktorDetailProyekScr
               height: 55,
               decoration: BoxDecoration(
                 borderRadius: BorderRadius.circular(16),
-                boxShadow: [
-                  BoxShadow(
-                    color: AppColors.primary.withOpacity(0.35),
-                    blurRadius: 16,
-                    offset: const Offset(0, 6),
-                  ),
-                ],
+                boxShadow: _alreadyBid
+                    ? null
+                    : [
+                        BoxShadow(
+                          color: AppColors.primary.withOpacity(0.35),
+                          blurRadius: 16,
+                          offset: const Offset(0, 6),
+                        ),
+                      ],
               ),
               child: ElevatedButton.icon(
-                onPressed: isLoading ? null : _submitBid,
+                onPressed: (isLoading || _alreadyBid || _checkingBid) ? null : _submitBid,
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: AppColors.primary,
-                  disabledBackgroundColor: AppColors.primary.withOpacity(0.6),
+                  backgroundColor: _alreadyBid ? Colors.grey.shade400 : AppColors.primary,
+                  disabledBackgroundColor: _alreadyBid
+                      ? Colors.grey.shade400
+                      : AppColors.primary.withOpacity(0.6),
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                   elevation: 0,
                 ),
@@ -351,9 +377,15 @@ class _KontraktorDetailProyekScreenState extends State<KontraktorDetailProyekScr
                         height: 22,
                         child: CircularProgressIndicator(strokeWidth: 2.5, color: Colors.white),
                       )
-                    : const Icon(Icons.send_rounded, color: Colors.white, size: 20),
+                    : Icon(
+                        _alreadyBid ? Icons.check_circle_rounded : Icons.send_rounded,
+                        color: Colors.white,
+                        size: 20,
+                      ),
                 label: Text(
-                  isLoading ? 'Mengirim...' : 'Kirim Penawaran ke Klien',
+                  _alreadyBid
+                      ? 'Anda Sudah Menawarkan'
+                      : (isLoading ? 'Mengirim...' : 'Kirim Penawaran ke Klien'),
                   style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white),
                 ),
               ),

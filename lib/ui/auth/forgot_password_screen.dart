@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import '../../core/constants/colors.dart';
-import '../../core/widgets/buildmatch_appbar.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'create_new_password_screen.dart';
 
@@ -13,7 +12,6 @@ class ForgotPasswordScreen extends StatefulWidget {
 
 class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
   final _emailController = TextEditingController();
-  bool _isLoading = false;
 
   @override
   void dispose() {
@@ -29,7 +27,6 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
       );
       return;
     }
-    setState(() => _isLoading = true);
     try {
       await Supabase.instance.client.auth.resetPasswordForEmail(email);
       if (!mounted) return;
@@ -48,8 +45,6 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Gagal kirim email: ${e.toString()}')),
       );
-    } finally {
-      if (mounted) setState(() => _isLoading = false);
     }
   }
 

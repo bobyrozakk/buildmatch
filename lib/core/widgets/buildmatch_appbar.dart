@@ -41,13 +41,17 @@ class BuildMatchAppBar extends StatelessWidget implements PreferredSizeWidget {
             child: const Icon(Icons.hardware_rounded, color: Colors.white, size: 16),
           ),
           const SizedBox(width: 8),
-          const Text(
-            "BuildMatch",
-            style: TextStyle(
-              color: Colors.black87,
-              fontWeight: FontWeight.bold,
-              fontSize: 18,
-            ),
+          RichText(
+            text: const TextSpan(children: [
+              TextSpan(
+                text: 'Build',
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: AppColors.primary),
+              ),
+              TextSpan(
+                text: 'Match',
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: Colors.black87),
+              ),
+            ]),
           ),
         ],
       ),

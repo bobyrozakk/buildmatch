@@ -171,6 +171,24 @@ class ProjectProvider extends ChangeNotifier {
     }
   }
 
+  // --- CEK APAKAH VENDOR SUDAH PERNAH NAWAR PROYEK INI ---
+  Future<bool> hasVendorBidOnProject(String projectId) async {
+    try {
+      final vendorId = _supabase.auth.currentUser?.id;
+      if (vendorId == null || projectId.isEmpty) return false;
+      final response = await _supabase
+          .from('bids')
+          .select('id')
+          .eq('vendor_id', vendorId)
+          .eq('project_id', projectId)
+          .limit(1);
+      return (response as List).isNotEmpty;
+    } catch (e) {
+      debugPrint("Error check vendor bid: $e");
+      return false;
+    }
+  }
+
   // --- KIRIM PENAWARAN (BID) ---
   Future<bool> submitBid({
     required String projectId,

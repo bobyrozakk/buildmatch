@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:image_picker/image_picker.dart';
 import '../../data/providers/auth_provider.dart';
+import '../../core/widgets/buildmatch_appbar.dart';
 import 'login_screen.dart';
 
 class RegisterScreen extends StatefulWidget {
@@ -222,38 +223,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
     return Scaffold(
       backgroundColor: const Color(0xFFF7F4EF),
-      appBar: AppBar(
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: Colors.black87),
-          onPressed: () => Navigator.pop(context),
-        ),
-        title: Row(
-          children: [
-            Container(
-              padding: const EdgeInsets.all(6),
-              decoration: BoxDecoration(
-                color: const Color(0xFF8B2B0F),
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: const Icon(
-                Icons.hardware_rounded,
-                color: Colors.white,
-                size: 16,
-              ),
-            ),
-            const SizedBox(width: 8),
-            const Text(
-              "BuildMatch",
-              style: TextStyle(
-                color: Colors.black87,
-                fontWeight: FontWeight.bold,
-                fontSize: 18,
-              ),
-            ),
-          ],
-        ),
+      appBar: BuildMatchAppBar(
         actions: [
           Container(
             margin: const EdgeInsets.only(right: 16, top: 12, bottom: 12),
