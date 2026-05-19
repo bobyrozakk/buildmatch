@@ -6,116 +6,212 @@ import '../../../data/models/profile_model.dart';
 import '../../../data/models/portfolio_model.dart';
 import '../../../data/models/certification_model.dart';
 import '../screens/kontraktor_profileEdit_screen.dart';
-import '../../shared/widgets/glass_card.dart';
 import '../../auth/role_screen.dart';
+import '../../shared/widgets/glass_card.dart';
 import '../../../core/constants/colors.dart';
 
 class KontraktorProfileTab extends StatefulWidget {
   const KontraktorProfileTab({super.key});
 
   @override
-  State<KontraktorProfileTab> createState() => _KontraktorProfileTabState();
+  State<KontraktorProfileTab> createState() =>
+      _KontraktorProfileTabState();
 }
 
-class _KontraktorProfileTabState extends State<KontraktorProfileTab> {
-  late Future<List<dynamic>> _dataFuture;
+class _KontraktorProfileTabState
+    extends State<KontraktorProfileTab> {
+
+  late Future<List<dynamic>> _future;
 
   @override
   void initState() {
     super.initState();
-    _loadData();
+    _load();
   }
 
-  // --- ACTIONS ---
+  void _load() {
+    final provider =
+        Provider.of<VendorProvider>(
+      context,
+      listen: false,
+    );
 
-  void _loadData() {
-    final provider = Provider.of<VendorProvider>(context, listen: false);
-    _dataFuture = Future.wait([
+    _future = Future.wait([
       provider.fetchVendorProfile(),
       provider.fetchPortfolios(),
       provider.fetchCertifications(),
     ]);
   }
 
-  Future<void> _handleLogout() async {
-    final provider = Provider.of<AuthProvider>(context, listen: false);
+  Future<void> _logout() async {
+    final provider =
+        Provider.of<AuthProvider>(
+      context,
+      listen: false,
+    );
+
     await provider.logout();
+
     if (!mounted) return;
+
     Navigator.pushAndRemoveUntil(
       context,
-      MaterialPageRoute(builder: (_) => const RoleScreen()),
-      (route) => false,
+      MaterialPageRoute(
+        builder: (_) => const RoleScreen(),
+      ),
+      (_) => false,
     );
   }
-
-  Future<void> _navigateToEdit() async {
-    await Navigator.push(context, MaterialPageRoute(builder: (_) => const EditProfileScreen()));
-    _loadData();
-    setState(() {});
-  }
-
-  // --- BUILD ---
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.backgroundCream,
-      body: FutureBuilder(
-        future: _dataFuture,
-        builder: (context, AsyncSnapshot<List<dynamic>> snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Center(child: CircularProgressIndicator(color: AppColors.primary));
+      backgroundColor:
+          AppColors.backgroundCream,
+
+      body: FutureBuilder<List<dynamic>>(
+        future: _future,
+        builder: (_, snapshot) {
+
+          if (snapshot.connectionState ==
+              ConnectionState.waiting) {
+            return const Center(
+              child: CircularProgressIndicator(
+                color: AppColors.primary,
+              ),
+            );
           }
 
-          final profile = snapshot.data?[0] as ProfileModel?;
-          final portfolios = snapshot.data?[1] as List<PortfolioModel>? ?? [];
-          final certifications = snapshot.data?[2] as List<CertificationModel>? ?? [];
+          final profile =
+              snapshot.data?[0] as ProfileModel?;
+
+          final portfolios =
+              snapshot.data?[1]
+                      as List<PortfolioModel>? ??
+                  [];
+
+          final certifications =
+              snapshot.data?[2]
+                      as List<CertificationModel>? ??
+                  [];
 
           return CustomScrollView(
-            physics: const BouncingScrollPhysics(),
+            physics:
+                const BouncingScrollPhysics(),
             slivers: [
-              SliverToBoxAdapter(child: _buildHeader(profile)),
-              SliverPadding(
-                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
-                sliver: SliverToBoxAdapter(child: _buildStatsRow(portfolios.length)),
+
+              SliverToBoxAdapter(
+                child: _header(profile),
               ),
-              _buildSectionTitle("Portofolio Karyamu"),
+
+              SliverPadding(
+                padding:
+                    const EdgeInsets.all(20),
+                sliver: SliverToBoxAdapter(
+                  child: _stats(portfolios),
+                ),
+              ),
+
+              _title('Portofolio'),
+
               SliverToBoxAdapter(
                 child: SizedBox(
-                  height: 160,
+                  height: 180,
                   child: portfolios.isEmpty
-                      ? _buildEmptyState("Belum ada portofolio")
+                      ? _empty(
+                          'Belum ada portofolio',
+                        )
                       : ListView.builder(
-                          padding: const EdgeInsets.symmetric(horizontal: 24),
-                          scrollDirection: Axis.horizontal,
-                          itemCount: portfolios.length,
-                          itemBuilder: (_, i) => _buildPortoCard(portfolios[i]),
+                          scrollDirection:
+                              Axis.horizontal,
+                          padding:
+                              const EdgeInsets.symmetric(
+                            horizontal: 20,
+                          ),
+                          itemCount:
+                              portfolios.length,
+                          itemBuilder: (_, i) =>
+                              _portoCard(
+                            portfolios[i],
+                          ),
                         ),
                 ),
               ),
-              _buildSectionTitle("Sertifikasi & Keahlian"),
-              certifications.isEmpty
-                  ? SliverToBoxAdapter(child: _buildEmptyState("Belum ada sertifikat"))
-                  : SliverPadding(
-                      padding: const EdgeInsets.symmetric(horizontal: 24),
-                      sliver: SliverList(
-                        delegate: SliverChildBuilderDelegate(
-                          (_, i) => _buildSertifCard(certifications[i]),
-                          childCount: certifications.length,
-                        ),
-                      ),
-                    ),
+
+              _title('Sertifikasi'),
+
               SliverPadding(
-                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
-                sliver: SliverToBoxAdapter(
-                  child: TextButton.icon(
-                    onPressed: _handleLogout,
-                    icon: const Icon(Icons.logout_rounded, color: Colors.red),
-                    label: const Text('Keluar', style: TextStyle(color: Colors.red, fontWeight: FontWeight.w600)),
+                padding:
+                    const EdgeInsets.symmetric(
+                  horizontal: 20,
+                ),
+                sliver: SliverList(
+                  delegate:
+                      SliverChildBuilderDelegate(
+                    (_, i) => _certCard(
+                      certifications[i],
+                    ),
+                    childCount:
+                        certifications.length,
                   ),
                 ),
               ),
-              const SliverToBoxAdapter(child: SizedBox(height: 60)),
+
+              _title('Pengaturan'),
+
+              SliverPadding(
+                padding:
+                    const EdgeInsets.symmetric(
+                  horizontal: 20,
+                ),
+                sliver: SliverToBoxAdapter(
+                  child: Column(
+                    children: [
+
+                      _menuTile(
+                        Icons.edit_outlined,
+                        'Kelola Profil',
+                        () async {
+                          await Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) =>
+                                  const EditProfileScreen(),
+                            ),
+                          );
+
+                          setState(() {
+                            _load();
+                          });
+                        },
+                      ),
+
+                      _menuTile(
+                        Icons.reviews_outlined,
+                        'Lihat Ulasan',
+                        () {},
+                      ),
+
+                      _menuTile(
+                        Icons.support_agent_outlined,
+                        'Hubungi CS',
+                        () {},
+                      ),
+
+                      _menuTile(
+                        Icons.logout_rounded,
+                        'Keluar',
+                        _logout,
+                        isDanger: true,
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+
+              const SliverToBoxAdapter(
+                child: SizedBox(height: 100),
+              ),
             ],
           );
         },
@@ -123,149 +219,385 @@ class _KontraktorProfileTabState extends State<KontraktorProfileTab> {
     );
   }
 
-  // --- WIDGETS ---
+Widget _header(ProfileModel? p) {
+  return Stack(
+    children: [
 
-  Widget _buildHeader(ProfileModel? profile) {
-    return Stack(
-      children: [
-        Container(height: 120, decoration: const BoxDecoration(color: AppColors.primary)),
-        Padding(
-          padding: const EdgeInsets.fromLTRB(24, 60, 24, 0),
-          child: IOSGlassCard(
-            blur: 20,
-            child: Padding(
-              padding: const EdgeInsets.all(20),
-              child: Row(
-                children: [
-                  CircleAvatar(
-                    radius: 35,
-                    backgroundColor: AppColors.cardCream,
-                    backgroundImage: profile?.avatarUrl != null ? NetworkImage(profile!.avatarUrl!) : null,
-                    child: profile?.avatarUrl == null
-                        ? const Icon(Icons.person, size: 35, color: AppColors.primary)
-                        : null,
-                  ),
-                  const SizedBox(width: 16),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(profile?.name ?? 'Vendor Name', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                        Text(profile?.companyName ?? 'Nama Perusahaan', style: const TextStyle(fontSize: 13, color: Colors.black54)),
-                        if (profile?.isVerified == true)
-                          const Text('✓ Terverifikasi', style: TextStyle(color: Colors.green, fontSize: 11, fontWeight: FontWeight.bold)),
-                      ],
-                    ),
-                  ),
-                  IconButton(
-                    icon: const Icon(Icons.edit_note, color: AppColors.primary),
-                    onPressed: _navigateToEdit,
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildStatsRow(int portoCount) {
-    return Row(
-      children: [
-        _buildStatItem("$portoCount", "Proyek"),
-        const SizedBox(width: 12),
-        _buildStatItem("4.9", "Rating"),
-        const SizedBox(width: 12),
-        _buildStatItem("Aktif", "Status"),
-      ],
-    );
-  }
-
-  Widget _buildStatItem(String val, String label) {
-    return Expanded(
-      child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 12),
-        decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16)),
-        child: Column(
-          children: [
-            Text(val, style: const TextStyle(fontWeight: FontWeight.w900, color: AppColors.primary)),
-            Text(label, style: const TextStyle(fontSize: 10, color: Colors.black45)),
-          ],
+      Container(
+        height: 170,
+        decoration: const BoxDecoration(
+          color: AppColors.primary,
         ),
       ),
-    );
-  }
 
-  Widget _buildSectionTitle(String title) {
-    return SliverPadding(
-      padding: const EdgeInsets.fromLTRB(24, 32, 24, 16),
-      sliver: SliverToBoxAdapter(
-        child: Text(title, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-      ),
-    );
-  }
-
-  Widget _buildPortoCard(PortfolioModel data) {
-    return Container(
-      width: 140,
-      margin: const EdgeInsets.only(right: 12),
-      decoration: BoxDecoration(
-        color: Colors.grey.shade300,
-        borderRadius: BorderRadius.circular(16),
-        image: data.imageUrl != null
-            ? DecorationImage(image: NetworkImage(data.imageUrl!), fit: BoxFit.cover)
-            : null,
-      ),
-      child: Container(
-        padding: const EdgeInsets.all(12),
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(16),
-          gradient: LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: [Colors.transparent, Colors.black.withOpacity(0.7)],
-          ),
+      Padding(
+        padding: const EdgeInsets.fromLTRB(
+          20,
+          70,
+          20,
+          0,
         ),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.end,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(data.title, style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold)),
-            Text(data.year, style: const TextStyle(color: Colors.white70, fontSize: 9)),
-          ],
-        ),
-      ),
-    );
-  }
 
-  Widget _buildSertifCard(CertificationModel data) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16)),
-      child: Row(
-        children: [
-          const Icon(Icons.verified_outlined, color: AppColors.primary),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+        child: IOSGlassCard(
+          blur: 18,
+
+          child: Padding(
+            padding: const EdgeInsets.all(22),
+
+            child: Row(
               children: [
-                Text(data.title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
-                Text(data.issuer, style: const TextStyle(fontSize: 11, color: Colors.black54)),
+
+                CircleAvatar(
+                  radius: 38,
+                  backgroundColor:
+                      Colors.white,
+
+                  backgroundImage:
+                      p?.avatarUrl != null
+                          ? NetworkImage(
+                              p!.avatarUrl!,
+                            )
+                          : null,
+
+                  child: p?.avatarUrl == null
+                      ? Text(
+                          (p?.name ?? 'V')
+                              .substring(0, 1)
+                              .toUpperCase(),
+                          style:
+                              const TextStyle(
+                            fontSize: 28,
+                            fontWeight:
+                                FontWeight.bold,
+                            color:
+                                AppColors.primary,
+                          ),
+                        )
+                      : null,
+                ),
+
+                const SizedBox(width: 18),
+
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment:
+                        CrossAxisAlignment
+                            .start,
+
+                    children: [
+
+                      Text(
+                        p?.companyName ??
+                            'Vendor Company',
+
+                        style:
+                            const TextStyle(
+                          fontSize: 20,
+                          fontWeight:
+                              FontWeight.bold,
+                        ),
+                      ),
+
+                      const SizedBox(height: 5),
+
+                      Text(
+                        p?.name ?? '',
+                        style:
+                            const TextStyle(
+                          color:
+                              Colors.black54,
+                        ),
+                      ),
+
+                      const SizedBox(height: 10),
+
+                      if (p?.isVerified ==
+                          true)
+                        Container(
+                          padding:
+                              const EdgeInsets
+                                  .symmetric(
+                            horizontal: 12,
+                            vertical: 6,
+                          ),
+
+                          decoration:
+                              BoxDecoration(
+                            color: Colors
+                                .green
+                                .withOpacity(
+                              0.12,
+                            ),
+
+                            borderRadius:
+                                BorderRadius
+                                    .circular(
+                              20,
+                            ),
+                          ),
+
+                          child: const Text(
+                            '✓ Vendor Terverifikasi',
+
+                            style: TextStyle(
+                              color:
+                                  Colors.green,
+                              fontWeight:
+                                  FontWeight
+                                      .bold,
+                              fontSize: 11,
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+
+                IconButton(
+                  onPressed: () async {
+                    await Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) =>
+                            const EditProfileScreen(),
+                      ),
+                    );
+
+                    setState(() {
+                      _load();
+                    });
+                  },
+
+                  icon: const Icon(
+                    Icons.edit_note_rounded,
+                    color: AppColors.primary,
+                    size: 28,
+                  ),
+                ),
               ],
             ),
           ),
-          const Icon(Icons.check_circle, color: Colors.green, size: 16),
+        ),
+      ),
+    ],
+  );
+}
+
+  Widget _stats(
+    List<PortfolioModel> portfolios,
+  ) {
+    return Row(
+      children: [
+
+        _statBox(
+          portfolios.length.toString(),
+          'Portofolio',
+        ),
+
+        const SizedBox(width: 12),
+
+        _statBox('4.9', 'Rating'),
+
+        const SizedBox(width: 12),
+
+        _statBox('Aktif', 'Status'),
+      ],
+    );
+  }
+
+  Widget _statBox(
+    String value,
+    String label,
+  ) {
+    return Expanded(
+      child: Container(
+        padding:
+            const EdgeInsets.symmetric(
+          vertical: 18,
+        ),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius:
+              BorderRadius.circular(20),
+        ),
+        child: Column(
+          children: [
+
+            Text(
+              value,
+              style: const TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.bold,
+                color: AppColors.primary,
+              ),
+            ),
+
+            const SizedBox(height: 4),
+
+            Text(
+              label,
+              style: const TextStyle(
+                fontSize: 11,
+                color: Colors.black54,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _title(String text) {
+    return SliverPadding(
+      padding:
+          const EdgeInsets.fromLTRB(
+        20,
+        10,
+        20,
+        14,
+      ),
+      sliver: SliverToBoxAdapter(
+        child: Text(
+          text,
+          style: const TextStyle(
+            fontWeight: FontWeight.bold,
+            fontSize: 17,
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _portoCard(PortfolioModel p) {
+    return Container(
+      width: 160,
+      margin: const EdgeInsets.only(right: 14),
+      decoration: BoxDecoration(
+        borderRadius:
+            BorderRadius.circular(24),
+        image: p.imageUrl != null
+            ? DecorationImage(
+                image: NetworkImage(
+                  p.imageUrl!,
+                ),
+                fit: BoxFit.cover,
+              )
+            : null,
+        color: Colors.grey.shade300,
+      ),
+    );
+  }
+
+  Widget _certCard(
+    CertificationModel c,
+  ) {
+    return Container(
+      margin:
+          const EdgeInsets.only(bottom: 14),
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius:
+            BorderRadius.circular(20),
+      ),
+      child: Row(
+        children: [
+
+          Container(
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              color:
+                  AppColors.cardCream,
+              borderRadius:
+                  BorderRadius.circular(
+                14,
+              ),
+            ),
+            child: const Icon(
+              Icons.verified_outlined,
+              color: AppColors.primary,
+            ),
+          ),
+
+          const SizedBox(width: 14),
+
+          Expanded(
+            child: Column(
+              crossAxisAlignment:
+                  CrossAxisAlignment.start,
+              children: [
+
+                Text(
+                  c.title,
+                  style: const TextStyle(
+                    fontWeight:
+                        FontWeight.bold,
+                  ),
+                ),
+
+                const SizedBox(height: 3),
+
+                Text(
+                  c.issuer,
+                  style: const TextStyle(
+                    color: Colors.black54,
+                    fontSize: 12,
+                  ),
+                ),
+              ],
+            ),
+          ),
         ],
       ),
     );
   }
 
-  Widget _buildEmptyState(String text) {
+  Widget _menuTile(
+    IconData icon,
+    String title,
+    VoidCallback onTap, {
+    bool isDanger = false,
+  }) {
+    return Container(
+      margin:
+          const EdgeInsets.only(bottom: 14),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius:
+            BorderRadius.circular(20),
+      ),
+      child: ListTile(
+        onTap: onTap,
+        leading: Icon(
+          icon,
+          color: isDanger
+              ? Colors.red
+              : AppColors.primary,
+        ),
+        title: Text(
+          title,
+          style: TextStyle(
+            fontWeight: FontWeight.w600,
+            color: isDanger
+                ? Colors.red
+                : Colors.black87,
+          ),
+        ),
+        trailing: const Icon(
+          Icons.chevron_right_rounded,
+        ),
+      ),
+    );
+  }
+
+  Widget _empty(String text) {
     return Center(
-      child: Text(text, style: const TextStyle(fontStyle: FontStyle.italic, color: Colors.grey, fontSize: 12)),
+      child: Text(
+        text,
+        style: const TextStyle(
+          color: Colors.black38,
+        ),
+      ),
     );
   }
 }

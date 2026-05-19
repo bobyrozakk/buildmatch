@@ -7,9 +7,10 @@ import '../../client/tabs/progress_tab.dart';
 import '../../client/tabs/contractor_tab.dart';
 import '../../client/tabs/profile_tab.dart'; 
 
-// --- IMPORT TAB KONTRAKTOR ---
+// --- IMPORT TAB KONTRAKTOR ---s
 import '../../kontraktor/tabs/kontraktor_home_tab.dart';
 import '../../kontraktor/tabs/kontraktor_proyek_tab.dart';
+import '../../kontraktor/tabs/kontraktor_progress_tab.dart';
 import '../../kontraktor/tabs/kontraktor_profile_tab.dart'; 
 
 class MainNavScreen extends StatefulWidget {
@@ -42,11 +43,12 @@ class _MainNavScreenState extends State<MainNavScreen> {
     ];
 
     final List<Widget> vendorTabs = [
-      KontraktorHomeTab(onSwitchTab: (i) => setState(() => _currentIndex = i)),
+      KontraktorHomeTab(
+        onSwitchTab: (i) => setState(() => _currentIndex = i),
+      ),
       const KontraktorProyekTab(),
-      const Center(child: Text('Arsitek')), // Placeholder sementara
-      const Center(child: Text('Progress Kontraktor')), // Placeholder sementara
-      const KontraktorProfileTab(), 
+      const KontraktorProgressTab(),
+      const KontraktorProfileTab(),
     ];
 
     // 3. SETUP MENU BAWAH (NAV BAR)
@@ -61,7 +63,6 @@ class _MainNavScreenState extends State<MainNavScreen> {
     final List<NavigationDestination> vendorDestinations = const [
       NavigationDestination(icon: Icon(Icons.home_outlined), label: 'Beranda'),
       NavigationDestination(icon: Icon(Icons.work_outline), label: 'Proyek'),
-      NavigationDestination(icon: Icon(Icons.architecture), label: 'Arsitek'),
       NavigationDestination(icon: Icon(Icons.trending_up), label: 'Progress'),
       NavigationDestination(icon: Icon(Icons.person_outline), label: 'Profile'),
     ];
