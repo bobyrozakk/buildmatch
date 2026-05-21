@@ -218,4 +218,76 @@ class ProjectProvider extends ChangeNotifier {
       return false;
     }
   }
+
+  // --- AMBIL SEMUA BID UNTUK SATU PROYEK (UNTUK CLIENT) ---
+  /// Mengambil semua bid yang masuk pada proyek tertentu, join profil vendor.
+  Future<List<BidModel>> fetchProjectBids(String projectId) async {
+    try {
+      if (projectId.isEmpty) return [];
+      final response = await _supabase
+          .from('bids')
+          .select('*, profiles:vendor_id(name)')
+          .eq('project_id', projectId)
+          .order('created_at', ascending: false);
+      return List<Map<String, dynamic>>.from(response)
+          .map((json) => BidModel.fromJson(json))
+          .toList();
+    } catch (e) {
+      debugPrint("Error fetch project bids: $e");
+      return [];
+    }
+  }
+
+  // --- TERIMA BID (CLIENT) ---
+  /// Update bid menjadi 'accepted', update proyek menjadi 'in_progress'.
+  Future<bool> acceptBid({
+    required String bidId,
+    required String projectId,
+  }) async {
+    _isLoading = true;
+    notifyListeners();
+    try {
+      // 1. Ubah bid yang dipilih ke accepted
+      await _supabase
+          .from('bids')
+          .update({'status': 'accepted'})
+          .eq('id', bidId);
+
+      // 2. Ubah status proyek ke in_progress
+      await _supabase
+          .from('projects')
+          .update({'status': 'in_progress'})
+          .eq('id', projectId);
+
+      _isLoading = false;
+      notifyListeners();
+      return true;
+    } catch (e) {
+      debugPrint("Error accept bid: $e");
+      _isLoading = false;
+      notifyListeners();
+      return false;
+    }
+  }
+
+  // --- TOLAK BID (CLIENT) ---
+  Future<bool> rejectBid({required String bidId}) async {
+    _isLoading = true;
+    notifyListeners();
+    try {
+      await _supabase
+          .from('bids')
+          .update({'status': 'rejected'})
+          .eq('id', bidId);
+
+      _isLoading = false;
+      notifyListeners();
+      return true;
+    } catch (e) {
+      debugPrint("Error reject bid: $e");
+      _isLoading = false;
+      notifyListeners();
+      return false;
+    }
+  }
 }

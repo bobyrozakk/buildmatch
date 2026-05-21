@@ -5,30 +5,31 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 class AuthProvider extends ChangeNotifier {
   final _supabase = Supabase.instance.client;
   bool _isLoading = false;
-
   bool get isLoading => _isLoading;
   User? get currentUser => _supabase.auth.currentUser;
 
-  // FUNGSI REGISTER FULL 
+  // FUNGSI REGISTER FULL
   Future<String?> register({
     required String email,
     required String password,
     required String name,
     required String phone,
-    required String role, 
-    String? companyName, 
-    String? picName, 
-    String? npwp, 
-    File? npwpFile, // <-- Menerima file foto NPWP
-    String? straNumber, 
+    required String role,
+    String? companyName,
+    String? picName,
+    String? npwp,
+    File? npwpFile,
+    String? nib,      // ADDED: NIB 13 digit murni (tanpa spasi)
+    File? nibFile,    // ADDED: Foto bukti NIB
+    String? straNumber,
     String? experienceYears,
-    File? straFile, // <-- Menerima file foto STRA
+    File? straFile,
   }) async {
     _isLoading = true;
     notifyListeners();
 
     try {
-      // 1. FILTER ROLE 
+      // 1. FILTER ROLE
       String dbRole = 'client';
       if (role.toLowerCase() == 'kontraktor') dbRole = 'vendor';
       if (role.toLowerCase() == 'arsitek') dbRole = 'architect';
@@ -39,11 +40,11 @@ class AuthProvider extends ChangeNotifier {
         'phone': phone,
         'role': dbRole,
       };
-
       if (dbRole == 'vendor') {
         if (companyName != null) metadata['company_name'] = companyName;
         if (picName != null) metadata['pic_name'] = picName;
         if (npwp != null) metadata['npwp'] = npwp;
+        if (nib != null) metadata['nib'] = nib; // ADDED
       } else if (dbRole == 'architect') {
         if (straNumber != null) metadata['stra_number'] = straNumber;
         if (experienceYears != null) metadata['experience_years'] = experienceYears;
@@ -57,7 +58,6 @@ class AuthProvider extends ChangeNotifier {
       );
 
       final user = response.user;
-
       if (user != null) {
         // ==========================================
         // 4. UPLOAD FOTO (DI BUNGKUS TRY-CATCH AMAN)
@@ -68,13 +68,20 @@ class AuthProvider extends ChangeNotifier {
             final fileName = '${user.id}_npwp.$ext';
             await _supabase.storage.from('verifications').upload(fileName, npwpFile);
           }
+
+          // ADDED: Upload foto NIB ke bucket verifications
+          if (nibFile != null) {
+            final ext = nibFile.path.split('.').last;
+            final fileName = '${user.id}_nib.$ext'; // path: {userId}_nib.jpg
+            await _supabase.storage.from('verifications').upload(fileName, nibFile);
+          }
+
           if (straFile != null) {
             final ext = straFile.path.split('.').last;
             final fileName = '${user.id}_stra.$ext';
             await _supabase.storage.from('verifications').upload(fileName, straFile);
           }
         } catch (storageError) {
-          // Kalau upload gagal (misal bucket belum dibuat), biarin aja, jangan nge-crash-in sistem
           debugPrint("Peringatan: Gagal upload file dokumen: $storageError");
         }
 
@@ -83,15 +90,16 @@ class AuthProvider extends ChangeNotifier {
         // ==========================================
         try {
           await _supabase.from('profiles').upsert({
-            'id': user.id, // Samain ID profil dengan ID Auth
-            'name': dbRole == 'vendor' ? picName : name, 
+            'id': user.id,
+            'name': dbRole == 'vendor' ? picName : name,
             'phone': phone,
             'role': dbRole,
             'company_name': companyName,
             'npwp': npwp,
+            'nib': nib, // ADDED: simpan 13 digit murni ke kolom nib (VARCHAR)
             'stra_number': straNumber,
             'experience_years': experienceYears,
-            'is_verified': false, 
+            'is_verified': false,
           });
         } catch (dbError) {
           debugPrint("Peringatan: Gagal insert ke tabel profiles: $dbError");
@@ -102,12 +110,11 @@ class AuthProvider extends ChangeNotifier {
       _isLoading = false;
       notifyListeners();
       return null; // Sukses!
-
     } on AuthException catch (e) {
       debugPrint("AuthException: ${e.message}");
       _isLoading = false;
       notifyListeners();
-      if (e.message.toLowerCase().contains('already registered') || 
+      if (e.message.toLowerCase().contains('already registered') ||
           e.message.toLowerCase().contains('already exists')) {
         return 'Email sudah terdaftar. Silakan gunakan email lain.';
       }
@@ -141,13 +148,13 @@ class AuthProvider extends ChangeNotifier {
     await _supabase.auth.signOut();
     notifyListeners();
   }
-  
+
   // LOGIN GOOGLE
   Future<void> loginWithGoogle() async {
     try {
       await _supabase.auth.signInWithOAuth(
         OAuthProvider.google,
-        redirectTo: 'io.supabase.buildmatch://login-callback/', 
+        redirectTo: 'io.supabase.buildmatch://login-callback/',
       );
     } catch (e) {
       debugPrint("Error Google Login: $e");

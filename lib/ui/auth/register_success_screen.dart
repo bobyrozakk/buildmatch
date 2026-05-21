@@ -100,7 +100,7 @@ class _RegisterSuccessScreenState extends State<RegisterSuccessScreen>
                     Navigator.pushAndRemoveUntil(
                       context,
                       MaterialPageRoute(
-                        builder: (_) => LoginScreen(role: widget.role),
+                        builder: (_) => const LoginScreen(),
                       ),
                       (route) => false,
                     );

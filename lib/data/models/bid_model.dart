@@ -10,6 +10,7 @@ class BidModel {
   final String status; // 'pending' | 'accepted' | 'rejected'
   final DateTime? createdAt;
   final ProjectModel? project; // joined project (optional)
+  final String? vendorName; // joined from profiles table (optional)
 
   const BidModel({
     this.id,
@@ -20,9 +21,16 @@ class BidModel {
     this.status = 'pending',
     this.createdAt,
     this.project,
+    this.vendorName,
   });
 
   factory BidModel.fromJson(Map<String, dynamic> json) {
+    // Handle joined vendor profile name
+    String? vendorName;
+    if (json['profiles'] is Map) {
+      vendorName = (json['profiles'] as Map)['name'] as String?;
+    }
+
     return BidModel(
       id: json['id'] as String?,
       projectId: json['project_id'] as String? ?? '',
@@ -36,6 +44,7 @@ class BidModel {
       project: json['projects'] is Map
           ? ProjectModel.fromJson(Map<String, dynamic>.from(json['projects'] as Map))
           : null,
+      vendorName: vendorName,
     );
   }
 }

@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../data/providers/auth_provider.dart';
-import '../../auth/role_screen.dart';
+import '../../auth/login_screen.dart';
 import '../../shared/widgets/glass_card.dart';
 import '../../../core/constants/colors.dart';
 
@@ -25,7 +25,7 @@ class _ProfileTabState extends State<ProfileTab> {
     if (!mounted) return;
     Navigator.pushAndRemoveUntil(
       context,
-      MaterialPageRoute(builder: (_) => const RoleScreen()),
+      MaterialPageRoute(builder: (_) => const LoginScreen()),
       (route) => false,
     );
   }

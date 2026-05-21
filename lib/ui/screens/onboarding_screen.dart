@@ -1,9 +1,8 @@
 import 'package:flutter/material.dart';
-import '../auth/role_screen.dart';
+import '../auth/login_screen.dart'; // CHANGED: was role_screen.dart
 
 class OnboardingScreen extends StatefulWidget {
   const OnboardingScreen({super.key});
-
   @override
   State<OnboardingScreen> createState() => _OnboardingScreenState();
 }
@@ -19,21 +18,21 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
         curve: Curves.easeInOut,
       );
     } else {
-      _goToRoleScreen();
+      _goToLoginScreen(); // CHANGED: was _goToRoleScreen()
     }
   }
 
-  void _goToRoleScreen() {
+  void _goToLoginScreen() { // CHANGED: was _goToRoleScreen()
     Navigator.pushReplacement(
       context,
-      MaterialPageRoute(builder: (_) => const RoleScreen()),
+      MaterialPageRoute(builder: (_) => const LoginScreen()), // CHANGED: no role param
     );
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF2E9DF), // Warna background cream dasar
+      backgroundColor: const Color(0xFFF2E9DF),
       body: SafeArea(
         child: Column(
           children: [
@@ -47,7 +46,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                 mainAxisAlignment: MainAxisAlignment.end,
                 children: [
                   TextButton(
-                    onPressed: _goToRoleScreen,
+                    onPressed: _goToLoginScreen, // CHANGED: was _goToRoleScreen
                     child: const Text(
                       "Lewati",
                       style: TextStyle(
@@ -60,7 +59,6 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                 ],
               ),
             ),
-
             // PageView untuk Ilustrasi
             Expanded(
               child: PageView(
@@ -77,7 +75,6 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                 ],
               ),
             ),
-
             // Bottom Card
             Container(
               width: double.infinity,
@@ -117,7 +114,6 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                     }),
                   ),
                   const SizedBox(height: 32),
-
                   // Teks Judul
                   Text(
                     _getTitle(_currentPage),
@@ -129,7 +125,6 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                     ),
                   ),
                   const SizedBox(height: 16),
-
                   // Teks Deskripsi
                   Text(
                     _getDescription(_currentPage),
@@ -140,7 +135,6 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                     ),
                   ),
                   const SizedBox(height: 32),
-
                   // Tombol Selanjutnya / Mulai
                   SizedBox(
                     width: double.infinity,
@@ -158,9 +152,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
                           Text(
-                            _currentPage == 2
-                                ? "Mulai Sekarang"
-                                : "Selanjutnya",
+                            _currentPage == 2 ? "Mulai Sekarang" : "Selanjutnya",
                             style: const TextStyle(
                               fontSize: 16,
                               fontWeight: FontWeight.bold,
@@ -214,15 +206,10 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     }
   }
 
-  // ==========================================
-  // ILUSTRASI MOCKUP DENGAN FLUTTER WIDGETS
-  // ==========================================
-
   Widget _buildSlide1Illustration() {
     return Stack(
       alignment: Alignment.center,
       children: [
-        // Background Abstract Circles
         Positioned(
           top: 20,
           left: 40,
@@ -239,7 +226,6 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
             backgroundColor: const Color(0xFFE8CDB6).withOpacity(0.8),
           ),
         ),
-        // Tengah (Background shadow shape)
         Container(
           width: 250,
           height: 250,
@@ -248,8 +234,6 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
             color: const Color(0xFFE8CDB6).withOpacity(0.4),
           ),
         ),
-
-        // Mockup HP (Kontraktor List)
         Container(
           width: 180,
           height: 320,
@@ -267,7 +251,6 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
           ),
           child: Column(
             children: [
-              // Header mockup
               Container(
                 height: 40,
                 decoration: const BoxDecoration(
@@ -285,12 +268,10 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                 ),
               ),
               const SizedBox(height: 12),
-              // List items
               _buildMockListCard(),
               _buildMockListCard(active: true),
               _buildMockListCard(),
               const Spacer(),
-              // Bottom search bar mock
               Container(
                 margin: const EdgeInsets.all(12),
                 height: 20,
@@ -302,8 +283,6 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
             ],
           ),
         ),
-
-        // Verified Badge
         Positioned(
           top: 60,
           right: 60,
@@ -331,8 +310,6 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
             ),
           ),
         ),
-
-        // Rating Badge
         Positioned(
           bottom: 90,
           left: 70,
@@ -393,11 +370,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
               color: const Color(0xFFE8CDB6),
               borderRadius: BorderRadius.circular(6),
             ),
-            child: const Icon(
-              Icons.business,
-              color: Color(0xFF8B2B0F),
-              size: 16,
-            ),
+            child: const Icon(Icons.business, color: Color(0xFF8B2B0F), size: 16),
           ),
           const SizedBox(width: 8),
           Expanded(
@@ -409,8 +382,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                 Row(
                   children: List.generate(
                     5,
-                    (index) =>
-                        const Icon(Icons.star, color: Colors.amber, size: 8),
+                    (index) => const Icon(Icons.star, color: Colors.amber, size: 8),
                   ),
                 ),
               ],
@@ -434,7 +406,6 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     return Stack(
       alignment: Alignment.center,
       children: [
-        // Background Abstract Circles
         Positioned(
           top: 40,
           left: 50,
@@ -443,7 +414,6 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
             backgroundColor: const Color(0xFFE8CDB6).withOpacity(0.8),
           ),
         ),
-        // Tengah (Background shadow shape)
         Container(
           width: 260,
           height: 260,
@@ -452,8 +422,6 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
             color: const Color(0xFFE8CDB6).withOpacity(0.4),
           ),
         ),
-
-        // Background mock cards (berbayang di belakang)
         Positioned(
           left: 60,
           child: Container(
@@ -476,8 +444,6 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
             ),
           ),
         ),
-
-        // Main Proposal Card
         Container(
           width: 200,
           height: 240,
@@ -524,39 +490,18 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                             color: const Color(0xFFE8CDB6),
                             borderRadius: BorderRadius.circular(8),
                           ),
-                          child: const Icon(
-                            Icons.assignment,
-                            color: Color(0xFF8B2B0F),
-                            size: 16,
-                          ),
+                          child: const Icon(Icons.assignment, color: Color(0xFF8B2B0F), size: 16),
                         ),
                         const SizedBox(width: 8),
-                        Expanded(
-                          child: Container(
-                            height: 8,
-                            color: Colors.grey.shade300,
-                          ),
-                        ),
+                        Expanded(child: Container(height: 8, color: Colors.grey.shade300)),
                       ],
                     ),
                     const SizedBox(height: 16),
-                    Container(
-                      height: 6,
-                      width: double.infinity,
-                      color: Colors.grey.shade200,
-                    ),
+                    Container(height: 6, width: double.infinity, color: Colors.grey.shade200),
                     const SizedBox(height: 8),
-                    Container(
-                      height: 6,
-                      width: 120,
-                      color: Colors.grey.shade200,
-                    ),
+                    Container(height: 6, width: 120, color: Colors.grey.shade200),
                     const SizedBox(height: 8),
-                    Container(
-                      height: 6,
-                      width: 80,
-                      color: Colors.grey.shade200,
-                    ),
+                    Container(height: 6, width: 80, color: Colors.grey.shade200),
                     const SizedBox(height: 24),
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceAround,
@@ -572,8 +517,6 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
             ],
           ),
         ),
-
-        // 3 Offer Badge
         Positioned(
           top: 60,
           right: 70,
@@ -590,25 +533,12 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: const [
-                Text(
-                  "3",
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 14,
-                    fontWeight: FontWeight.bold,
-                    height: 1.0,
-                  ),
-                ),
-                Text(
-                  "Offer",
-                  style: TextStyle(color: Colors.white, fontSize: 8),
-                ),
+                Text("3", style: TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.bold, height: 1.0)),
+                Text("Offer", style: TextStyle(color: Colors.white, fontSize: 8)),
               ],
             ),
           ),
         ),
-
-        // Anggaran Badge
         Positioned(
           bottom: 30,
           left: 80,
@@ -624,14 +554,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
               children: const [
                 Icon(Icons.monetization_on, color: Color(0xFFC95E36), size: 14),
                 SizedBox(width: 4),
-                Text(
-                  "Anggaran",
-                  style: TextStyle(
-                    color: Colors.black87,
-                    fontSize: 10,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
+                Text("Anggaran", style: TextStyle(color: Colors.black87, fontSize: 10, fontWeight: FontWeight.bold)),
               ],
             ),
           ),
@@ -655,7 +578,6 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     return Stack(
       alignment: Alignment.center,
       children: [
-        // Background Abstract Circles
         Positioned(
           top: 20,
           left: 40,
@@ -672,8 +594,6 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
             backgroundColor: const Color(0xFFE8CDB6).withOpacity(0.4),
           ),
         ),
-
-        // Progress Card Mockup
         Container(
           width: 220,
           height: 250,
@@ -702,11 +622,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                       color: const Color(0xFFE8CDB6),
                       borderRadius: BorderRadius.circular(6),
                     ),
-                    child: const Icon(
-                      Icons.analytics,
-                      color: Color(0xFF8B2B0F),
-                      size: 16,
-                    ),
+                    child: const Icon(Icons.analytics, color: Color(0xFF8B2B0F), size: 16),
                   ),
                 ],
               ),
@@ -714,57 +630,24 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: const [
-                  Text(
-                    "Progres Keseluruhan",
-                    style: TextStyle(
-                      fontSize: 10,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.black54,
-                    ),
-                  ),
-                  Text(
-                    "72%",
-                    style: TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.bold,
-                      color: Color(0xFFC95E36),
-                    ),
-                  ),
+                  Text("Progres Keseluruhan", style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.black54)),
+                  Text("72%", style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFFC95E36))),
                 ],
               ),
               const SizedBox(height: 8),
-              // Progress Bar
               Stack(
                 children: [
-                  Container(
-                    height: 6,
-                    width: double.infinity,
-                    decoration: BoxDecoration(
-                      color: Colors.grey.shade200,
-                      borderRadius: BorderRadius.circular(4),
-                    ),
-                  ),
-                  Container(
-                    height: 6,
-                    width: 130,
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF8B2B0F),
-                      borderRadius: BorderRadius.circular(4),
-                    ),
-                  ),
+                  Container(height: 6, width: double.infinity, decoration: BoxDecoration(color: Colors.grey.shade200, borderRadius: BorderRadius.circular(4))),
+                  Container(height: 6, width: 130, decoration: BoxDecoration(color: const Color(0xFF8B2B0F), borderRadius: BorderRadius.circular(4))),
                 ],
               ),
               const SizedBox(height: 24),
-
-              // Checklist items
               _buildProgressCheck(active: true),
               _buildProgressCheck(active: true),
               _buildProgressCheck(active: false, inProgress: true),
             ],
           ),
         ),
-
-        // Foto Laporan Badge
         Positioned(
           top: 100,
           right: 30,
@@ -784,26 +667,14 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   mainAxisSize: MainAxisSize.min,
                   children: const [
-                    Text(
-                      "Foto Laporan",
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontSize: 10,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    Text(
-                      "12 foto baru",
-                      style: TextStyle(color: Colors.white70, fontSize: 8),
-                    ),
+                    Text("Foto Laporan", style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold)),
+                    Text("12 foto baru", style: TextStyle(color: Colors.white70, fontSize: 8)),
                   ],
                 ),
               ],
             ),
           ),
         ),
-
-        // Update Milestone Badge
         Positioned(
           bottom: 50,
           left: 20,
@@ -817,28 +688,14 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                const Icon(
-                  Icons.notifications_active,
-                  color: Color(0xFFC95E36),
-                  size: 14,
-                ),
+                const Icon(Icons.notifications_active, color: Color(0xFFC95E36), size: 14),
                 const SizedBox(width: 6),
                 Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   mainAxisSize: MainAxisSize.min,
                   children: const [
-                    Text(
-                      "Update Milestone",
-                      style: TextStyle(
-                        color: Colors.black87,
-                        fontSize: 10,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    Text(
-                      "Struktur selesai ✓",
-                      style: TextStyle(color: Colors.black54, fontSize: 8),
-                    ),
+                    Text("Update Milestone", style: TextStyle(color: Colors.black87, fontSize: 10, fontWeight: FontWeight.bold)),
+                    Text("Struktur selesai ✓", style: TextStyle(color: Colors.black54, fontSize: 8)),
                   ],
                 ),
               ],
@@ -858,47 +715,29 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
             width: 16,
             height: 16,
             decoration: BoxDecoration(
-              color: active
-                  ? const Color(0xFF8B2B0F)
-                  : (inProgress ? Colors.transparent : Colors.transparent),
+              color: active ? const Color(0xFF8B2B0F) : Colors.transparent,
               shape: BoxShape.circle,
               border: Border.all(
-                color: active
-                    ? const Color(0xFF8B2B0F)
-                    : (inProgress
-                          ? const Color(0xFFC95E36)
-                          : Colors.grey.shade300),
+                color: active ? const Color(0xFF8B2B0F) : (inProgress ? const Color(0xFFC95E36) : Colors.grey.shade300),
                 width: 2,
               ),
             ),
-            child: active
-                ? const Icon(Icons.check, color: Colors.white, size: 10)
-                : null,
+            child: active ? const Icon(Icons.check, color: Colors.white, size: 10) : null,
           ),
           const SizedBox(width: 8),
           Expanded(
             child: Container(
               height: 6,
               decoration: BoxDecoration(
-                color: active
-                    ? Colors.grey.shade300
-                    : (inProgress
-                          ? const Color(0xFFC95E36)
-                          : Colors.grey.shade200),
+                color: active ? Colors.grey.shade300 : (inProgress ? const Color(0xFFC95E36) : Colors.grey.shade200),
                 borderRadius: BorderRadius.circular(4),
               ),
             ),
           ),
           const SizedBox(width: 8),
           Icon(
-            active
-                ? Icons.check_circle
-                : (inProgress
-                      ? Icons.access_time_filled
-                      : Icons.circle_outlined),
-            color: active
-                ? Colors.green
-                : (inProgress ? const Color(0xFFC95E36) : Colors.grey.shade300),
+            active ? Icons.check_circle : (inProgress ? Icons.access_time_filled : Icons.circle_outlined),
+            color: active ? Colors.green : (inProgress ? const Color(0xFFC95E36) : Colors.grey.shade300),
             size: 14,
           ),
         ],

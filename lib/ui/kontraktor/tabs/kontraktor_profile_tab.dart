@@ -6,7 +6,7 @@ import '../../../data/models/profile_model.dart';
 import '../../../data/models/portfolio_model.dart';
 import '../../../data/models/certification_model.dart';
 import '../screens/kontraktor_profileEdit_screen.dart';
-import '../../auth/role_screen.dart';
+import '../../auth/login_screen.dart';
 import '../../shared/widgets/glass_card.dart';
 import '../../../core/constants/colors.dart';
 
@@ -57,7 +57,7 @@ class _KontraktorProfileTabState
     Navigator.pushAndRemoveUntil(
       context,
       MaterialPageRoute(
-        builder: (_) => const RoleScreen(),
+        builder: (_) => const LoginScreen(),
       ),
       (_) => false,
     );

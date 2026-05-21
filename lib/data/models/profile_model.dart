@@ -6,6 +6,7 @@ class ProfileModel {
   final String role;
   final String? companyName;
   final String? npwp;
+  final String? nib; // ADDED: Nomor Induk Berusaha (13 digit, VARCHAR)
   final String? straNumber;
   final String? experienceYears;
   final bool isVerified;
@@ -19,6 +20,7 @@ class ProfileModel {
     required this.role,
     this.companyName,
     this.npwp,
+    this.nib, // ADDED
     this.straNumber,
     this.experienceYears,
     this.isVerified = false,
@@ -34,6 +36,7 @@ class ProfileModel {
       role: json['role'] as String? ?? 'client',
       companyName: json['company_name'] as String?,
       npwp: json['npwp'] as String?,
+      nib: json['nib'] as String?, // ADDED
       straNumber: json['stra_number'] as String?,
       experienceYears: json['experience_years'] as String?,
       isVerified: json['is_verified'] as bool? ?? false,
@@ -52,6 +55,7 @@ class ProfileModel {
       'role': role,
       'company_name': companyName,
       'npwp': npwp,
+      'nib': nib, // ADDED
       'stra_number': straNumber,
       'experience_years': experienceYears,
       'is_verified': isVerified,

@@ -4,13 +4,13 @@ import '../../data/providers/auth_provider.dart';
 import '../../core/constants/colors.dart';
 import '../../core/widgets/buildmatch_appbar.dart';
 import '../../core/widgets/app_text_field.dart';
-import 'register_screen.dart';
+import 'role_screen.dart'; // CHANGED: was register_screen.dart
 import '../shared/screens/main_nav.dart';
 import 'forgot_password_screen.dart';
 
 class LoginScreen extends StatefulWidget {
-  final String role;
-  const LoginScreen({super.key, required this.role});
+  // CHANGED: removed `required String role` parameter
+  const LoginScreen({super.key});
 
   @override
   State<LoginScreen> createState() => _LoginScreenState();
@@ -34,9 +34,7 @@ class _LoginScreenState extends State<LoginScreen> {
       email: _emailController.text.trim(),
       password: _passwordController.text,
     );
-
     if (!mounted) return;
-
     if (success) {
       Navigator.pushAndRemoveUntil(
         context,
@@ -56,19 +54,18 @@ class _LoginScreenState extends State<LoginScreen> {
   @override
   Widget build(BuildContext context) {
     final isLoading = context.watch<AuthProvider>().isLoading;
-
     return Scaffold(
       backgroundColor: AppColors.backgroundCream,
       appBar: const BuildMatchAppBar(),
-
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(24.0),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(
-              "Selamat Datang ${widget.role}",
-              style: const TextStyle(
+            // CHANGED: was "Selamat Datang ${widget.role}"
+            const Text(
+              "Selamat Datang Kembali",
+              style: TextStyle(
                 fontSize: 26,
                 fontWeight: FontWeight.bold,
                 color: Colors.black87,
@@ -80,7 +77,6 @@ class _LoginScreenState extends State<LoginScreen> {
               style: TextStyle(color: Colors.black54, fontSize: 14),
             ),
             const SizedBox(height: 40),
-
             // FORM EMAIL
             const Text(
               "Email",
@@ -92,9 +88,7 @@ class _LoginScreenState extends State<LoginScreen> {
               hintText: "contoh@gmail.com",
               prefixIcon: Icons.email_rounded,
             ),
-
             const SizedBox(height: 20),
-
             // FORM PASSWORD
             const Text(
               "Password",
@@ -109,7 +103,6 @@ class _LoginScreenState extends State<LoginScreen> {
               obscureText: _obscureText,
               onToggleObscure: () => setState(() => _obscureText = !_obscureText),
             ),
-
             const SizedBox(height: 12),
             Align(
               alignment: Alignment.centerRight,
@@ -130,9 +123,7 @@ class _LoginScreenState extends State<LoginScreen> {
                 ),
               ),
             ),
-
             const SizedBox(height: 30),
-
             // BUTTON MASUK
             SizedBox(
               width: double.infinity,
@@ -157,9 +148,7 @@ class _LoginScreenState extends State<LoginScreen> {
                       ),
               ),
             ),
-
             const SizedBox(height: 30),
-
             // DIVIDER GOOGLE
             Row(
               children: [
@@ -175,7 +164,6 @@ class _LoginScreenState extends State<LoginScreen> {
               ],
             ),
             const SizedBox(height: 24),
-
             // BUTTON GOOGLE
             SizedBox(
               width: double.infinity,
@@ -197,13 +185,13 @@ class _LoginScreenState extends State<LoginScreen> {
                 ),
               ),
             ),
-
             const SizedBox(height: 40),
+            // CHANGED: was RegisterScreen(role: widget.role), now goes to RoleScreen()
             Center(
               child: GestureDetector(
                 onTap: () => Navigator.push(
                   context,
-                  MaterialPageRoute(builder: (_) => RegisterScreen(role: widget.role)),
+                  MaterialPageRoute(builder: (_) => const RoleScreen()),
                 ),
                 child: RichText(
                   text: const TextSpan(
@@ -219,7 +207,6 @@ class _LoginScreenState extends State<LoginScreen> {
                 ),
               ),
             ),
-
             const SizedBox(height: 16),
             Center(
               child: RichText(
