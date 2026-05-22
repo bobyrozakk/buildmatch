@@ -1,11 +1,145 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../shared/widgets/glass_card.dart';
 import '../screens/create_project_screen.dart';
+import '../../../data/providers/project_provider.dart';
+import '../../../data/models/project_model.dart';
 import '../../../core/constants/colors.dart';
 
-class BerandaTab extends StatelessWidget {
+class BerandaTab extends StatefulWidget {
   const BerandaTab({super.key});
+
+  @override
+  State<BerandaTab> createState() => _BerandaTabState();
+}
+
+class _BerandaTabState extends State<BerandaTab> {
+  /// Cek draft user. Jika ada, tampilkan dialog pilihan.
+  /// Jika tidak ada, langsung buka form baru.
+  Future<void> _onMulaiProyek() async {
+    final provider = Provider.of<ProjectProvider>(context, listen: false);
+    final drafts = await provider.fetchDraftProjects();
+
+    if (!mounted) return;
+
+    if (drafts.isEmpty) {
+      // Tidak ada draft — langsung buka form baru
+      Navigator.push(
+        context,
+        MaterialPageRoute(builder: (_) => const CreateProjectScreen()),
+      );
+      return;
+    }
+
+    // Ada draft — tampilkan dialog pilihan
+    final ProjectModel latestDraft = drafts.first;
+    final String draftTitle = latestDraft.title.isNotEmpty &&
+            latestDraft.title != 'Draft Tanpa Judul'
+        ? latestDraft.title
+        : 'Draft Tanpa Judul';
+
+    final result = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Row(
+          children: [
+            Icon(Icons.bookmark_rounded, color: AppColors.primary, size: 22),
+            SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                'Ada Draft yang Belum Selesai',
+                style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
+              ),
+            ),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Kamu punya proyek yang belum dipublikasikan:',
+              style: TextStyle(fontSize: 13, color: Colors.black54),
+            ),
+            const SizedBox(height: 10),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              decoration: BoxDecoration(
+                color: AppColors.primary.withOpacity(0.07),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.edit_note_rounded,
+                      size: 16, color: AppColors.primary),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      draftTitle,
+                      style: const TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 13,
+                        color: AppColors.primary,
+                      ),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            if (drafts.length > 1) ...[  
+              const SizedBox(height: 6),
+              Text(
+                '+ ${drafts.length - 1} draft lainnya di tab Progress',
+                style: const TextStyle(fontSize: 11, color: Colors.black38),
+              ),
+            ],
+          ],
+        ),
+        actionsPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+        actions: [
+          OutlinedButton(
+            onPressed: () => Navigator.pop(ctx, 'new'),
+            style: OutlinedButton.styleFrom(
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12)),
+              side: BorderSide(color: Colors.grey.shade300),
+            ),
+            child: const Text('Buat Baru',
+                style: TextStyle(color: Colors.black54)),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx, 'continue'),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.primary,
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12)),
+            ),
+            child: const Text('Lanjutkan Draft',
+                style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+
+    if (!mounted) return;
+
+    if (result == 'continue') {
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => CreateProjectScreen(draft: latestDraft),
+        ),
+      );
+    } else if (result == 'new') {
+      Navigator.push(
+        context,
+        MaterialPageRoute(builder: (_) => const CreateProjectScreen()),
+      );
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -121,14 +255,7 @@ class BerandaTab extends StatelessWidget {
                       ),
                       const SizedBox(height: 16),
                       ElevatedButton(
-                        onPressed: () {
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (_) => const CreateProjectScreen(),
-                            ),
-                          );
-                        },
+                        onPressed: _onMulaiProyek,
                         style: ElevatedButton.styleFrom(
                           backgroundColor: Colors.white,
                           foregroundColor: AppColors.primaryDark,

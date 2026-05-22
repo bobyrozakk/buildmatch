@@ -44,6 +44,10 @@ class ProjectModel {
     this.clientName,
   });
 
+  // ────────────────────────────────────────────────────
+  // Factory: dari JSON (Supabase / Firebase response)
+  // ────────────────────────────────────────────────────
+
   factory ProjectModel.fromJson(Map<String, dynamic> json) {
     // Handle joined profiles data for client name
     String? clientName;
@@ -78,4 +82,100 @@ class ProjectModel {
       clientName: clientName,
     );
   }
+
+  // ────────────────────────────────────────────────────
+  // toJson: untuk upload ke Supabase / Firebase
+  // ────────────────────────────────────────────────────
+
+  Map<String, dynamic> toJson() {
+    return {
+      if (id != null) 'id': id,
+      'title': title,
+      if (description != null) 'description': description,
+      'budget': budget,
+      'land_size': landSize,
+      'building_size': buildingSize,
+      'floors': floors,
+      'bedrooms': bedrooms,
+      'bathrooms': bathrooms,
+      'house_style': houseStyle,
+      if (location != null) 'location': location,
+      if (latitude != null) 'latitude': latitude,
+      if (longitude != null) 'longitude': longitude,
+      if (clientId != null) 'client_id': clientId,
+      'image_urls': imageUrls,
+      if (referencePdfUrl != null) 'reference_pdf_url': referencePdfUrl,
+      if (status != null) 'status': status,
+      'progress_percent': progressPercent,
+    };
+  }
+
+  // ────────────────────────────────────────────────────
+  // copyWith: untuk update sebagian field tanpa mutasi
+  // (berguna di Provider saat update status/progress)
+  // ────────────────────────────────────────────────────
+
+  ProjectModel copyWith({
+    String? id,
+    String? title,
+    String? description,
+    double? budget,
+    double? landSize,
+    double? buildingSize,
+    int? floors,
+    int? bedrooms,
+    int? bathrooms,
+    String? houseStyle,
+    String? location,
+    double? latitude,
+    double? longitude,
+    String? clientId,
+    List<String>? imageUrls,
+    String? referencePdfUrl,
+    String? status,
+    int? progressPercent,
+    DateTime? createdAt,
+    String? clientName,
+  }) {
+    return ProjectModel(
+      id: id ?? this.id,
+      title: title ?? this.title,
+      description: description ?? this.description,
+      budget: budget ?? this.budget,
+      landSize: landSize ?? this.landSize,
+      buildingSize: buildingSize ?? this.buildingSize,
+      floors: floors ?? this.floors,
+      bedrooms: bedrooms ?? this.bedrooms,
+      bathrooms: bathrooms ?? this.bathrooms,
+      houseStyle: houseStyle ?? this.houseStyle,
+      location: location ?? this.location,
+      latitude: latitude ?? this.latitude,
+      longitude: longitude ?? this.longitude,
+      clientId: clientId ?? this.clientId,
+      imageUrls: imageUrls ?? this.imageUrls,
+      referencePdfUrl: referencePdfUrl ?? this.referencePdfUrl,
+      status: status ?? this.status,
+      progressPercent: progressPercent ?? this.progressPercent,
+      createdAt: createdAt ?? this.createdAt,
+      clientName: clientName ?? this.clientName,
+    );
+  }
+
+  // ────────────────────────────────────────────────────
+  // Computed helpers (baca-saja, tidak disimpan ke DB)
+  // ────────────────────────────────────────────────────
+
+  /// Apakah proyek masih menunggu penawaran kontraktor?
+  bool get isPending => status == 'pending' || status == null;
+
+  /// Apakah proyek sedang berjalan?
+  bool get isOngoing => status == 'ongoing';
+
+  /// Apakah proyek selesai?
+  bool get isCompleted => status == 'completed';
+
+  @override
+  String toString() =>
+      'ProjectModel(id: $id, title: $title, floors: $floors, '
+      'bedrooms: $bedrooms, bathrooms: $bathrooms, status: $status)';
 }

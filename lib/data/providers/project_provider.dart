@@ -86,7 +86,102 @@ class ProjectProvider extends ChangeNotifier {
     }
   }
 
-  // --- AMBIL PROYEK KLIEN ---
+  // --- SIMPAN PROYEK SEBAGAI DRAFT ---
+  /// Menyimpan data form yang sudah diisi sebagai draft (status = 'draft').
+  /// Semua parameter opsional — tidak ada validasi ketat, simpan apa adanya.
+  Future<bool> saveDraft({
+    String? draftId,
+    String title = '',
+    String description = '',
+    double budget = 0,
+    double landSize = 0,
+    double buildingSize = 0,
+    int floors = 1,
+    int bedrooms = 0,
+    int bathrooms = 0,
+    String houseStyle = '',
+    String location = '',
+    double? latitude,
+    double? longitude,
+  }) async {
+    _isLoading = true;
+    notifyListeners();
+
+    try {
+      final userId = _supabase.auth.currentUser?.id;
+      if (userId == null) throw Exception("User belum login!");
+
+      final data = {
+        'title': title.trim().isEmpty ? 'Draft Tanpa Judul' : title.trim(),
+        'description': description.trim(),
+        'budget': budget,
+        'land_size': landSize,
+        'building_size': buildingSize,
+        'floors': floors,
+        'bedrooms': bedrooms,
+        'bathrooms': bathrooms,
+        'house_style': houseStyle,
+        'location': location.trim(),
+        'latitude': latitude,
+        'longitude': longitude,
+        'client_id': userId,
+        'image_urls': [],
+        'status': 'draft',
+      };
+
+      if (draftId != null && draftId.isNotEmpty) {
+        // Update draft yang sudah ada
+        await _supabase.from('projects').update(data).eq('id', draftId);
+      } else {
+        // Buat draft baru
+        await _supabase.from('projects').insert(data);
+      }
+
+      _isLoading = false;
+      notifyListeners();
+      return true;
+    } catch (e) {
+      debugPrint("Error save draft: $e");
+      _isLoading = false;
+      notifyListeners();
+      return false;
+    }
+  }
+
+  // --- AMBIL PROYEK DRAFT MILIK CLIENT ---
+  Future<List<ProjectModel>> fetchDraftProjects() async {
+    try {
+      final userId = _supabase.auth.currentUser?.id;
+      if (userId == null) return [];
+
+      final response = await _supabase
+          .from('projects')
+          .select('*')
+          .eq('client_id', userId)
+          .eq('status', 'draft')
+          .order('created_at', ascending: false);
+
+      return List<Map<String, dynamic>>.from(response)
+          .map((json) => ProjectModel.fromJson(json))
+          .toList();
+    } catch (e) {
+      debugPrint("Error fetch drafts: $e");
+      return [];
+    }
+  }
+
+  // --- HAPUS DRAFT ---
+  Future<bool> deleteDraft(String draftId) async {
+    try {
+      await _supabase.from('projects').delete().eq('id', draftId);
+      return true;
+    } catch (e) {
+      debugPrint("Error delete draft: $e");
+      return false;
+    }
+  }
+
+  // --- AMBIL PROYEK KLIEN (TANPA DRAFT) ---
   Future<List<ProjectModel>> fetchProjects() async {
     try {
       final userId = _supabase.auth.currentUser?.id;
@@ -96,6 +191,7 @@ class ProjectProvider extends ChangeNotifier {
           .from('projects')
           .select('*')
           .eq('client_id', userId)
+          .neq('status', 'draft')         // <-- draft tidak muncul di sini
           .order('created_at', ascending: false);
       return List<Map<String, dynamic>>.from(response)
           .map((json) => ProjectModel.fromJson(json))
@@ -112,7 +208,7 @@ class ProjectProvider extends ChangeNotifier {
       final response = await _supabase
           .from('projects')
           .select('*, profiles:client_id(name)')
-          .eq('status', 'open')
+          .eq('status', 'open')           // hanya 'open', draft otomatis excluded
           .order('created_at', ascending: false);
       return List<Map<String, dynamic>>.from(response)
           .map((json) => ProjectModel.fromJson(json))
@@ -132,10 +228,12 @@ class ProjectProvider extends ChangeNotifier {
       if (vendorId == null) return [];
 
       // Ambil proyek yang sudah tidak open (in_progress/completed) dengan join client name
+      // Draft juga tidak diikutsertakan karena filter neq 'open' tapi kita tambah neq 'draft'
       final response = await _supabase
           .from('projects')
           .select('*, profiles:client_id(name)')
           .neq('status', 'open')
+          .neq('status', 'draft')         // <-- pastikan draft tidak muncul di vendor
           .order('created_at', ascending: false);
       return List<Map<String, dynamic>>.from(response)
           .map((json) => ProjectModel.fromJson(json))
