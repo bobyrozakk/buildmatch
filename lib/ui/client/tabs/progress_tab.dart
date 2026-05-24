@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../../data/providers/project_provider.dart';
 import '../../../data/models/project_model.dart';
+import '../../../data/models/bid_model.dart';
 import '../screens/project_detail_screen.dart';
 import '../screens/create_project_screen.dart';
 import '../../../core/constants/colors.dart';
@@ -17,6 +18,7 @@ class ProgressTab extends StatefulWidget {
 class _ProgressTabState extends State<ProgressTab> {
   late Future<List<ProjectModel>> _projectsFuture;
   late Future<List<ProjectModel>> _draftsFuture;
+  late Future<List<BidModel>> _incomingBidsFuture;
 
   @override
   void initState() {
@@ -29,6 +31,7 @@ class _ProgressTabState extends State<ProgressTab> {
     setState(() {
       _projectsFuture = provider.fetchProjects();
       _draftsFuture = provider.fetchDraftProjects();
+      _incomingBidsFuture = provider.fetchClientIncomingBids();
     });
   }
 
@@ -108,6 +111,53 @@ class _ProgressTabState extends State<ProgressTab> {
         child: ListView(
           padding: const EdgeInsets.all(20),
           children: [
+            // ── SECTION PENAWARAN MASUK ──
+            FutureBuilder<List<BidModel>>(
+              future: _incomingBidsFuture,
+              builder: (context, snapshot) {
+                if (snapshot.connectionState == ConnectionState.waiting) {
+                  return const SizedBox.shrink();
+                }
+
+                final bids = snapshot.data ?? [];
+                if (bids.isEmpty) return const SizedBox.shrink();
+
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(6),
+                          decoration: BoxDecoration(
+                            color: Colors.orange.withOpacity(0.1),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: const Icon(Icons.gavel_rounded,
+                              size: 16, color: Colors.orange),
+                        ),
+                        const SizedBox(width: 8),
+                        Text(
+                          'Penawaran Masuk (${bids.length})',
+                          style: const TextStyle(
+                            fontSize: 15,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.black87,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+
+                    ...bids.map((bid) => _buildIncomingBidCard(bid)),
+
+                    const SizedBox(height: 8),
+                    const Divider(height: 32),
+                  ],
+                );
+              },
+            ),
+
             // ── SECTION DRAFT ──
             FutureBuilder<List<ProjectModel>>(
               future: _draftsFuture,
@@ -458,6 +508,118 @@ class _ProgressTabState extends State<ProgressTab> {
                 color: Colors.black54,
                 fontWeight: FontWeight.bold,
               ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // --- CARD PENAWARAN MASUK ---
+  Widget _buildIncomingBidCard(BidModel bid) {
+    final projectTitle = bid.project?.title ?? 'Proyek';
+    final vendorName = bid.vendorName ?? 'Kontraktor';
+
+    return GestureDetector(
+      onTap: () {
+        if (bid.project != null) {
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) => ProjectDetailScreen(project: bid.project!),
+            ),
+          ).then((_) => _refresh());
+        }
+      },
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 12),
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+            color: Colors.orange.withOpacity(0.2),
+            width: 1,
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.03),
+              blurRadius: 8,
+              offset: const Offset(0, 3),
+            ),
+          ],
+        ),
+        child: Row(
+          children: [
+            // Avatar kontraktor
+            CircleAvatar(
+              radius: 22,
+              backgroundColor: AppColors.primary.withOpacity(0.1),
+              child: const Icon(Icons.person, color: AppColors.primary, size: 20),
+            ),
+            const SizedBox(width: 12),
+
+            // Info
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    vendorName,
+                    style: const TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 14,
+                      color: Colors.black87,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    projectTitle,
+                    style: const TextStyle(fontSize: 12, color: Colors.black54),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    AppFormatters.formatRupiah(bid.price),
+                    style: const TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.bold,
+                      color: AppColors.primary,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
+            // Timestamp + arrow
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                if (bid.createdAt != null)
+                  Text(
+                    _formatDate(bid.createdAt!),
+                    style: const TextStyle(fontSize: 10, color: Colors.black38),
+                  ),
+                const SizedBox(height: 8),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: Colors.orange.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: const Text(
+                    'Menunggu',
+                    style: TextStyle(
+                      fontSize: 10,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.orange,
+                    ),
+                  ),
+                ),
+              ],
             ),
           ],
         ),

@@ -1,22 +1,59 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import '../../shared/widgets/glass_card.dart';
 import '../screens/create_project_screen.dart';
+import '../screens/project_detail_screen.dart';
 import '../../../data/providers/project_provider.dart';
+import '../../../data/providers/vendor_provider.dart';
 import '../../../data/models/project_model.dart';
+import '../../../data/models/profile_model.dart';
+import '../../../data/models/bid_model.dart';
 import '../../../core/constants/colors.dart';
+import '../../../core/utils/formatters.dart';
+import '../../shared/screens/chat_list_screen.dart';
+import '../../shared/screens/notification_screen.dart';
+import '../../../data/providers/chat_provider.dart';
+import '../../../data/providers/notification_provider.dart';
 
 class BerandaTab extends StatefulWidget {
-  const BerandaTab({super.key});
+  final ValueChanged<int>? onSwitchTab;
+  const BerandaTab({super.key, this.onSwitchTab});
 
   @override
   State<BerandaTab> createState() => _BerandaTabState();
 }
 
 class _BerandaTabState extends State<BerandaTab> {
-  /// Cek draft user. Jika ada, tampilkan dialog pilihan.
-  /// Jika tidak ada, langsung buka form baru.
+  late Future<List<dynamic>> _dataFuture;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadData();
+  }
+
+  void _loadData() {
+    final project = Provider.of<ProjectProvider>(context, listen: false);
+    final vendor = Provider.of<VendorProvider>(context, listen: false);
+    
+    // Fetch notifications and chats in background
+    Provider.of<NotificationProvider>(context, listen: false).fetchNotifications();
+    Provider.of<ChatProvider>(context, listen: false).fetchChats();
+
+    _dataFuture = Future.wait([
+      project.fetchProjects(), // 0: client projects (non-draft)
+      vendor.fetchTopVendors(), // 1: top rated vendors
+      project.fetchClientIncomingBids(), // 2: incoming bids
+    ]);
+  }
+
+  Future<void> _refresh() async {
+    setState(_loadData);
+    await _dataFuture;
+  }
+
+  // --- ACTIONS ---
+
   Future<void> _onMulaiProyek() async {
     final provider = Provider.of<ProjectProvider>(context, listen: false);
     final drafts = await provider.fetchDraftProjects();
@@ -24,15 +61,13 @@ class _BerandaTabState extends State<BerandaTab> {
     if (!mounted) return;
 
     if (drafts.isEmpty) {
-      // Tidak ada draft — langsung buka form baru
       Navigator.push(
         context,
         MaterialPageRoute(builder: (_) => const CreateProjectScreen()),
-      );
+      ).then((_) => _refresh());
       return;
     }
 
-    // Ada draft — tampilkan dialog pilihan
     final ProjectModel latestDraft = drafts.first;
     final String draftTitle = latestDraft.title.isNotEmpty &&
             latestDraft.title != 'Draft Tanpa Judul'
@@ -89,7 +124,7 @@ class _BerandaTabState extends State<BerandaTab> {
                 ],
               ),
             ),
-            if (drafts.length > 1) ...[  
+            if (drafts.length > 1) ...[
               const SizedBox(height: 6),
               Text(
                 '+ ${drafts.length - 1} draft lainnya di tab Progress',
@@ -132,397 +167,693 @@ class _BerandaTabState extends State<BerandaTab> {
         MaterialPageRoute(
           builder: (_) => CreateProjectScreen(draft: latestDraft),
         ),
-      );
+      ).then((_) => _refresh());
     } else if (result == 'new') {
       Navigator.push(
         context,
         MaterialPageRoute(builder: (_) => const CreateProjectScreen()),
-      );
+      ).then((_) => _refresh());
     }
   }
+
+  void _openProjectDetail(ProjectModel p) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => ProjectDetailScreen(project: p)),
+    ).then((_) => _refresh());
+  }
+
+  void _goToContractorTab() => widget.onSwitchTab?.call(1);
+  void _goToProgressTab() => widget.onSwitchTab?.call(3);
+
+  // --- BUILD ---
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: Container(
-        // Soft pastel blue-to-pink gradient background
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            colors: [Color(0xFFF3F8FF), Color(0xFFFFF0F5)],
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-          ),
-        ),
-        child: SafeArea(
-          child: SingleChildScrollView(
-            physics: const BouncingScrollPhysics(),
-            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const SizedBox(height: 10),
-                // 1. HEADER & NOTIFICATION
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      backgroundColor: AppColors.backgroundCream,
+      body: SafeArea(
+        child: RefreshIndicator(
+          color: AppColors.primary,
+          onRefresh: _refresh,
+          child: FutureBuilder<List<dynamic>>(
+            future: _dataFuture,
+            builder: (context, snapshot) {
+              if (snapshot.connectionState == ConnectionState.waiting) {
+                return const Center(
+                    child: CircularProgressIndicator(color: AppColors.primary));
+              }
+
+              final projects =
+                  (snapshot.data?[0] as List<ProjectModel>? ?? []);
+              final topVendors =
+                  (snapshot.data?[1] as List<Map<String, dynamic>>? ?? []);
+              final incomingBids =
+                  (snapshot.data?[2] as List<BidModel>? ?? []);
+
+              final activeProjects = projects
+                  .where((p) => p.status == 'in_progress')
+                  .toList();
+              final openProjects =
+                  projects.where((p) => p.status == 'open').toList();
+
+              return SingleChildScrollView(
+                physics: const AlwaysScrollableScrollPhysics(
+                    parent: BouncingScrollPhysics()),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Text(
-                          "Selamat datang,",
-                          style: TextStyle(fontSize: 14, color: Colors.black54),
-                        ),
-                        Text(
-                          // Nama user dari auth metadata
-                          Supabase.instance.client.auth.currentUser?.userMetadata?['name'] ?? 'Klien',
-                          style: const TextStyle(
-                            fontSize: 22,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.black87,
-                          ),
-                        ),
-                      ],
+                    _buildAppBar(),
+                    const SizedBox(height: 20),
+                    _buildHeroCard(),
+                    const SizedBox(height: 24),
+                    _buildStatsRow(
+                      activeCount: activeProjects.length,
+                      openCount: openProjects.length,
+                      bidsCount: incomingBids.length,
                     ),
-                    Container(
-                      decoration: BoxDecoration(
-                        color: Colors.white.withOpacity(0.6),
-                        shape: BoxShape.circle,
-                      ),
-                      child: IconButton(
-                        icon: const Icon(
-                          Icons.notifications_none_rounded,
-                          color: Colors.deepOrangeAccent,
-                        ),
-                        onPressed: () {
-                        },
-                      ),
-                    ),
+                    const SizedBox(height: 28),
+                    _buildSectionHeader('Menu Utama'),
+                    const SizedBox(height: 12),
+                    _buildMenuGrid(),
+                    const SizedBox(height: 28),
+                    _buildSectionHeader('Kontraktor Terpopuler',
+                        onTap: _goToContractorTab),
+                    const SizedBox(height: 12),
+                    _buildKontraktorList(topVendors),
+                    const SizedBox(height: 28),
+                    _buildSectionHeader('Proyek Saya',
+                        onTap: _goToProgressTab),
+                    const SizedBox(height: 12),
+                    _buildProyekSaya([...activeProjects, ...openProjects]),
+                    const SizedBox(height: 100),
                   ],
                 ),
-                const SizedBox(height: 20),
-
-                // 2. SEARCH BAR
-                IOSGlassCard(
-                  blur: 15,
-                  child: TextField(
-                    decoration: InputDecoration(
-                      hintText: "Cari kontraktor, arsitek...",
-                      hintStyle: const TextStyle(
-                        color: Colors.black45,
-                        fontSize: 14,
-                      ),
-                      prefixIcon: const Icon(
-                        Icons.search,
-                        color: Colors.black54,
-                      ),
-                      suffixIcon: const Icon(
-                        Icons.tune_rounded,
-                        color: Colors.deepOrangeAccent,
-                      ),
-                      border: InputBorder.none,
-                      contentPadding: const EdgeInsets.symmetric(vertical: 15),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 24),
-
-                // 3. HERO CARD (Mulai Proyek)
-                Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.all(24),
-                  decoration: BoxDecoration(
-                    gradient: AppColors.primaryGradient,
-                    borderRadius: BorderRadius.circular(20),
-                    boxShadow: [
-                      BoxShadow(
-                        color: AppColors.primaryDark.withOpacity(0.3),
-                        blurRadius: 15,
-                        offset: const Offset(0, 8),
-                      ),
-                    ],
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text(
-                        "Bangun Rumah\nImpian Anda",
-                        style: TextStyle(
-                          fontSize: 22,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.white,
-                          height: 1.3,
-                        ),
-                      ),
-                      const SizedBox(height: 16),
-                      ElevatedButton(
-                        onPressed: _onMulaiProyek,
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.white,
-                          foregroundColor: AppColors.primaryDark,
-                          elevation: 0,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(20),
-                          ),
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 20,
-                            vertical: 12,
-                          ),
-                        ),
-                        child: const Text(
-                          "Mulai Proyek",
-                          style: TextStyle(fontWeight: FontWeight.bold),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 30),
-
-                // 4. LAYANAN KAMI
-                _buildSectionHeader("Layanan Kami"),
-                const SizedBox(height: 16),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    _buildServiceItem(
-                      Icons.architecture_rounded,
-                      "Kontraktor",
-                      Colors.brown.shade600,
-                    ),
-                    _buildServiceItem(
-                      Icons.design_services_rounded,
-                      "Arsitek",
-                      Colors.brown.shade600,
-                    ),
-                    _buildServiceItem(
-                      Icons.calculate_rounded,
-                      "Estimasi\nBiaya",
-                      Colors.brown.shade600,
-                    ),
-                    _buildServiceItem(
-                      Icons.chat_bubble_outline_rounded,
-                      "Konsultasi",
-                      Colors.brown.shade600,
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 30),
-
-                // 5. KONTRAKTOR TERPOPULER
-                _buildSectionHeader("Kontraktor Terpopuler"),
-                const SizedBox(height: 16),
-                SizedBox(
-                  height: 210,
-                  child: ListView(
-                    scrollDirection: Axis.horizontal,
-                    physics: const BouncingScrollPhysics(),
-                    clipBehavior: Clip.none,
-                    children: [
-                      _buildContractorCard(
-                        name: "PT Bangun Jaya",
-                        specialty: "Rumah Tinggal",
-                        location: "Malang",
-                        rating: "4.8",
-                        imageUrl: "https://i.pravatar.cc/150?img=11",
-                      ),
-                      const SizedBox(width: 16),
-                      _buildContractorCard(
-                        name: "CV Karya Mandiri",
-                        specialty: "Interior & Eksterior",
-                        location: "Surabaya",
-                        rating: "4.9",
-                        imageUrl: "https://i.pravatar.cc/150?img=5",
-                      ),
-                      const SizedBox(width: 16), // Padding ujung
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 30),
-              ],
-            ),
+              );
+            },
           ),
         ),
       ),
     );
   }
 
-  // --- WIDGET HELPER BAWAH SINI ---
+  // --- APP BAR ---
 
-  Widget _buildSectionHeader(String title) {
+  Widget _buildAppBar() {
+    final user = Supabase.instance.client.auth.currentUser;
+    final name = user?.userMetadata?['name'] ?? 'Klien';
+
     return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        Text(
-          title,
-          style: const TextStyle(
-            fontSize: 16,
-            fontWeight: FontWeight.bold,
-            color: Colors.black87,
+        Container(
+          padding: const EdgeInsets.all(8),
+          decoration: BoxDecoration(
+              color: AppColors.primary,
+              borderRadius: BorderRadius.circular(10)),
+          child: const Icon(Icons.hardware_rounded,
+              color: Colors.white, size: 20),
+        ),
+        const SizedBox(width: 10),
+        RichText(
+          text: const TextSpan(children: [
+            TextSpan(
+                text: 'Build',
+                style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 18,
+                    color: AppColors.primary)),
+            TextSpan(
+                text: 'Match',
+                style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 18,
+                    color: Colors.black87)),
+          ]),
+        ),
+        const Spacer(),
+        Consumer<ChatProvider>(
+          builder: (context, chat, child) => _buildIconBtn(
+            Icons.chat_bubble_outline_rounded, 
+            badge: chat.totalUnreadCount,
+            onTap: () {
+              widget.onSwitchTab?.call(2);
+            }
           ),
         ),
-        const Text(
-          "Lihat Semua",
-          style: TextStyle(
-            fontSize: 12,
-            color: AppColors.primaryDark,
-            fontWeight: FontWeight.w600,
+        const SizedBox(width: 8),
+        Consumer<NotificationProvider>(
+          builder: (context, notif, child) => _buildIconBtn(
+            Icons.notifications_none_rounded, 
+            badge: notif.unreadCount,
+            onTap: () {
+              Navigator.push(context, MaterialPageRoute(builder: (_) => const NotificationScreen()));
+            }
+          ),
+        ),
+        const SizedBox(width: 8),
+        CircleAvatar(
+          radius: 18,
+          backgroundColor: AppColors.cardCream,
+          child: Text(
+            name.isNotEmpty ? name[0].toUpperCase() : 'K',
+            style: const TextStyle(
+                color: AppColors.primary,
+                fontWeight: FontWeight.bold,
+                fontSize: 14),
           ),
         ),
       ],
     );
   }
 
-  Widget _buildServiceItem(IconData icon, String label, Color iconColor) {
-    return Column(
-      children: [
-        IOSGlassCard(
-          blur: 20,
-          child: Container(
-            width: 65,
-            height: 65,
+  Widget _buildIconBtn(IconData icon, {VoidCallback? onTap, int badge = 0}) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          Container(
+            padding: const EdgeInsets.all(8),
             decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.5),
-              borderRadius: BorderRadius.circular(16),
+                color: AppColors.cardCream,
+                borderRadius: BorderRadius.circular(12)),
+            child: Icon(icon, size: 20, color: AppColors.primary),
+          ),
+          if (badge > 0)
+            Positioned(
+              top: -2,
+              right: -2,
+              child: Container(
+                padding: const EdgeInsets.all(4),
+                decoration: const BoxDecoration(color: Colors.red, shape: BoxShape.circle),
+                constraints: const BoxConstraints(minWidth: 16, minHeight: 16),
+                child: Text(
+                  '$badge',
+                  style: const TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.bold),
+                  textAlign: TextAlign.center,
+                ),
+              ),
             ),
-            child: Icon(icon, color: iconColor, size: 28),
-          ),
-        ),
-        const SizedBox(height: 8),
-        Text(
-          label,
-          textAlign: TextAlign.center,
-          style: const TextStyle(
-            fontSize: 11,
-            fontWeight: FontWeight.w600,
-            color: Colors.black87,
-          ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 
-  Widget _buildContractorCard({
-    required String name,
-    required String specialty,
-    required String location,
-    required String rating,
-    required String imageUrl,
-  }) {
-    return IOSGlassCard(
-      blur: 15,
-      child: Container(
-        width: 150,
-        padding: const EdgeInsets.all(12),
-        decoration: BoxDecoration(
-          color: Colors.white.withOpacity(0.6),
-          borderRadius: BorderRadius.circular(20),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.center,
-          children: [
-            // Gambar Profil + Rating
-            Stack(
-              clipBehavior: Clip.none,
-              children: [
-                CircleAvatar(
-                  radius: 30,
-                  backgroundImage: NetworkImage(imageUrl),
-                  backgroundColor: Colors.grey.shade300,
-                ),
-                Positioned(
-                  right: -10,
-                  top: -5,
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 6,
-                      vertical: 2,
-                    ),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(10),
-                      boxShadow: [
-                        BoxShadow(color: Colors.black12, blurRadius: 4),
-                      ],
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        const Icon(
-                          Icons.star_rounded,
-                          color: Colors.amber,
-                          size: 12,
-                        ),
-                        const SizedBox(width: 2),
-                        Text(
-                          rating,
-                          style: const TextStyle(
-                            fontSize: 10,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            // Nama & Verified Badge
-            Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Flexible(
-                  child: Text(
-                    name,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      fontWeight: FontWeight.bold,
-                      fontSize: 13,
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 4),
-                const Icon(Icons.verified, color: Colors.blue, size: 14),
-              ],
-            ),
-            const SizedBox(height: 4),
-            // Spesialisasi
-            Text(
-              specialty,
-              style: const TextStyle(fontSize: 10, color: Colors.black54),
-            ),
-            const Spacer(),
-            // Lokasi
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.symmetric(vertical: 6),
+  // --- HERO CARD ---
+
+  Widget _buildHeroCard() {
+    final user = Supabase.instance.client.auth.currentUser;
+    final name = user?.userMetadata?['name'] ?? 'Klien';
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        gradient: AppColors.primaryGradient,
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [
+          BoxShadow(
+              color: AppColors.primaryDark.withOpacity(0.2),
+              blurRadius: 12,
+              offset: const Offset(0, 6))
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text('Selamat datang,',
+              style: TextStyle(color: Colors.white70, fontSize: 13)),
+          const SizedBox(height: 4),
+          Text(name,
+              style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 22,
+                  fontWeight: FontWeight.bold)),
+          const SizedBox(height: 14),
+          const Text(
+            'Bangun rumah impianmu mulai dari sini. Buat proyek, dapatkan penawaran terbaik dari kontraktor.',
+            style: TextStyle(color: Colors.white70, fontSize: 12, height: 1.4),
+          ),
+          const SizedBox(height: 16),
+          GestureDetector(
+            onTap: _onMulaiProyek,
+            child: Container(
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
               decoration: BoxDecoration(
-                color: Colors.white.withOpacity(0.5),
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.center,
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(20)),
+              child: const Row(
+                mainAxisSize: MainAxisSize.min,
                 children: [
-                  const Icon(
-                    Icons.location_on_rounded,
-                    color: Colors.black54,
-                    size: 12,
-                  ),
-                  const SizedBox(width: 4),
-                  Text(
-                    location,
-                    style: const TextStyle(
-                      fontSize: 10,
-                      color: Colors.black54,
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
+                  Icon(Icons.add_circle_outline_rounded,
+                      size: 16, color: AppColors.primaryDark),
+                  SizedBox(width: 6),
+                  Text('Mulai Proyek',
+                      style: TextStyle(
+                          color: AppColors.primaryDark,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 13)),
                 ],
               ),
             ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // --- STATS ---
+
+  Widget _buildStatsRow({
+    required int activeCount,
+    required int openCount,
+    required int bidsCount,
+  }) {
+    return Row(
+      children: [
+        _buildStatItem('$activeCount', 'Proyek Aktif'),
+        const SizedBox(width: 10),
+        _buildStatItem('$openCount', 'Open\nTender'),
+        const SizedBox(width: 10),
+        _buildStatItem('$bidsCount', 'Penawaran\nMasuk'),
+      ],
+    );
+  }
+
+  Widget _buildStatItem(String val, String label) {
+    return Expanded(
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 14),
+        decoration: BoxDecoration(
+            color: Colors.white, borderRadius: BorderRadius.circular(14)),
+        child: Column(
+          children: [
+            Text(val,
+                style: const TextStyle(
+                    fontWeight: FontWeight.w900,
+                    fontSize: 18,
+                    color: AppColors.primary)),
+            const SizedBox(height: 2),
+            Text(label,
+                style: const TextStyle(fontSize: 10, color: Colors.black54),
+                textAlign: TextAlign.center),
           ],
         ),
       ),
     );
   }
+
+  // --- SECTION HEADER ---
+
+  Widget _buildSectionHeader(String title, {VoidCallback? onTap}) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Text(title,
+            style:
+                const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+        if (onTap != null)
+          GestureDetector(
+            onTap: onTap,
+            child: const Text('Lihat Semua',
+                style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: AppColors.primary)),
+          ),
+      ],
+    );
+  }
+
+  // --- MENU UTAMA (4 items - fitur nyata) ---
+
+  Widget _buildMenuGrid() {
+    final menuItems = [
+      _MenuItem(Icons.add_circle_outline_rounded, 'Buat Proyek', _onMulaiProyek),
+      _MenuItem(Icons.engineering_rounded, 'Cari Kontraktor', _goToContractorTab),
+      _MenuItem(Icons.timeline_rounded, 'Lihat Progress', _goToProgressTab),
+      _MenuItem(Icons.person_outline_rounded, 'Profil Saya',
+          () => widget.onSwitchTab?.call(4)),
+    ];
+
+    return GridView.count(
+      crossAxisCount: 4,
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      mainAxisSpacing: 12,
+      crossAxisSpacing: 10,
+      childAspectRatio: 0.85,
+      children: menuItems.map((item) {
+        return GestureDetector(
+          onTap: item.onTap,
+          child: Column(
+            children: [
+              Container(
+                width: 56,
+                height: 56,
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(color: Colors.grey.shade200),
+                ),
+                child: Icon(item.icon, color: AppColors.primary, size: 24),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                item.label,
+                textAlign: TextAlign.center,
+                style: const TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                    color: Colors.black87),
+              ),
+            ],
+          ),
+        );
+      }).toList(),
+    );
+  }
+
+  // --- KONTRAKTOR TERPOPULER ---
+
+  Widget _buildKontraktorList(List<Map<String, dynamic>> vendors) {
+    if (vendors.isEmpty) {
+      return _buildEmptyCard('Belum ada data rating kontraktor');
+    }
+    return SizedBox(
+      height: 200,
+      child: ListView.builder(
+        scrollDirection: Axis.horizontal,
+        itemCount: vendors.length,
+        itemBuilder: (_, i) {
+          final item = vendors[i];
+          final profile = item['profile'] as ProfileModel;
+          final avgRating = item['avgRating'] as double;
+          final reviewCount = item['reviewCount'] as int;
+          final displayName = profile.companyName?.isNotEmpty == true
+              ? profile.companyName!
+              : profile.name;
+
+          return Container(
+            width: 170,
+            margin: EdgeInsets.only(right: i < vendors.length - 1 ? 12 : 0),
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: Colors.grey.shade200),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Stack(
+                  clipBehavior: Clip.none,
+                  children: [
+                    CircleAvatar(
+                      radius: 28,
+                      backgroundColor: AppColors.cardCream,
+                      backgroundImage: NetworkImage(
+                        'https://ui-avatars.com/api/?name=${Uri.encodeComponent(profile.name)}&background=B53D1B&color=fff&size=128',
+                      ),
+                    ),
+                    Positioned(
+                      right: -4,
+                      top: -4,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 6, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(color: Colors.grey.shade200),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(Icons.star_rounded,
+                                color: Colors.amber, size: 11),
+                            const SizedBox(width: 2),
+                            Text(avgRating.toStringAsFixed(1),
+                                style: const TextStyle(
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.bold)),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                Row(
+                  children: [
+                    Flexible(
+                      child: Text(
+                        displayName,
+                        style: const TextStyle(
+                            fontWeight: FontWeight.bold, fontSize: 13),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    const SizedBox(width: 4),
+                    if (profile.isVerified)
+                      const Icon(Icons.verified, color: Colors.blue, size: 13),
+                  ],
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  '$reviewCount ulasan',
+                  style: const TextStyle(fontSize: 10, color: Colors.black54),
+                ),
+                const Spacer(),
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(vertical: 6),
+                  decoration: BoxDecoration(
+                    color: AppColors.cardCream,
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      const Icon(Icons.star_rounded,
+                          color: Colors.amber, size: 12),
+                      const SizedBox(width: 4),
+                      Text(
+                        '${avgRating.toStringAsFixed(1)} • $reviewCount review',
+                        style: const TextStyle(
+                            fontSize: 10,
+                            color: Colors.black54,
+                            fontWeight: FontWeight.w500),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  // --- PROYEK SAYA (open + in_progress) ---
+
+  Widget _buildProyekSaya(List<ProjectModel> projects) {
+    if (projects.isEmpty) {
+      return Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(28),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: Colors.grey.shade200),
+        ),
+        child: Column(
+          children: [
+            Icon(Icons.folder_open_rounded, size: 40, color: Colors.grey.shade300),
+            const SizedBox(height: 12),
+            const Text(
+              'Belum ada proyek',
+              style: TextStyle(
+                fontWeight: FontWeight.w600,
+                fontSize: 13,
+                color: Colors.black54,
+              ),
+            ),
+            const SizedBox(height: 4),
+            const Text(
+              'Buat proyek pertamamu untuk mulai\nmendapatkan penawaran kontraktor',
+              textAlign: TextAlign.center,
+              style: TextStyle(fontSize: 11, color: Colors.black38, height: 1.4),
+            ),
+            const SizedBox(height: 14),
+            GestureDetector(
+              onTap: _onMulaiProyek,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                decoration: BoxDecoration(
+                  color: AppColors.primary,
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: const Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.add_rounded, size: 16, color: Colors.white),
+                    SizedBox(width: 4),
+                    Text('Buat Proyek',
+                        style: TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.w600,
+                            fontSize: 12)),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    final list = projects.take(3).toList();
+    return Column(
+      children: list.map((p) {
+        final isActive = p.status == 'in_progress';
+        final progress = (p.progressPercent / 100).clamp(0.0, 1.0);
+
+        // Status badge config
+        final String statusLabel;
+        final Color statusColor;
+        if (p.status == 'in_progress') {
+          statusLabel = 'BERJALAN';
+          statusColor = Colors.blue;
+        } else if (p.status == 'open') {
+          statusLabel = 'OPEN TENDER';
+          statusColor = Colors.orange;
+        } else {
+          statusLabel = (p.status ?? 'N/A').toUpperCase();
+          statusColor = Colors.grey;
+        }
+
+        return GestureDetector(
+          onTap: () => _openProjectDetail(p),
+          child: Container(
+            margin: const EdgeInsets.only(bottom: 12),
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: Colors.grey.shade200),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Expanded(
+                      child: Text(p.title,
+                          style: const TextStyle(
+                              fontWeight: FontWeight.bold, fontSize: 14),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis),
+                    ),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 8, vertical: 3),
+                      decoration: BoxDecoration(
+                          color: statusColor.withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(8)),
+                      child: Text(
+                        statusLabel,
+                        style: TextStyle(
+                            fontSize: 9,
+                            fontWeight: FontWeight.bold,
+                            color: statusColor),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 4),
+                Row(children: [
+                  const Icon(Icons.location_on_outlined,
+                      size: 13, color: Colors.black54),
+                  const SizedBox(width: 4),
+                  Expanded(
+                    child: Text(p.location ?? 'Lokasi tidak diketahui',
+                        style: const TextStyle(
+                            fontSize: 12, color: Colors.black54),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis),
+                  ),
+                  Text(
+                    AppFormatters.formatRupiah(p.budget),
+                    style: const TextStyle(
+                        fontSize: 11,
+                        color: AppColors.primary,
+                        fontWeight: FontWeight.w600),
+                  ),
+                ]),
+                if (isActive) ...[
+                  const SizedBox(height: 12),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Text('Progres',
+                          style: TextStyle(fontSize: 12, color: Colors.black54)),
+                      Text('${p.progressPercent}%',
+                          style: const TextStyle(
+                              fontSize: 12, fontWeight: FontWeight.bold)),
+                    ],
+                  ),
+                  const SizedBox(height: 6),
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(10),
+                    child: LinearProgressIndicator(
+                      value: progress,
+                      minHeight: 7,
+                      backgroundColor: Colors.grey.shade200,
+                      valueColor: const AlwaysStoppedAnimation<Color>(
+                          AppColors.primary),
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        );
+      }).toList(),
+    );
+  }
+
+  // --- HELPERS ---
+
+  Widget _buildEmptyCard(String text) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(24),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.grey.shade200),
+      ),
+      child: Center(
+        child: Text(text,
+            style: const TextStyle(
+                fontStyle: FontStyle.italic,
+                color: Colors.grey,
+                fontSize: 12)),
+      ),
+    );
+  }
+}
+
+class _MenuItem {
+  final IconData icon;
+  final String label;
+  final VoidCallback? onTap;
+  _MenuItem(this.icon, this.label, this.onTap);
 }

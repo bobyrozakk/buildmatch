@@ -6,6 +6,8 @@ import 'package:provider/provider.dart';
 import 'data/providers/project_provider.dart';
 import 'data/providers/auth_provider.dart';
 import 'data/providers/vendor_provider.dart';
+import 'data/providers/chat_provider.dart';
+import 'data/providers/notification_provider.dart';
 
 // --- IMPORT SCREENS ---
 import 'ui/shared/screens/main_nav.dart';
@@ -40,6 +42,8 @@ void main() async {
         ChangeNotifierProvider(create: (_) => AuthProvider()),
         ChangeNotifierProvider(create: (_) => ProjectProvider()),
         ChangeNotifierProvider(create: (_) => VendorProvider()),
+        ChangeNotifierProvider(create: (_) => ChatProvider()),
+        ChangeNotifierProvider(create: (_) => NotificationProvider()),
       ],
       child: const BuildMatchApp(),
     ),

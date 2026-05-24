@@ -39,19 +39,26 @@ class _KontraktorDetailProyekScreenState extends State<KontraktorDetailProyekScr
   final _messageController = TextEditingController();
   bool _alreadyBid = false;
   bool _checkingBid = true;
+  int _bidCount = 0;
+  bool _specExpanded = false;
 
   @override
   void initState() {
     super.initState();
-    _checkExistingBid();
+    _loadMeta();
   }
 
-  Future<void> _checkExistingBid() async {
+  Future<void> _loadMeta() async {
     final provider = Provider.of<ProjectProvider>(context, listen: false);
-    final result = await provider.hasVendorBidOnProject(widget.project.id ?? '');
+    final projectId = widget.project.id ?? '';
+    final results = await Future.wait([
+      provider.hasVendorBidOnProject(projectId),
+      provider.fetchProjectBidCount(projectId),
+    ]);
     if (!mounted) return;
     setState(() {
-      _alreadyBid = result;
+      _alreadyBid = results[0] as bool;
+      _bidCount = results[1] as int;
       _checkingBid = false;
     });
   }
@@ -107,8 +114,27 @@ class _KontraktorDetailProyekScreenState extends State<KontraktorDetailProyekScr
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
-        title: const Text('Detail & Penawaran', style: TextStyle(color: Colors.black87, fontWeight: FontWeight.bold)),
+        title: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text('Detail Proyek', style: TextStyle(color: Colors.black87, fontWeight: FontWeight.bold, fontSize: 16)),
+            Text(
+              widget.project.title,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(color: Colors.black54, fontSize: 11, fontWeight: FontWeight.normal),
+            ),
+          ],
+        ),
         iconTheme: const IconThemeData(color: Colors.black87),
+        actions: [
+          if (widget.project.status != null)
+            Padding(
+              padding: const EdgeInsets.only(right: 16),
+              child: Center(child: _buildStatusBadge(widget.project.status!)),
+            ),
+        ],
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(20),
@@ -166,81 +192,22 @@ class _KontraktorDetailProyekScreenState extends State<KontraktorDetailProyekScr
                 ),
               ),
             ),
-            const SizedBox(height: 24),
-            Text(
-              widget.project.title,
-              style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w800, color: Colors.black87, letterSpacing: -0.3),
-            ),
-            if (widget.project.clientName != null && widget.project.clientName!.isNotEmpty) ...[
-              const SizedBox(height: 6),
-              Row(
-                children: [
-                  const Icon(Icons.person_outline, size: 16, color: Colors.black45),
-                  const SizedBox(width: 6),
-                  Text(
-                    'oleh ${widget.project.clientName}',
-                    style: const TextStyle(color: Colors.black54, fontSize: 13, fontWeight: FontWeight.w500),
-                  ),
-                ],
-              ),
-            ],
-            const SizedBox(height: 12),
-            Text(
-              widget.project.description ?? 'Tidak ada deskripsi rinci.',
-              style: const TextStyle(color: Colors.black54, height: 1.5, letterSpacing: 0.2),
-            ),
-            const SizedBox(height: 24),
+            const SizedBox(height: 20),
 
-            // Section: Spesifikasi Proyek
-            Row(
-              children: const [
-                Icon(Icons.architecture_rounded, size: 20, color: AppColors.primary),
-                SizedBox(width: 8),
-                Text('Spesifikasi Proyek', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-              ],
-            ),
+            // Title Card: judul + budget badge + chip ringkas
+            _buildTitleCard(),
             const SizedBox(height: 16),
-            IOSGlassCard(
-              blur: 15,
-              child: Padding(
-                padding: const EdgeInsets.all(16.0),
-                child: Column(
-                  children: [
-                    Row(
-                      children: [
-                        Expanded(child: _specChip(Icons.account_balance_wallet_outlined, 'Anggaran', AppFormatters.formatRupiah(widget.project.budget))),
-                        const SizedBox(width: 12),
-                        Expanded(child: _specChip(Icons.terrain_outlined, 'Luas Tanah', '${widget.project.landSize.toStringAsFixed(0)} m²')),
-                      ],
-                    ),
-                    const SizedBox(height: 12),
-                    Row(
-                      children: [
-                        Expanded(child: _specChip(Icons.home_outlined, 'Luas Bangunan', '${widget.project.buildingSize.toStringAsFixed(0)} m²')),
-                        const SizedBox(width: 12),
-                        Expanded(child: _specChip(Icons.layers_outlined, 'Lantai', '${widget.project.floors}')),
-                      ],
-                    ),
-                    const SizedBox(height: 12),
-                    Row(
-                      children: [
-                        Expanded(child: _specChip(Icons.bed_outlined, 'Kamar Tidur', '${widget.project.bedrooms}')),
-                        const SizedBox(width: 12),
-                        Expanded(child: _specChip(Icons.bathtub_outlined, 'Kamar Mandi', '${widget.project.bathrooms}')),
-                      ],
-                    ),
-                    const SizedBox(height: 12),
-                    Row(
-                      children: [
-                        Expanded(child: _specChip(Icons.style_outlined, 'Gaya', widget.project.houseStyle)),
-                        const SizedBox(width: 12),
-                        Expanded(child: _specChip(Icons.location_on_outlined, 'Lokasi', widget.project.location ?? '-')),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-            ),
+
+            // Client Info Card
+            _buildClientInfoCard(),
+            const SizedBox(height: 20),
+
+            // Deskripsi + mini specs
+            _buildDescriptionCard(),
+            const SizedBox(height: 20),
+
+            // Spesifikasi Teknis (Collapsible)
+            _buildTechnicalSpecsCard(),
 
             // Section: Lampiran & Lokasi (jika tersedia)
             if ((widget.project.referencePdfUrl != null && widget.project.referencePdfUrl!.isNotEmpty) ||
@@ -508,6 +475,277 @@ class _KontraktorDetailProyekScreenState extends State<KontraktorDetailProyekScr
             ],
           ),
         ),
+      ),
+    );
+  }
+
+  // ----- NEW HELPERS -----
+
+  Widget _buildStatusBadge(String status) {
+    Color bg;
+    String label;
+    switch (status.toLowerCase()) {
+      case 'open':
+        bg = AppColors.primary;
+        label = 'Baru';
+        break;
+      case 'in_progress':
+        bg = Colors.orange.shade700;
+        label = 'Berjalan';
+        break;
+      case 'completed':
+        bg = Colors.green.shade700;
+        label = 'Selesai';
+        break;
+      default:
+        bg = Colors.grey.shade600;
+        label = status;
+    }
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(20)),
+      child: Text(label, style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold)),
+    );
+  }
+
+  Widget _buildTitleCard() {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(18),
+        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 10, offset: const Offset(0, 4))],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: Text(
+                  widget.project.title,
+                  style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: Colors.black87, letterSpacing: -0.3),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                decoration: BoxDecoration(color: AppColors.primary, borderRadius: BorderRadius.circular(20)),
+                child: Text(
+                  AppFormatters.formatRupiah(widget.project.budget),
+                  style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              _miniChip(Icons.location_on_outlined, widget.project.location ?? '-'),
+              _miniChip(Icons.calendar_today_rounded, AppFormatters.timeAgo(widget.project.createdAt)),
+              _miniChip(Icons.gavel_outlined, '$_bidCount penawaran'),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _miniChip(IconData icon, String label) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(color: AppColors.cardCream, borderRadius: BorderRadius.circular(14)),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 12, color: AppColors.primary),
+          const SizedBox(width: 4),
+          Text(label, style: const TextStyle(fontSize: 11, color: Colors.black87, fontWeight: FontWeight.w500)),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildClientInfoCard() {
+    final name = (widget.project.clientName?.isNotEmpty == true) ? widget.project.clientName! : 'Klien';
+    final initial = name.isNotEmpty ? name[0].toUpperCase() : '?';
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: AppColors.cardCream,
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Row(
+        children: [
+          CircleAvatar(
+            radius: 22,
+            backgroundColor: AppColors.primary,
+            child: Text(initial, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(name, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.black87)),
+                const SizedBox(height: 2),
+                Text(
+                  'Pemilik proyek · $_bidCount penawaran masuk',
+                  style: const TextStyle(fontSize: 11, color: Colors.black54),
+                ),
+              ],
+            ),
+          ),
+          Text(
+            AppFormatters.timeAgo(widget.project.createdAt),
+            style: const TextStyle(fontSize: 11, color: AppColors.primary, fontWeight: FontWeight.w600),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDescriptionCard() {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 10, offset: const Offset(0, 4))],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Row(
+            children: [
+              Icon(Icons.description_outlined, size: 18, color: AppColors.primary),
+              SizedBox(width: 8),
+              Text('Deskripsi Proyek', style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold)),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Text(
+            widget.project.description?.isNotEmpty == true
+                ? widget.project.description!
+                : 'Tidak ada deskripsi rinci.',
+            style: const TextStyle(color: Colors.black54, height: 1.5, fontSize: 13),
+          ),
+          const SizedBox(height: 14),
+          Row(
+            children: [
+              Expanded(child: _miniSpecTile('Luas Bangunan', '${widget.project.buildingSize.toStringAsFixed(0)} m²')),
+              const SizedBox(width: 10),
+              Expanded(child: _miniSpecTile('Luas Tanah', '${widget.project.landSize.toStringAsFixed(0)} m²')),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              Expanded(child: _miniSpecTile('Gaya', widget.project.houseStyle)),
+              const SizedBox(width: 10),
+              Expanded(child: _miniSpecTile('Lantai', '${widget.project.floors}')),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _miniSpecTile(String label, String value) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(color: AppColors.cardCream, borderRadius: BorderRadius.circular(10)),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(label, style: const TextStyle(fontSize: 11, color: Colors.black54)),
+          const SizedBox(height: 2),
+          Text(
+            value,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(fontSize: 13, color: Colors.black87, fontWeight: FontWeight.w700),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildTechnicalSpecsCard() {
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 10, offset: const Offset(0, 4))],
+      ),
+      child: Column(
+        children: [
+          InkWell(
+            onTap: () => setState(() => _specExpanded = !_specExpanded),
+            borderRadius: BorderRadius.circular(16),
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Row(
+                children: [
+                  const Icon(Icons.architecture_rounded, size: 18, color: AppColors.primary),
+                  const SizedBox(width: 8),
+                  const Expanded(
+                    child: Text('Spesifikasi Teknis Lengkap', style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold)),
+                  ),
+                  Icon(
+                    _specExpanded ? Icons.expand_less_rounded : Icons.expand_more_rounded,
+                    color: Colors.black54,
+                  ),
+                ],
+              ),
+            ),
+          ),
+          if (_specExpanded)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+              child: Column(
+                children: [
+                  Row(
+                    children: [
+                      Expanded(child: _specChip(Icons.account_balance_wallet_outlined, 'Anggaran', AppFormatters.formatRupiah(widget.project.budget))),
+                      const SizedBox(width: 12),
+                      Expanded(child: _specChip(Icons.terrain_outlined, 'Luas Tanah', '${widget.project.landSize.toStringAsFixed(0)} m²')),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  Row(
+                    children: [
+                      Expanded(child: _specChip(Icons.home_outlined, 'Luas Bangunan', '${widget.project.buildingSize.toStringAsFixed(0)} m²')),
+                      const SizedBox(width: 12),
+                      Expanded(child: _specChip(Icons.layers_outlined, 'Lantai', '${widget.project.floors}')),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  Row(
+                    children: [
+                      Expanded(child: _specChip(Icons.bed_outlined, 'Kamar Tidur', '${widget.project.bedrooms}')),
+                      const SizedBox(width: 12),
+                      Expanded(child: _specChip(Icons.bathtub_outlined, 'Kamar Mandi', '${widget.project.bathrooms}')),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  Row(
+                    children: [
+                      Expanded(child: _specChip(Icons.style_outlined, 'Gaya', widget.project.houseStyle)),
+                      const SizedBox(width: 12),
+                      Expanded(child: _specChip(Icons.location_on_outlined, 'Lokasi', widget.project.location ?? '-')),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+        ],
       ),
     );
   }

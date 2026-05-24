@@ -269,6 +269,21 @@ class ProjectProvider extends ChangeNotifier {
     }
   }
 
+  // --- HITUNG JUMLAH PENAWARAN MASUK UNTUK SEBUAH PROYEK ---
+  Future<int> fetchProjectBidCount(String projectId) async {
+    try {
+      if (projectId.isEmpty) return 0;
+      final response = await _supabase
+          .from('bids')
+          .select('id')
+          .eq('project_id', projectId);
+      return (response as List).length;
+    } catch (e) {
+      debugPrint("Error fetch bid count: $e");
+      return 0;
+    }
+  }
+
   // --- CEK APAKAH VENDOR SUDAH PERNAH NAWAR PROYEK INI ---
   Future<bool> hasVendorBidOnProject(String projectId) async {
     try {
@@ -314,6 +329,44 @@ class ProjectProvider extends ChangeNotifier {
       _isLoading = false;
       notifyListeners();
       return false;
+    }
+  }
+
+  // --- AMBIL PENAWARAN MASUK UNTUK CLIENT (SEMUA PROYEK OPEN) ---
+  /// Fetches all pending bids across all open projects owned by the current client.
+  /// Each bid includes joined project info and vendor name.
+  Future<List<BidModel>> fetchClientIncomingBids() async {
+    try {
+      final userId = _supabase.auth.currentUser?.id;
+      if (userId == null) return [];
+
+      // Get all open project IDs for this client
+      final projectsResponse = await _supabase
+          .from('projects')
+          .select('id')
+          .eq('client_id', userId)
+          .eq('status', 'open');
+
+      final projectIds = List<Map<String, dynamic>>.from(projectsResponse)
+          .map((p) => p['id'] as String)
+          .toList();
+
+      if (projectIds.isEmpty) return [];
+
+      // Get pending bids for those projects, join vendor name + project info
+      final bidsResponse = await _supabase
+          .from('bids')
+          .select('*, profiles:vendor_id(name), projects:project_id(title, budget, image_urls)')
+          .inFilter('project_id', projectIds)
+          .eq('status', 'pending')
+          .order('created_at', ascending: false);
+
+      return List<Map<String, dynamic>>.from(bidsResponse)
+          .map((json) => BidModel.fromJson(json))
+          .toList();
+    } catch (e) {
+      debugPrint("Error fetch client incoming bids: $e");
+      return [];
     }
   }
 

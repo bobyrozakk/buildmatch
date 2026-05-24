@@ -12,6 +12,7 @@ import '../../kontraktor/tabs/kontraktor_home_tab.dart';
 import '../../kontraktor/tabs/kontraktor_proyek_tab.dart';
 import '../../kontraktor/tabs/kontraktor_progress_tab.dart';
 import '../../kontraktor/tabs/kontraktor_profile_tab.dart'; 
+import 'chat_list_screen.dart';
 
 class MainNavScreen extends StatefulWidget {
   const MainNavScreen({super.key});
@@ -35,9 +36,11 @@ class _MainNavScreenState extends State<MainNavScreen> {
 
     // 2. SETUP DAFTAR HALAMAN (TABS)
     final List<Widget> clientTabs = [
-      const BerandaTab(),
+      BerandaTab(
+        onSwitchTab: (i) => setState(() => _currentIndex = i),
+      ),
       const ContractorTab(),
-      const Center(child: Text('Konsultasi Klien')), // Placeholder sementara
+      const ChatListScreen(), 
       const ProgressTab(), 
       const ProfileTab(), 
     ];

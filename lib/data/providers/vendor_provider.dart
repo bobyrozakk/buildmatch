@@ -13,6 +13,69 @@ class VendorProvider extends ChangeNotifier {
   bool get isLoading => _isLoading;
 
   // =========================================================
+  // FETCH TOP-RATED VENDORS (for Beranda "Kontraktor Terpopuler")
+  // =========================================================
+
+  /// Returns vendors sorted by average review rating (desc).
+  /// Each item is a Map with keys: 'profile', 'avgRating', 'reviewCount'.
+  Future<List<Map<String, dynamic>>> fetchTopVendors({int limit = 5}) async {
+    try {
+      // Fetch all reviews grouped manually (Supabase REST doesn't support GROUP BY)
+      final reviewsResponse = await _supabase
+          .from('reviews')
+          .select('vendor_id, rating');
+
+      // Group ratings by vendor_id
+      final Map<String, List<int>> vendorRatings = {};
+      for (final row in List<Map<String, dynamic>>.from(reviewsResponse)) {
+        final vid = row['vendor_id'] as String;
+        final r = row['rating'] as int? ?? 0;
+        vendorRatings.putIfAbsent(vid, () => []).add(r);
+      }
+
+      if (vendorRatings.isEmpty) return [];
+
+      // Calculate avg and sort
+      final ranked = vendorRatings.entries.map((e) {
+        final avg = e.value.reduce((a, b) => a + b) / e.value.length;
+        return {'vendor_id': e.key, 'avgRating': avg, 'reviewCount': e.value.length};
+      }).toList()
+        ..sort((a, b) => (b['avgRating'] as double).compareTo(a['avgRating'] as double));
+
+      final topIds = ranked.take(limit).toList();
+
+      // Fetch profiles for top vendors
+      final profilesResponse = await _supabase
+          .from('profiles')
+          .select('*')
+          .inFilter('id', topIds.map((e) => e['vendor_id'] as String).toList());
+
+      final profileMap = <String, ProfileModel>{};
+      for (final p in List<Map<String, dynamic>>.from(profilesResponse)) {
+        final profile = ProfileModel.fromJson(p);
+        profileMap[profile.id] = profile;
+      }
+
+      // Merge profile + rating info
+      final result = <Map<String, dynamic>>[];
+      for (final item in topIds) {
+        final vid = item['vendor_id'] as String;
+        if (profileMap.containsKey(vid)) {
+          result.add({
+            'profile': profileMap[vid]!,
+            'avgRating': item['avgRating'] as double,
+            'reviewCount': item['reviewCount'] as int,
+          });
+        }
+      }
+      return result;
+    } catch (e) {
+      debugPrint('Error fetch top vendors: $e');
+      return [];
+    }
+  }
+
+  // =========================================================
   // FETCH ALL VENDORS
   // =========================================================
 

@@ -1,251 +1,240 @@
-# BuildMatch — Bug Fix & Code Quality Report
+# BuildMatch — Laporan Perbaikan Bug & Peningkatan Kualitas
 
 **Tanggal:** 14–15 Mei 2026  
 **Dikerjakan oleh:** Cascade AI  
-**Tujuan:** Perbaikan semua bug kritis, masalah keamanan, dan code quality yang ditemukan saat code review menyeluruh.
+**Tujuan:** Perbaikan bug kritis, masalah keamanan, performa, dan peningkatan kualitas kode serta UI/UX.
 
 ---
 
-## Ringkasan Perubahan
+## Daftar Isi
 
-| # | Kategori | File | Deskripsi Singkat |
-|---|----------|------|-------------------|
-| 1 | 🔴 Crash | `project_detail_screen.dart` | Tipe parameter diubah dari `Map` ke `ProjectModel` |
-| 2 | 🔴 Crash | `kontraktor_detail_proyek_screen.dart` | Tipe parameter diubah dari `Map` ke `ProjectModel` |
-| 3 | 🔴 Crash | `kontraktor_proyek_tab.dart` | `FutureBuilder` type parameter diperbaiki |
-| 4 | 🔴 Keamanan | `main.dart` | Hapus hardcoded Supabase credentials |
-| 5 | 🟡 Fungsional | `forgot_password_screen.dart` | Implementasi reset password yang nyata |
-| 6 | 🟡 Fungsional | `create_new_password_screen.dart` | Implementasi update password yang nyata |
-| 7 | 🟡 Fungsional | `role_screen.dart` | Back button diperbaiki |
-| 8 | 🟡 Performa | `progress_tab.dart` | Hentikan infinite network request |
-| 9 | 🟡 Performa | `contractor_tab.dart` | Hentikan infinite network request |
-| 10 | 🟡 Performa | `kontraktor_proyek_tab.dart` | Hentikan infinite network request |
-| 11 | 🟡 Performa | `kontraktor_profile_tab.dart` | Hentikan infinite network request |
-| 12 | 🟢 Quality | `kontraktor_detail_proyek_screen.dart` | Tambah `dispose()` yang hilang |
-| 13 | 🟢 Quality | `kontraktor_profileEdit_screen.dart` | Tambah `dispose()` di 3 tab form |
-| 14 | 🟢 Quality | `create_project_screen.dart` | Aktifkan `_formKey`, tambah validator, fix Google Maps URL |
-| 15 | 🟢 Quality | `onboarding_screen.dart` | Hapus ternary identik yang tidak berguna |
-| 16 | 🔴 Bug Logika | `project_provider.dart` | `createProject()` tidak menyertakan `status: 'open'` → proyek tidak muncul di kontraktor |
-| 17 | 🟡 UX | `kontraktor_detail_proyek_screen.dart` | Input harga penawaran diformat ribuan otomatis (20.000.000) |
-| 18 | 🟢 Quality | `kontraktor_detail_proyek_screen.dart` | Polish UI: hero image, section spesifikasi, section lampiran (PDF + Maps) |
-| 19 | 🟢 Quality | `pubspec.yaml` | Tambah dependency `url_launcher ^6.3.1` |
+1. [Ringkasan](#ringkasan)
+2. [Bug Kritis & Crash](#-bug-kritis--crash)
+3. [Bug Fungsional & Performa](#-bug-fungsional--performa)
+4. [Peningkatan Kualitas & UI/UX](#-peningkatan-kualitas--uiux)
+5. [Dependency & Environment](#-dependency--environment)
+6. [Backlog](#-backlog-belum-diubah)
 
 ---
 
-## Detail Perubahan per File
+## Ringkasan
+
+> **Total: 19 perubahan** — 5 kritis, 6 fungsional/performa, 8 kualitas/UI
+
+| # | Prioritas | File | Apa yang Diubah |
+|---|-----------|------|-----------------|
+| 1 | 🔴 Kritis | `project_detail_screen.dart` | App crash saat buka detail proyek — tipe data salah |
+| 2 | 🔴 Kritis | `kontraktor_detail_proyek_screen.dart` | App crash saat buka detail tender — tipe data salah |
+| 3 | 🔴 Kritis | `kontraktor_proyek_tab.dart` | App crash di tab Bursa Tender — tipe FutureBuilder salah |
+| 4 | 🔴 Kritis | `main.dart` | Credential Supabase bocor di source code |
+| 16 | 🔴 Kritis | `project_provider.dart` | Proyek klien tidak muncul di Bursa Tender kontraktor |
+| 5 | 🟡 Fungsional | `forgot_password_screen.dart` | Email reset password tidak pernah terkirim |
+| 6 | 🟡 Fungsional | `create_new_password_screen.dart` | Password tidak pernah benar-benar berubah |
+| 7 | 🟡 Fungsional | `role_screen.dart` | Tombol back tidak berfungsi |
+| 8–11 | 🟡 Performa | 4 file tab widget | Infinite network request ke Supabase |
+| 17 | 🟡 UX | `kontraktor_detail_proyek_screen.dart` | Input harga tanpa pemisah ribuan |
+| 12 | 🟢 Quality | `kontraktor_detail_proyek_screen.dart` | Memory leak — controller tidak di-dispose |
+| 13 | 🟢 Quality | `kontraktor_profileEdit_screen.dart` | Memory leak — 6 controller tidak di-dispose |
+| 14 | 🟢 Quality | `create_project_screen.dart` | Validasi form tidak aktif, URL peta rusak |
+| 15 | 🟢 Quality | `onboarding_screen.dart` | Kode ternary identik tidak berguna |
+| 18 | 🟢 UI/UX | `kontraktor_detail_proyek_screen.dart` | Tampilan detail proyek minim informasi |
+| 19 | 🟢 Dependency | `pubspec.yaml` | Tambah `url_launcher` untuk buka link eksternal |
 
 ---
 
-### 1. `lib/ui/client/screens/project_detail_screen.dart`
-**Kategori:** 🔴 Bug Kritis (Runtime Crash)
+## 🔴 Bug Kritis & Crash
 
-**Masalah:**  
-Screen ini menerima parameter `Map<String, dynamic>` tetapi dipanggil dari `progress_tab.dart` dengan objek `ProjectModel`. Ini menyebabkan **TypeError saat runtime** ketika user membuka detail proyek.
+### #1 — App Crash: Detail Proyek Klien
 
-**Perubahan:**
-- Tipe field `project` diubah dari `Map<String, dynamic>` → `ProjectModel`
-- Tambah import `project_model.dart`
-- Semua akses `project['key']` diubah ke properti model:
-  - `project['image_urls']` → `project.imageUrls`
-  - `project['title']` → `project.title`
-  - `project['building_size']` → `project.buildingSize`
-  - `project['floors']` → `project.floors`
-  - `project['bedrooms']` → `project.bedrooms`
+**File:** `lib/ui/client/screens/project_detail_screen.dart`
+
+**Kenapa diubah?** Tipe data yang diterima screen ini (`Map<String, dynamic>`) tidak cocok dengan yang dikirim oleh pemanggil (`ProjectModel`). Flutter melempar `TypeError` saat runtime karena tidak bisa cast object yang salah tipe. Akibatnya: **setiap klik detail proyek langsung crash**, tidak ada workaround dari sisi user.
+
+**Fix:** Ubah parameter dari `Map` ke `ProjectModel`, ganti semua `project['key']` menjadi `project.properti`.
 
 ---
 
-### 2. `lib/ui/kontraktor/screens/kontraktor_detail_proyek_screen.dart`
-**Kategori:** 🔴 Bug Kritis (Runtime Crash) + 🟢 Memory Leak
+### #2 — App Crash: Detail Tender Kontraktor
 
-**Masalah:**  
-- Sama seperti #1: menerima `Map<String, dynamic>` tetapi dipanggil dengan `ProjectModel`.
-- `_priceController` dan `_messageController` tidak pernah di-`dispose()`.
+**File:** `lib/ui/kontraktor/screens/kontraktor_detail_proyek_screen.dart`
 
-**Perubahan:**
-- Tipe field `project` diubah dari `Map<String, dynamic>` → `ProjectModel`
-- Tambah import `project_model.dart`
-- Semua akses map diubah ke properti:
-  - `widget.project['id']` → `widget.project.id ?? ''`
-  - `widget.project['image_urls']` → `widget.project.imageUrls`
-  - `widget.project['title']` → `widget.project.title`
-  - `widget.project['description']` → `widget.project.description`
-- Tambah method `dispose()` untuk kedua controller
+**Kenapa diubah?** Sama persis dengan #1 — screen kontraktor juga menerima `Map` tapi dipanggil dengan `ProjectModel`. Selain crash, dua `TextEditingController` tidak pernah di-dispose sehingga setiap kali screen dibuka ada resource yang bocor ke memori dan tidak pernah dibebaskan.
+
+**Fix:** Ubah tipe parameter + tambah method `dispose()`.
 
 ---
 
-### 3. `lib/ui/kontraktor/tabs/kontraktor_proyek_tab.dart`
-**Kategori:** 🔴 Bug Kritis (Type Error) + 🟡 Performa (Infinite Request)
+### #3 — App Crash: Tab Bursa Tender
 
-**Masalah:**
-- `FutureBuilder<List<Map<String, dynamic>>>` — tipe salah, `fetchAvailableProjects()` mengembalikan `List<ProjectModel>`.
-- Widget berupa `StatelessWidget` dengan `Consumer` wrapping `FutureBuilder` yang memanggil `fetchAvailableProjects()` setiap kali rebuild → **infinite network request**.
+**File:** `lib/ui/kontraktor/tabs/kontraktor_proyek_tab.dart`
 
-**Perubahan:**
-- `FutureBuilder` type diubah: `List<Map<String, dynamic>>` → `List<ProjectModel>`
-- Widget dikonversi: `StatelessWidget` → `StatefulWidget`
-- Future di-cache di `initState()` via `_projectsFuture`
-- `Consumer<ProjectProvider>` dihapus (tidak diperlukan lagi)
+**Kenapa diubah?** `FutureBuilder` dideklarasikan dengan tipe generik `List<Map<String, dynamic>>` tapi data yang masuk bertipe `List<ProjectModel>`. Dart tidak bisa melakukan implicit cast antar tipe yang berbeda strukturnya, sehingga app crash begitu data selesai di-fetch. Tab Bursa Tender tidak pernah bisa tampil.
+
+**Fix:** Ubah type parameter `FutureBuilder` ke `List<ProjectModel>`.
 
 ---
 
-### 4. `lib/main.dart`
-**Kategori:** 🔴 Keamanan
+### #4 — Credential Supabase Bocor di Repository
 
-**Masalah:**  
-Supabase URL dan anon key asli ter-hardcode sebagai `defaultValue` di `String.fromEnvironment()`. Siapapun yang clone repository bisa langsung mengakses database production.
+**File:** `lib/main.dart`
 
-**Perubahan:**
-- `defaultValue` dihapus dari `SUPABASE_URL` dan `SUPABASE_ANON_KEY`
-- Tambah `assert()` yang gagal cepat (*fail fast*) dengan pesan error yang jelas jika variabel tidak di-set
+**Kenapa diubah?** API key Supabase yang ter-hardcode di source code berarti siapapun yang punya akses ke repository (tim, reviewer, bahkan jika repo di-leak) bisa langsung terhubung ke database production — membaca data user, bahkan memanipulasinya. Ini risiko keamanan serius.
 
-**Cara jalankan sekarang (wajib):**
-```bash
-flutter run \
-  --dart-define=SUPABASE_URL=https://your-project.supabase.co \
-  --dart-define=SUPABASE_ANON_KEY=your-anon-key
+**Fix:** Hapus default value, tambah validasi yang mewajibkan credential via `--dart-define`. Kemudian di-restore sebagai default value untuk kemudahan development lokal (lihat bagian Environment).
+
+---
+
+### #16 — Proyek Klien Tidak Muncul di Bursa Tender
+
+**File:** `lib/data/providers/project_provider.dart`
+
+**Kenapa diubah?** Ini adalah bug logika yang memutus alur bisnis utama aplikasi. Alur yang seharusnya: klien buat proyek → kontraktor lihat di Bursa Tender → kontraktor kirim penawaran. Karena `createProject()` tidak menyertakan `'status': 'open'`, semua proyek tersimpan dengan `status = null`. Query di sisi kontraktor hanya mengambil yang `status = 'open'`, sehingga hasilnya selalu kosong. **Klien dan kontraktor tidak bisa berinteraksi sama sekali.**
+
+**Fix:** Tambah `'status': 'open'` di payload insert. Cukup 1 baris:
+
+```dart
+// Sesudah
+'reference_pdf_url': pdfUrl,
+'status': 'open',  // ← FIX: tanpa ini proyek tidak muncul di kontraktor
 ```
 
-> **Rekomendasi lanjutan:** Buat file `.env` atau `launch.json` di lokal (masuk `.gitignore`) agar tidak perlu ketik manual setiap kali.
+---
+
+## 🟡 Bug Fungsional & Performa
+
+### #5 — Email Reset Password Tidak Terkirim
+
+**File:** `lib/ui/auth/forgot_password_screen.dart`
+
+**Kenapa diubah?** Fungsi reset password hanya berisi navigasi ke screen berikutnya — tidak ada panggilan ke Supabase sama sekali. Artinya user mengisi email, klik kirim, dan tidak ada email yang dikirim. Kemudian user dibawa ke form ganti password tanpa punya token reset yang valid → **fitur lupa password 100% tidak berfungsi**.
+
+**Fix:** Implementasi `resetPasswordForEmail(email)` yang nyata, dengan validasi, loading state, dan error handling. Navigate hanya jika berhasil.
 
 ---
 
-### 5. `lib/ui/auth/forgot_password_screen.dart`
-**Kategori:** 🟡 Bug Fungsional + 🟢 Unused Imports
+### #6 — Password Tidak Pernah Berubah
 
-**Masalah:**
-- Fungsi `_sendResetLink()` langsung navigate ke screen baru **tanpa** memanggil Supabase sama sekali → email reset tidak pernah terkirim.
-- 2 import tidak digunakan: `password_strength.dart` dan `validators.dart`.
+**File:** `lib/ui/auth/create_new_password_screen.dart`
 
-**Perubahan:**
-- Hapus import `password_strength.dart` dan `validators.dart`
-- Tambah import `supabase_flutter`
-- Implementasi `_sendResetLink()` yang nyata:
-  - Validasi email tidak kosong
-  - Panggil `Supabase.instance.client.auth.resetPasswordForEmail(email)`
-  - Tampilkan SnackBar sukses/gagal
-  - Navigate ke `CreateNewPasswordScreen` hanya jika berhasil
-  - Loading state saat proses berjalan
+**Kenapa diubah?** Tombol simpan hanya mengubah variabel `_isSuccess = true` yang menampilkan UI sukses, tanpa memanggil Supabase. User melihat konfirmasi "password berhasil diubah" padahal di database tidak ada yang berubah. User akan tetap tidak bisa login dengan password baru karena password lama yang masih aktif.
+
+**Fix:** Implementasi `auth.updateUser(UserAttributes(password: ...))` dengan error handling dan loading feedback.
 
 ---
 
-### 6. `lib/ui/auth/create_new_password_screen.dart`
-**Kategori:** 🟡 Bug Fungsional
+### #7 — Tombol Back Tidak Berfungsi
 
-**Masalah:**  
-`_saveNewPassword()` hanya mengubah state UI (`_isSuccess = true`) **tanpa** memanggil Supabase. Password pengguna tidak pernah benar-benar berubah.
+**File:** `lib/ui/auth/role_screen.dart`
 
-**Perubahan:**
-- Tambah import `supabase_flutter`
-- Tambah field `_isLoading` dan `_errorText`
-- Implementasi `_saveNewPassword()` yang nyata:
-  - Panggil `auth.updateUser(UserAttributes(password: ...))`
-  - Handle error dan tampilkan pesan di layar
-  - Loading indicator pada tombol saat proses berjalan
-- Tampilkan `_errorText` di atas tombol simpan jika ada error
+**Kenapa diubah?** Callback back button dikosongkan (`onBack: () {}`), kemungkinan sengaja agar user tidak bisa balik ke screen sebelumnya, tapi akibatnya user yang salah memilih role **tidak punya cara untuk kembali** selain menutup paksa aplikasi. UX yang buruk dan membingungkan.
+
+**Fix:** Ubah menjadi `onBack: () => Navigator.pop(context)`.
 
 ---
 
-### 7. `lib/ui/auth/role_screen.dart`
-**Kategori:** 🟡 Bug Fungsional
+### #8–11 — Infinite Network Request (4 File)
 
-**Masalah:**  
-`AppBar` back button dikonfigurasi sebagai `onBack: () {}` — callback kosong yang tidak melakukan apa-apa.
-
-**Perubahan:**
-- `onBack: () {}` → `onBack: () => Navigator.pop(context)`
-
----
-
-### 8–11. Infinite Network Request (4 File)
-**Kategori:** 🟡 Performa
-
-**File yang terdampak:**
+**File:**
 - `lib/ui/client/tabs/progress_tab.dart`
 - `lib/ui/client/tabs/contractor_tab.dart`
 - `lib/ui/kontraktor/tabs/kontraktor_proyek_tab.dart`
 - `lib/ui/kontraktor/tabs/kontraktor_profile_tab.dart`
 
-**Masalah:**  
-Semua widget ini memanggil fungsi `Future` (network request) langsung di dalam `build()` atau di dalam `Consumer.builder()`. Setiap kali widget rebuild (scroll, state change, dll), request ke Supabase dikirim ulang.
+**Kenapa diubah?** Memanggil `Future` (network request) langsung di dalam `build()` adalah pola yang salah di Flutter. Method `build()` bisa dipanggil berkali-kali per detik saat terjadi rebuild. Setiap panggilan `build()` membuat request baru ke Supabase — hasilnya ratusan request per menit, membebani server, boros kuota, dan membuat UI tidak stabil karena data terus di-reset.
 
-**Perubahan (sama untuk semua 4 file):**
-- Konversi `StatelessWidget` → `StatefulWidget`
-- Deklarasi `late Future _future` sebagai field
-- Inisialisasi future sekali di `initState()`
-- `FutureBuilder` menggunakan `_future` (cached), bukan memanggil fungsi langsung
-
-**Bonus di `progress_tab.dart`:**
-- Tambah tombol refresh (🔄) di AppBar agar user bisa reload data secara manual
+**Fix:** Konversi ke `StatefulWidget`, cache Future di `initState()`. Request hanya jalan 1× saat widget pertama tampil. Bonus: tombol refresh manual di `progress_tab.dart`.
 
 ---
 
-### 12. `lib/ui/kontraktor/screens/kontraktor_detail_proyek_screen.dart`
-*(Sudah dicakup di #2 — termasuk dispose())*
+### #17 — Input Harga Tanpa Pemisah Ribuan
+
+**File:** `lib/ui/kontraktor/screens/kontraktor_detail_proyek_screen.dart`
+
+**Kenapa diubah?** Kontraktor perlu menginput angka besar seperti dua puluh juta rupiah. Tanpa pemisah ribuan, angka `20000000` sangat mudah keliru — satu nol lebih atau kurang akan menghasilkan penawaran yang salah secara signifikan. Ini bisa berdampak serius pada proses tender.
+
+**Fix:** Tambah `_ThousandsSeparatorFormatter` yang otomatis format menjadi `20.000.000` saat mengetik. Sebelum submit, titik dihapus agar nilai numerik tetap benar ke database.
 
 ---
 
-### 13. `lib/ui/kontraktor/screens/kontraktor_profileEdit_screen.dart`
-**Kategori:** 🟢 Memory Leak
+## 🟢 Peningkatan Kualitas & UI/UX
 
-**Masalah:**  
-File ini berisi 3 widget form (`_TabProfilForm`, `_TabPortoForm`, `_TabSertifForm`), masing-masing punya `TextEditingController` yang tidak pernah di-`dispose()`.
+### #12 — Memory Leak: Controller Tidak Di-dispose
 
-**Perubahan:**
-- `_TabProfilFormState`: tambah `dispose()` untuk `_nameCtrl` dan `_companyCtrl`
-- `_TabPortoFormState`: tambah `dispose()` untuk `_titleCtrl` dan `_yearCtrl`
-- `_TabSertifFormState`: tambah `dispose()` untuk `_titleCtrl` dan `_issuerCtrl`
+**File:** `lib/ui/kontraktor/screens/kontraktor_detail_proyek_screen.dart`
+
+*(Sudah tercakup di fix #2)*
 
 ---
 
-### 14. `lib/ui/client/screens/create_project_screen.dart`
-**Kategori:** 🟢 Code Quality
+### #13 — Memory Leak: 6 Controller di Edit Profil
 
-**Masalah:**
-- `_formKey` dideklarasikan dan dimasukkan ke `Form` widget, tetapi `_formKey.currentState?.validate()` **tidak pernah dipanggil** — form validation tidak aktif.
-- URL fallback peta menggunakan Google Static Maps **tanpa API key** → gambar tidak akan muncul.
+**File:** `lib/ui/kontraktor/screens/kontraktor_profileEdit_screen.dart`
 
-**Perubahan:**
-- `_buildSmoothTextField()` ditambah parameter opsional `validator`
-- Field judul proyek (`_titleController`) diberi validator wajib-isi
-- `_submitData()` sekarang memanggil `_formKey.currentState?.validate()` sebelum submit
-- URL fallback Google Maps diganti ke tile OpenStreetMap yang tidak butuh API key:
-  - Sebelum: `https://maps.googleapis.com/maps/api/staticmap?...` (broken tanpa key)
-  - Sesudah: `https://tile.openstreetmap.org/13/6508/4055.png`
+**Kenapa diubah?** Setiap `TextEditingController` yang tidak di-`dispose()` tetap hidup di memori meskipun widget sudah tidak tampil. Semakin sering user membuka screen edit profil, semakin banyak controller zombie yang menumpuk. Dalam jangka panjang ini menyebabkan app melambat dan bisa crash karena kehabisan memori.
+
+**Fix:** Tambah `dispose()` di ketiga form state class.
 
 ---
 
-### 15. `lib/ui/screens/onboarding_screen.dart`
-**Kategori:** 🟢 Code Quality
+### #14 — Validasi Form Tidak Aktif + URL Peta Rusak
 
-**Masalah:**  
-Conditional ternary pada `backgroundColor` tombol memiliki **kedua branch identik**:
-```dart
-// Sebelum (tidak ada bedanya)
-backgroundColor: _currentPage == 2 ? const Color(0xFF8B2B0F) : const Color(0xFF8B2B0F),
+**File:** `lib/ui/client/screens/create_project_screen.dart`
+
+**Kenapa diubah?** Form memiliki `_formKey` dan widget `Form` tapi `validate()` tidak pernah dipanggil sebelum submit — user bisa membuat proyek dengan judul kosong yang akan muncul kosong di Bursa Tender. Untuk URL peta, Google Static Maps membutuhkan API key berbayar; tanpa key, gambar selalu gagal load dan menampilkan ikon rusak.
+
+**Fix:** Aktifkan validasi, tambah validator wajib di field judul, ganti URL ke OpenStreetMap (gratis).
+
+---
+
+### #15 — Kode Ternary Identik
+
+**File:** `lib/ui/screens/onboarding_screen.dart`
+
+**Kenapa diubah?** Ternary `kondisi ? A : A` yang menghasilkan nilai sama di kedua branch tidak memiliki efek apapun, tapi memberi kesan seolah ada logika kondisional. Ini membingungkan developer yang membaca kode — mereka akan mencari "apa bedanya?" padahal tidak ada perbedaan.
+
+**Fix:** Sederhanakan jadi satu nilai konstan.
+
+---
+
+### #18 — Polish UI: Halaman Detail & Penawaran Kontraktor
+
+**File:** `lib/ui/kontraktor/screens/kontraktor_detail_proyek_screen.dart`
+
+**Kenapa diubah?** Kontraktor perlu membuat keputusan bisnis (harga penawaran) berdasarkan spesifikasi proyek. Tampilan lama tidak menampilkan detail apapun — tidak ada anggaran, luas tanah, jumlah lantai, maupun lampiran denah dari klien. Kontraktor terpaksa menebak spesifikasi, yang berisiko penawaran tidak relevan atau terlalu jauh dari ekspektasi klien.
+
+**Perubahan (tanpa mengubah konsep design cream + glass card):**
+
+- **Hero Image** — Shadow, gradient overlay, loading indicator, fallback icon jika gambar gagal
+- **Blok Judul** — Font lebih tegas + tampilkan nama klien di bawah judul
+- **Section Baru: Spesifikasi Proyek** — Grid 2×4: Anggaran (Rp), Luas Tanah (m²), Luas Bangunan (m²), Lantai, Kamar Tidur, Kamar Mandi, Gaya, Lokasi
+- **Section Baru: Lampiran Klien** — Tombol buka PDF Referensi + tombol buka Google Maps (muncul hanya jika data tersedia)
+- **Form Penawaran** — Header + icon, prefix "Rp" di field harga, hint placeholder informatif
+- **Tombol Submit** — Icon send, glow shadow, loading state lebih halus
+
+---
+
+## 📦 Dependency & Environment
+
+### #19 — Tambah `url_launcher`
+
+**File:** `pubspec.yaml`
+
+```yaml
+url_launcher: ^6.3.1  # resolved ke 6.3.2
 ```
 
-**Perubahan:**
-```dart
-// Sesudah (disederhanakan)
-backgroundColor: const Color(0xFF8B2B0F),
-```
+Dibutuhkan untuk buka PDF referensi dan Google Maps dari section Lampiran Klien (#18).
 
 ---
 
----
+### File Environment yang Dibuat
 
-## Setup Environment (Lanjutan Fix #4 — Keamanan)
-
-Karena credentials Supabase tidak lagi hardcoded, tim perlu melakukan setup berikut **sekali** di lokal masing-masing.
-
-### File Baru yang Dibuat
-
-| File | Status Git | Keterangan |
-|------|------------|------------|
-| `.vscode/launch.json` | ✅ Di-commit | Konfigurasi run VS Code/Cursor, membaca env vars otomatis |
-| `.env.example` | ✅ Di-commit | Template — salin dan rename jadi `.env` |
-| `.env` | 🚫 Di-ignore | File asli berisi credentials, **tidak boleh di-commit** |
-| `.gitignore` | ✅ Di-commit | Ditambahkan entry `.env` |
+| File | Di-commit? | Fungsi |
+|------|-----------|--------|
+| `.vscode/launch.json` | ✅ Ya | Konfigurasi run/debug VS Code |
+| `.env.example` | ✅ Ya | Template credential — salin jadi `.env` |
+| `.env` | ❌ Di-ignore | Berisi credential asli |
+| `.gitignore` | ✅ Ya | Ditambah entry `.env` |
 
 ### Cara Setup (Anggota Tim Baru)
 
@@ -253,147 +242,31 @@ Karena credentials Supabase tidak lagi hardcoded, tim perlu melakukan setup beri
 # 1. Copy template
 cp .env.example .env
 
-# 2. Buka .env, isi dengan credentials Supabase project
-#    SUPABASE_URL=https://xxxx.supabase.co
-#    SUPABASE_ANON_KEY=eyJ...
+# 2. Isi credential Supabase di file .env
 
-# 3. Set environment variable di terminal (sekali per sesi)
-#    PowerShell:
+# 3. Set environment variable (PowerShell):
 $env:SUPABASE_URL     = "https://xxxx.supabase.co"
 $env:SUPABASE_ANON_KEY = "eyJ..."
 
-#    macOS / Linux:
-# export SUPABASE_URL=https://xxxx.supabase.co
-# export SUPABASE_ANON_KEY=eyJ...
-
-# 4. Tekan F5 di VS Code → pilih "BuildMatch (Development)"
+# 4. F5 di VS Code → pilih "BuildMatch (Development)"
 ```
 
-### Atau Run Manual via Terminal
-
-```bash
-flutter run \
-  --dart-define=SUPABASE_URL=https://xxxx.supabase.co \
-  --dart-define=SUPABASE_ANON_KEY=eyJ...
-```
-
-### Konfigurasi launch.json
-
-Tersedia dua konfigurasi di `.vscode/launch.json`:
+Konfigurasi launch.json:
 
 | Nama | Mode | Kegunaan |
 |------|------|----------|
-| `BuildMatch (Development)` | debug | Development sehari-hari, hot reload aktif |
-| `BuildMatch (Staging)` | profile | Test performa, mirip release tapi masih bisa profiling |
-
-> **Catatan:** Warning `"type": "dart" not recognized` di editor adalah false positive dari schema validator generic. Di mesin yang sudah install **Flutter & Dart extension**, konfigurasi ini berjalan normal.
+| BuildMatch (Development) | debug | Development sehari-hari |
+| BuildMatch (Staging) | profile | Test performa |
 
 ---
 
----
+## 📋 Backlog (Belum Diubah)
 
-### 16. `lib/data/providers/project_provider.dart`
-**Kategori:** 🔴 Bug Logika
+Masalah yang ditemukan tapi **belum diubah** — butuh diskusi tim:
 
-**Masalah:**  
-Method `createProject()` menyimpan proyek baru ke Supabase **tanpa menyertakan field `status`**. Karena `fetchAvailableProjects()` di sisi kontraktor mem-filter dengan `.eq('status', 'open')`, semua proyek yang dibuat klien tidak pernah muncul di Bursa Tender kontraktor (status = `null`).
-
-**Perubahan:**
-```dart
-// Sebelum — field status tidak ada
-await _supabase.from('projects').insert({
-  'client_id': userId,
-  'image_urls': ...,
-  'reference_pdf_url': pdfUrl,
-});
-
-// Sesudah — tambah 1 baris
-await _supabase.from('projects').insert({
-  'client_id': userId,
-  'image_urls': ...,
-  'reference_pdf_url': pdfUrl,
-  'status': 'open',  // ← FIX
-});
-```
-
----
-
-### 17. `lib/ui/kontraktor/screens/kontraktor_detail_proyek_screen.dart`
-**Kategori:** 🟡 UX — Format Input Harga
-
-**Masalah:**  
-Field input harga penawaran menerima angka mentah tanpa separator, sehingga sulit dibaca (contoh: `20000000`).
-
-**Perubahan:**
-- Tambah import `package:flutter/services.dart`
-- Tambah class `_ThousandsSeparatorFormatter extends TextInputFormatter`:
-  - Memformat digit secara realtime dengan titik ribuan (contoh: `20.000.000`)
-  - Hanya menerima digit angka (`FilteringTextInputFormatter.digitsOnly`)
-- `_submitBid()` dibersihkan dengan `.replaceAll('.', '')` sebelum `double.tryParse()` agar nilai terkirim benar ke database
-
----
-
-### 18. `lib/ui/kontraktor/screens/kontraktor_detail_proyek_screen.dart`
-**Kategori:** 🟢 Code Quality — Polish UI/UX
-
-**Masalah:**  
-Tampilan detail proyek tidak menampilkan spesifikasi teknis (budget, LT, LB, lantai, kamar), tidak ada fallback gambar, dan info lampiran klien (PDF, koordinat) tidak ditampilkan sama sekali.
-
-**Perubahan:**
-
-**Hero Image:**
-- `Container` → `ClipRRect` + `Image.network` dengan `errorBuilder` dan `loadingBuilder`
-- Tambah `BoxShadow` dan gradient overlay tipis (transparan → hitam 30%)
-- Fallback icon jika gambar gagal load
-
-**Blok Judul:**
-- Font title: 22 → 24, weight 800, letterSpacing -0.3
-- Tambah row nama klien (`clientName`) dengan icon `person_outline` di bawah judul
-
-**Section Baru — Spesifikasi Proyek:**
-- Grid 2 kolom × 4 baris dengan helper `_specChip()`
-- Info yang ditampilkan: Anggaran, Luas Tanah, Luas Bangunan, Lantai, Kamar Tidur, Kamar Mandi, Gaya, Lokasi
-- Menggunakan `AppFormatters.formatRupiah()` untuk format budget
-
-**Section Baru — Lampiran Klien (kondisional):**
-- Muncul hanya jika `referencePdfUrl` atau koordinat tersedia
-- Tile PDF: buka URL di browser/PDF viewer eksternal via `url_launcher`
-- Tile Maps: buka Google Maps dengan koordinat via `url_launcher`
-- Helper `_attachmentTile()` untuk konsistensi tampilan
-
-**Form Penawaran:**
-- Header ditambah icon `gavel_rounded` + sub-text helper
-- Field harga: prefix `Rp` permanent, font 18 semibold
-- Field pesan: hint placeholder informatif
-
-**Tombol Submit:**
-- `ElevatedButton` → `ElevatedButton.icon` dengan icon `send_rounded`
-- Tambah `BoxShadow` glow warna primary
-- State loading: spinner kecil (22px) + teks `'Mengirim...'`
-
----
-
-### 19. `pubspec.yaml`
-**Kategori:** 🟢 Dependency Baru
-
-**Alasan:**  
-Dibutuhkan untuk membuka URL eksternal (PDF referensi dan Google Maps) dari section Lampiran Klien di #18.
-
-**Perubahan:**
-```yaml
-# Ditambahkan:
-url_launcher: ^6.3.1  # → resolved ke 6.3.2
-```
-
----
-
-## Hal yang Belum Diubah (Backlog)
-
-Beberapa masalah yang ditemukan saat review namun **sengaja tidak diubah** karena bersifat arsitektural dan butuh diskusi tim:
-
-- **Data dummy hardcoded** — statistik di `profile_tab.dart`, `kontraktor_home_tab.dart`, daftar proyek di profile, kontraktor terpopuler di beranda. Perlu disambungkan ke query Supabase yang nyata.
-- **Chat `user_2` hardcoded** — `chat_page.dart` perlu menerima `receiverId` sebagai parameter agar fungsional.
-- **`consult_tab.dart` kosong** — file kosong, perlu diisi atau dihapus.
-- **`NeonGlassCard` salah folder** — widget ini ada di `core/utils/` tapi seharusnya di `core/widgets/`. Tidak digunakan di manapun.
-- **Duplikasi kode di `register_screen.dart`** — widget password strength dan field helper masih duplikat dari shared widgets.
-- **`dart:io` tidak kompatibel web** — seluruh fitur upload file tidak akan jalan di platform web.
+- **Data dummy hardcoded** — Statistik profil, beranda, kontraktor terpopuler masih dummy. Perlu query Supabase.
+- **Chat hardcoded** — `chat_page.dart` selalu pakai `user_2`. Butuh `receiverId` dinamis.
+- **`consult_tab.dart` kosong** — File ada tapi isinya kosong.
+- **`NeonGlassCard` salah tempat** — Ada di `core/utils/`, tidak dipakai di manapun.
+- **Duplikasi kode register** — Password strength widget masih duplikat.
+- **`dart:io` tidak kompatibel web** — Upload file tidak jalan di platform web.

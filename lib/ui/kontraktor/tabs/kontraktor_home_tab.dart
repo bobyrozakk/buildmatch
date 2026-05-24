@@ -10,6 +10,10 @@ import '../../../data/providers/vendor_provider.dart';
 import '../../../data/providers/project_provider.dart';
 import '../screens/kontraktor_profileEdit_screen.dart';
 import '../screens/kontraktor_detail_proyek_screen.dart';
+import '../../shared/screens/chat_list_screen.dart';
+import '../../shared/screens/notification_screen.dart';
+import '../../../data/providers/chat_provider.dart';
+import '../../../data/providers/notification_provider.dart';
 
 class KontraktorHomeTab extends StatefulWidget {
   final ValueChanged<int>? onSwitchTab;
@@ -36,6 +40,10 @@ class _KontraktorHomeTabState extends State<KontraktorHomeTab> {
   void _loadData() {
     final vendor = Provider.of<VendorProvider>(context, listen: false);
     final project = Provider.of<ProjectProvider>(context, listen: false);
+    
+    Provider.of<NotificationProvider>(context, listen: false).fetchNotifications();
+    Provider.of<ChatProvider>(context, listen: false).fetchChats();
+
     _dataFuture = Future.wait([
       vendor.fetchVendorProfile(),
       project.fetchAvailableProjects(),
@@ -71,90 +79,8 @@ class _KontraktorHomeTabState extends State<KontraktorHomeTab> {
     widget.onSwitchTab?.call(3);
   }
 
-  void _showNotifSheet() {
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: Colors.transparent,
-      isScrollControlled: true,
-      builder: (_) => StatefulBuilder(
-        builder: (ctx, setSheetState) {
-          return Container(
-            constraints: BoxConstraints(maxHeight: MediaQuery.of(context).size.height * 0.55),
-            decoration: const BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-            ),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const SizedBox(height: 12),
-                Container(width: 40, height: 4, decoration: BoxDecoration(color: Colors.grey.shade300, borderRadius: BorderRadius.circular(2))),
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
-                  child: Row(
-                    children: [
-                      const Text('Notifikasi', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                      const SizedBox(width: 8),
-                      if (_notifications.isNotEmpty)
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                          decoration: BoxDecoration(color: AppColors.primary, borderRadius: BorderRadius.circular(10)),
-                          child: Text('${_notifications.length} Baru', style: const TextStyle(fontSize: 10, color: Colors.white, fontWeight: FontWeight.bold)),
-                        ),
-                      const Spacer(),
-                      if (_notifications.isNotEmpty)
-                        GestureDetector(
-                          onTap: () {
-                            setState(() => _notifications.clear());
-                            setSheetState(() {});
-                          },
-                          child: const Text('Hapus Semua', style: TextStyle(fontSize: 12, color: Colors.red, fontWeight: FontWeight.w600)),
-                        ),
-                    ],
-                  ),
-                ),
-                const Divider(height: 1),
-                if (_notifications.isEmpty)
-                  const Padding(
-                    padding: EdgeInsets.all(40),
-                    child: Text('Tidak ada notifikasi baru', style: TextStyle(color: Colors.grey, fontStyle: FontStyle.italic)),
-                  )
-                else
-                  Flexible(
-                    child: ListView.separated(
-                      shrinkWrap: true,
-                      padding: const EdgeInsets.symmetric(vertical: 8),
-                      itemCount: _notifications.length,
-                      separatorBuilder: (_, __) => const Divider(height: 1, indent: 16, endIndent: 16),
-                      itemBuilder: (_, i) {
-                        final n = _notifications[i];
-                        return ListTile(
-                          leading: Container(
-                            padding: const EdgeInsets.all(8),
-                            decoration: BoxDecoration(color: n.color.withOpacity(0.1), borderRadius: BorderRadius.circular(10)),
-                            child: Icon(n.icon, size: 18, color: n.color),
-                          ),
-                          title: Text(n.text, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
-                          subtitle: Text(n.time, style: const TextStyle(fontSize: 10, color: Colors.black38)),
-                          trailing: Container(width: 8, height: 8, decoration: const BoxDecoration(color: AppColors.primary, shape: BoxShape.circle)),
-                          onTap: () {
-                            setState(() => _notifications.removeAt(i));
-                            setSheetState(() {});
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(content: Text('Notifikasi dibaca'), duration: Duration(seconds: 1)),
-                            );
-                          },
-                        );
-                      },
-                    ),
-                  ),
-              ],
-            ),
-          );
-        },
-      ),
-    );
-  }
+  // Removed dummy _showNotifSheet, we use NotificationScreen now.
+
 
   // --- BUILD ---
 
@@ -229,13 +155,25 @@ class _KontraktorHomeTabState extends State<KontraktorHomeTab> {
           ]),
         ),
         const Spacer(),
-        _buildIconBtn(Icons.chat_bubble_outline_rounded, onTap: () {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Fitur chat akan segera hadir')),
-          );
-        }),
+        Consumer<ChatProvider>(
+          builder: (context, chat, child) => _buildIconBtn(
+            Icons.chat_bubble_outline_rounded, 
+            badge: chat.totalUnreadCount,
+            onTap: () {
+              Navigator.push(context, MaterialPageRoute(builder: (_) => const ChatListScreen()));
+            }
+          ),
+        ),
         const SizedBox(width: 8),
-        _buildIconBtn(Icons.notifications_none_rounded, badge: _notifications.length, onTap: _showNotifSheet),
+        Consumer<NotificationProvider>(
+          builder: (context, notif, child) => _buildIconBtn(
+            Icons.notifications_none_rounded, 
+            badge: notif.unreadCount,
+            onTap: () {
+              Navigator.push(context, MaterialPageRoute(builder: (_) => const NotificationScreen()));
+            }
+          ),
+        ),
         const SizedBox(width: 8),
         GestureDetector(
           onTap: _openEditProfile,
