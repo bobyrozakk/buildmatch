@@ -10,7 +10,15 @@ class BidModel {
   final String status; // 'pending' | 'accepted' | 'rejected'
   final DateTime? createdAt;
   final ProjectModel? project; // joined project (optional)
-  final String? vendorName; // joined from profiles table (optional)
+  final String? vendorName;    // joined from profiles table
+
+  // ── Field lama ──
+  final int? estimationMonths;
+  final String? rabUrl;
+
+  // ── Field baru untuk Filter ──
+  final int? vendorExperienceYears;
+  final double? vendorRating;
 
   const BidModel({
     this.id,
@@ -22,13 +30,32 @@ class BidModel {
     this.createdAt,
     this.project,
     this.vendorName,
+    this.estimationMonths,
+    this.rabUrl,
+    this.vendorExperienceYears,
+    this.vendorRating,
   });
 
   factory BidModel.fromJson(Map<String, dynamic> json) {
-    // Handle joined vendor profile name
     String? vendorName;
+    int? experienceYears;
+    double? vendorRating;
+
     if (json['profiles'] is Map) {
-      vendorName = (json['profiles'] as Map)['name'] as String?;
+      final profile = json['profiles'] as Map<String, dynamic>;
+      vendorName = profile['name'] as String?;
+
+      // profiles.experience_years bertipe text di DB -> parse aman ke int
+      final expRaw = profile['experience_years'];
+      if (expRaw != null) {
+        experienceYears = int.tryParse(expRaw.toString());
+      }
+
+      // avg_rating di-inject dari query provider
+      final ratingRaw = profile['avg_rating'];
+      if (ratingRaw != null) {
+        vendorRating = double.tryParse(ratingRaw.toString());
+      }
     }
 
     return BidModel(
@@ -45,6 +72,10 @@ class BidModel {
           ? ProjectModel.fromJson(Map<String, dynamic>.from(json['projects'] as Map))
           : null,
       vendorName: vendorName,
+      estimationMonths: json['estimation_months'] as int?,
+      rabUrl: json['rab_url'] as String?,
+      vendorExperienceYears: experienceYears,
+      vendorRating: vendorRating,
     );
   }
 }

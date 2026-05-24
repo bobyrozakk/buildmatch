@@ -8,11 +8,13 @@ import '../models/bid_model.dart';
 /// Vendor-related functions sudah dipindah ke VendorProvider.
 class ProjectProvider extends ChangeNotifier {
   final _supabase = Supabase.instance.client;
-  bool _isLoading = false;
 
+  bool _isLoading = false;
   bool get isLoading => _isLoading;
 
-  // --- BUAT PROYEK BARU (DENGAN UPLOAD FILE) ---
+  // ─────────────────────────────────────────────
+  // BUAT PROYEK BARU (DENGAN UPLOAD FILE)
+  // ─────────────────────────────────────────────
   Future<bool> createProject({
     required String title,
     required String description,
@@ -31,7 +33,6 @@ class ProjectProvider extends ChangeNotifier {
   }) async {
     _isLoading = true;
     notifyListeners();
-
     try {
       final userId = _supabase.auth.currentUser?.id;
       if (userId == null) throw Exception("User belum login!");
@@ -39,23 +40,30 @@ class ProjectProvider extends ChangeNotifier {
       String? imageUrl;
       String? pdfUrl;
 
-      // 1. UPLOAD GAMBAR INSPIRASI JIKA ADA
+      // 1. Upload gambar inspirasi jika ada
       if (imageFile != null) {
         final imageExt = imageFile.path.split('.').last;
-        final imageName = '${userId}_${DateTime.now().millisecondsSinceEpoch}.$imageExt';
-        await _supabase.storage.from('project-renders').upload(imageName, imageFile);
-        imageUrl = _supabase.storage.from('project-renders').getPublicUrl(imageName);
+        final imageName =
+            '${userId}_${DateTime.now().millisecondsSinceEpoch}.$imageExt';
+        await _supabase.storage
+            .from('project-renders')
+            .upload(imageName, imageFile);
+        imageUrl = _supabase.storage
+            .from('project-renders')
+            .getPublicUrl(imageName);
       }
 
-      // 2. UPLOAD PDF REFERENSI KLIEN JIKA ADA
+      // 2. Upload PDF referensi klien jika ada
       if (pdfFile != null) {
         final pdfExt = pdfFile.path.split('.').last;
-        final pdfName = '${userId}_${DateTime.now().millisecondsSinceEpoch}_Reference.$pdfExt';
+        final pdfName =
+            '${userId}_${DateTime.now().millisecondsSinceEpoch}_Reference.$pdfExt';
         await _supabase.storage.from('documents').upload(pdfName, pdfFile);
-        pdfUrl = _supabase.storage.from('documents').getPublicUrl(pdfName);
+        pdfUrl =
+            _supabase.storage.from('documents').getPublicUrl(pdfName);
       }
 
-      // 3. INSERT KE DATABASE
+      // 3. Insert ke database
       await _supabase.from('projects').insert({
         'title': title,
         'description': description,
@@ -86,9 +94,9 @@ class ProjectProvider extends ChangeNotifier {
     }
   }
 
-  // --- SIMPAN PROYEK SEBAGAI DRAFT ---
-  /// Menyimpan data form yang sudah diisi sebagai draft (status = 'draft').
-  /// Semua parameter opsional — tidak ada validasi ketat, simpan apa adanya.
+  // ─────────────────────────────────────────────
+  // SIMPAN PROYEK SEBAGAI DRAFT
+  // ─────────────────────────────────────────────
   Future<bool> saveDraft({
     String? draftId,
     String title = '',
@@ -106,13 +114,13 @@ class ProjectProvider extends ChangeNotifier {
   }) async {
     _isLoading = true;
     notifyListeners();
-
     try {
       final userId = _supabase.auth.currentUser?.id;
       if (userId == null) throw Exception("User belum login!");
 
       final data = {
-        'title': title.trim().isEmpty ? 'Draft Tanpa Judul' : title.trim(),
+        'title':
+            title.trim().isEmpty ? 'Draft Tanpa Judul' : title.trim(),
         'description': description.trim(),
         'budget': budget,
         'land_size': landSize,
@@ -130,10 +138,8 @@ class ProjectProvider extends ChangeNotifier {
       };
 
       if (draftId != null && draftId.isNotEmpty) {
-        // Update draft yang sudah ada
         await _supabase.from('projects').update(data).eq('id', draftId);
       } else {
-        // Buat draft baru
         await _supabase.from('projects').insert(data);
       }
 
@@ -148,7 +154,9 @@ class ProjectProvider extends ChangeNotifier {
     }
   }
 
-  // --- AMBIL PROYEK DRAFT MILIK CLIENT ---
+  // ─────────────────────────────────────────────
+  // AMBIL PROYEK DRAFT MILIK CLIENT
+  // ─────────────────────────────────────────────
   Future<List<ProjectModel>> fetchDraftProjects() async {
     try {
       final userId = _supabase.auth.currentUser?.id;
@@ -170,7 +178,9 @@ class ProjectProvider extends ChangeNotifier {
     }
   }
 
-  // --- HAPUS DRAFT ---
+  // ─────────────────────────────────────────────
+  // HAPUS DRAFT
+  // ─────────────────────────────────────────────
   Future<bool> deleteDraft(String draftId) async {
     try {
       await _supabase.from('projects').delete().eq('id', draftId);
@@ -181,7 +191,9 @@ class ProjectProvider extends ChangeNotifier {
     }
   }
 
-  // --- AMBIL PROYEK KLIEN (TANPA DRAFT) ---
+  // ─────────────────────────────────────────────
+  // AMBIL PROYEK KLIEN (TANPA DRAFT)
+  // ─────────────────────────────────────────────
   Future<List<ProjectModel>> fetchProjects() async {
     try {
       final userId = _supabase.auth.currentUser?.id;
@@ -191,8 +203,9 @@ class ProjectProvider extends ChangeNotifier {
           .from('projects')
           .select('*')
           .eq('client_id', userId)
-          .neq('status', 'draft')         // <-- draft tidak muncul di sini
+          .neq('status', 'draft')
           .order('created_at', ascending: false);
+
       return List<Map<String, dynamic>>.from(response)
           .map((json) => ProjectModel.fromJson(json))
           .toList();
@@ -202,14 +215,17 @@ class ProjectProvider extends ChangeNotifier {
     }
   }
 
-  // --- AMBIL PROYEK OPEN TENDER (UNTUK KONTRAKTOR) ---
+  // ─────────────────────────────────────────────
+  // AMBIL PROYEK OPEN TENDER (UNTUK KONTRAKTOR)
+  // ─────────────────────────────────────────────
   Future<List<ProjectModel>> fetchAvailableProjects() async {
     try {
       final response = await _supabase
           .from('projects')
           .select('*, profiles:client_id(name)')
-          .eq('status', 'open')           // hanya 'open', draft otomatis excluded
+          .eq('status', 'open')
           .order('created_at', ascending: false);
+
       return List<Map<String, dynamic>>.from(response)
           .map((json) => ProjectModel.fromJson(json))
           .toList();
@@ -219,22 +235,21 @@ class ProjectProvider extends ChangeNotifier {
     }
   }
 
-  // --- AMBIL PROYEK BERJALAN UNTUK VENDOR ---
-  /// Mengambil proyek yang dimiliki/dikerjakan vendor saat ini (status != 'open' atau progress > 0).
-  /// Saat ini menggunakan filter status != 'open' dari semua proyek.
+  // ─────────────────────────────────────────────
+  // AMBIL PROYEK BERJALAN UNTUK VENDOR
+  // ─────────────────────────────────────────────
   Future<List<ProjectModel>> fetchVendorActiveProjects() async {
     try {
       final vendorId = _supabase.auth.currentUser?.id;
       if (vendorId == null) return [];
 
-      // Ambil proyek yang sudah tidak open (in_progress/completed) dengan join client name
-      // Draft juga tidak diikutsertakan karena filter neq 'open' tapi kita tambah neq 'draft'
       final response = await _supabase
           .from('projects')
           .select('*, profiles:client_id(name)')
           .neq('status', 'open')
-          .neq('status', 'draft')         // <-- pastikan draft tidak muncul di vendor
+          .neq('status', 'draft')
           .order('created_at', ascending: false);
+
       return List<Map<String, dynamic>>.from(response)
           .map((json) => ProjectModel.fromJson(json))
           .toList();
@@ -244,9 +259,9 @@ class ProjectProvider extends ChangeNotifier {
     }
   }
 
-  // --- AMBIL DAFTAR PENAWARAN VENDOR (BIDS) ---
-  /// Mengambil semua bid yang diajukan vendor login. Optional filter status.
-  /// Setiap bid sudah join ke tabel `projects` (+ profil klien) untuk display.
+  // ─────────────────────────────────────────────
+  // AMBIL DAFTAR PENAWARAN VENDOR (BIDS)
+  // ─────────────────────────────────────────────
   Future<List<BidModel>> fetchVendorBids({String? status}) async {
     try {
       final vendorId = _supabase.auth.currentUser?.id;
@@ -254,12 +269,17 @@ class ProjectProvider extends ChangeNotifier {
 
       var query = _supabase
           .from('bids')
-          .select('*, projects:project_id(*, profiles:client_id(name))')
+          .select(
+              '*, projects:project_id(*, profiles:client_id(name))')
           .eq('vendor_id', vendorId);
+
       if (status != null) {
         query = query.eq('status', status);
       }
-      final response = await query.order('created_at', ascending: false);
+
+      final response =
+          await query.order('created_at', ascending: false);
+
       return List<Map<String, dynamic>>.from(response)
           .map((json) => BidModel.fromJson(json))
           .toList();
@@ -269,7 +289,9 @@ class ProjectProvider extends ChangeNotifier {
     }
   }
 
-  // --- HITUNG JUMLAH PENAWARAN MASUK UNTUK SEBUAH PROYEK ---
+  // ─────────────────────────────────────────────
+  // HITUNG JUMLAH PENAWARAN MASUK UNTUK SEBUAH PROYEK
+  // ─────────────────────────────────────────────
   Future<int> fetchProjectBidCount(String projectId) async {
     try {
       if (projectId.isEmpty) return 0;
@@ -284,17 +306,21 @@ class ProjectProvider extends ChangeNotifier {
     }
   }
 
-  // --- CEK APAKAH VENDOR SUDAH PERNAH NAWAR PROYEK INI ---
+  // ─────────────────────────────────────────────
+  // CEK APAKAH VENDOR SUDAH PERNAH NAWAR PROYEK INI
+  // ─────────────────────────────────────────────
   Future<bool> hasVendorBidOnProject(String projectId) async {
     try {
       final vendorId = _supabase.auth.currentUser?.id;
       if (vendorId == null || projectId.isEmpty) return false;
+
       final response = await _supabase
           .from('bids')
           .select('id')
           .eq('vendor_id', vendorId)
           .eq('project_id', projectId)
           .limit(1);
+
       return (response as List).isNotEmpty;
     } catch (e) {
       debugPrint("Error check vendor bid: $e");
@@ -302,11 +328,15 @@ class ProjectProvider extends ChangeNotifier {
     }
   }
 
-  // --- KIRIM PENAWARAN (BID) ---
+  // ─────────────────────────────────────────────
+  // KIRIM PENAWARAN (BID) — support RAB upload & estimasi bulan
+  // ─────────────────────────────────────────────
   Future<bool> submitBid({
     required String projectId,
     required double price,
     required String message,
+    required int estimationMonths,
+    File? rabFile, // RAB dari kontraktor (PDF/Excel/Word)
   }) async {
     _isLoading = true;
     notifyListeners();
@@ -314,11 +344,27 @@ class ProjectProvider extends ChangeNotifier {
       final vendorId = _supabase.auth.currentUser?.id;
       if (vendorId == null) throw Exception("Vendor belum login!");
 
+      String? rabUrl;
+
+      // Upload RAB jika ada
+      if (rabFile != null) {
+        final ext = rabFile.path.split('.').last;
+        final fileName =
+            '${vendorId}_RAB_${DateTime.now().millisecondsSinceEpoch}.$ext';
+        await _supabase.storage
+            .from('documents')
+            .upload(fileName, rabFile);
+        rabUrl =
+            _supabase.storage.from('documents').getPublicUrl(fileName);
+      }
+
       await _supabase.from('bids').insert({
         'project_id': projectId,
         'vendor_id': vendorId,
         'price': price,
         'message': message,
+        'estimation_months': estimationMonths,
+        if (rabUrl != null) 'rab_url': rabUrl,
       });
 
       _isLoading = false;
@@ -332,31 +378,31 @@ class ProjectProvider extends ChangeNotifier {
     }
   }
 
-  // --- AMBIL PENAWARAN MASUK UNTUK CLIENT (SEMUA PROYEK OPEN) ---
-  /// Fetches all pending bids across all open projects owned by the current client.
-  /// Each bid includes joined project info and vendor name.
+  // ─────────────────────────────────────────────
+  // AMBIL PENAWARAN MASUK UNTUK CLIENT (SEMUA PROYEK OPEN)
+  // ─────────────────────────────────────────────
   Future<List<BidModel>> fetchClientIncomingBids() async {
     try {
       final userId = _supabase.auth.currentUser?.id;
       if (userId == null) return [];
 
-      // Get all open project IDs for this client
       final projectsResponse = await _supabase
           .from('projects')
           .select('id')
           .eq('client_id', userId)
           .eq('status', 'open');
 
-      final projectIds = List<Map<String, dynamic>>.from(projectsResponse)
-          .map((p) => p['id'] as String)
-          .toList();
+      final projectIds =
+          List<Map<String, dynamic>>.from(projectsResponse)
+              .map((p) => p['id'] as String)
+              .toList();
 
       if (projectIds.isEmpty) return [];
 
-      // Get pending bids for those projects, join vendor name + project info
       final bidsResponse = await _supabase
           .from('bids')
-          .select('*, profiles:vendor_id(name), projects:project_id(title, budget, image_urls)')
+          .select(
+              '*, profiles:vendor_id(name), projects:project_id(title, budget, image_urls)')
           .inFilter('project_id', projectIds)
           .eq('status', 'pending')
           .order('created_at', ascending: false);
@@ -370,27 +416,80 @@ class ProjectProvider extends ChangeNotifier {
     }
   }
 
-  // --- AMBIL SEMUA BID UNTUK SATU PROYEK (UNTUK CLIENT) ---
-  /// Mengambil semua bid yang masuk pada proyek tertentu, join profil vendor.
+  // ─────────────────────────────────────────────
+  // AMBIL SEMUA BID UNTUK SATU PROYEK (UNTUK CLIENT)
+  // Join profil vendor (name, experience_years) + tarik rating manual
+  // ─────────────────────────────────────────────
   Future<List<BidModel>> fetchProjectBids(String projectId) async {
     try {
       if (projectId.isEmpty) return [];
-      final response = await _supabase
+
+      // 1. Tarik bids + join profil vendor dasar (termasuk experience_years)
+      final bidsResponse = await _supabase
           .from('bids')
-          .select('*, profiles:vendor_id(name)')
+          .select('*, profiles:vendor_id(name, experience_years)')
           .eq('project_id', projectId)
           .order('created_at', ascending: false);
-      return List<Map<String, dynamic>>.from(response)
-          .map((json) => BidModel.fromJson(json))
+
+      final bids = List<Map<String, dynamic>>.from(bidsResponse);
+
+      // 2. Kumpulkan semua vendor_id unik untuk narik rating
+      final vendorIds = bids
+          .map((b) => b['vendor_id'] as String?)
+          .whereType<String>()
+          .toSet()
           .toList();
+
+      Map<String, double> ratingMap = {};
+
+      // 3. Tarik semua data dari tabel reviews yang match dengan list vendor
+      if (vendorIds.isNotEmpty) {
+        final reviewsResponse = await _supabase
+            .from('reviews')
+            .select('vendor_id, rating')
+            .inFilter('vendor_id', vendorIds);
+
+        final reviews = List<Map<String, dynamic>>.from(reviewsResponse);
+
+        // Grouping & Hitung rata-rata rating per vendor
+        final Map<String, List<int>> ratingGroups = {};
+        for (final r in reviews) {
+          final vid = r['vendor_id'] as String?;
+          final rat = r['rating'] as int?;
+          if (vid != null && rat != null) {
+            ratingGroups.putIfAbsent(vid, () => []).add(rat);
+          }
+        }
+
+        ratingGroups.forEach((vid, ratings) {
+          ratingMap[vid] = ratings.reduce((a, b) => a + b) / ratings.length;
+        });
+      }
+
+      // 4. Inject avg_rating ke dalam map profiles sebelum di-parse ke model
+      final enrichedBids = bids.map((b) {
+        final vendorId = b['vendor_id'] as String?;
+        final profiles = Map<String, dynamic>.from((b['profiles'] as Map?) ?? {});
+
+        if (vendorId != null && ratingMap.containsKey(vendorId)) {
+          profiles['avg_rating'] = ratingMap[vendorId];
+        } else {
+          profiles['avg_rating'] = null;
+        }
+
+        return {...b, 'profiles': profiles};
+      }).toList();
+
+      return enrichedBids.map((json) => BidModel.fromJson(json)).toList();
     } catch (e) {
       debugPrint("Error fetch project bids: $e");
       return [];
     }
   }
 
-  // --- TERIMA BID (CLIENT) ---
-  /// Update bid menjadi 'accepted', update proyek menjadi 'in_progress'.
+  // ─────────────────────────────────────────────
+  // TERIMA BID (CLIENT)
+  // ─────────────────────────────────────────────
   Future<bool> acceptBid({
     required String bidId,
     required String projectId,
@@ -398,17 +497,13 @@ class ProjectProvider extends ChangeNotifier {
     _isLoading = true;
     notifyListeners();
     try {
-      // 1. Ubah bid yang dipilih ke accepted
       await _supabase
           .from('bids')
-          .update({'status': 'accepted'})
-          .eq('id', bidId);
+          .update({'status': 'accepted'}).eq('id', bidId);
 
-      // 2. Ubah status proyek ke in_progress
       await _supabase
           .from('projects')
-          .update({'status': 'in_progress'})
-          .eq('id', projectId);
+          .update({'status': 'in_progress'}).eq('id', projectId);
 
       _isLoading = false;
       notifyListeners();
@@ -421,15 +516,16 @@ class ProjectProvider extends ChangeNotifier {
     }
   }
 
-  // --- TOLAK BID (CLIENT) ---
+  // ─────────────────────────────────────────────
+  // TOLAK BID (CLIENT)
+  // ─────────────────────────────────────────────
   Future<bool> rejectBid({required String bidId}) async {
     _isLoading = true;
     notifyListeners();
     try {
       await _supabase
           .from('bids')
-          .update({'status': 'rejected'})
-          .eq('id', bidId);
+          .update({'status': 'rejected'}).eq('id', bidId);
 
       _isLoading = false;
       notifyListeners();

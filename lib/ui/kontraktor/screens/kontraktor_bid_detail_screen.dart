@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:url_launcher/url_launcher.dart';
 import 'package:buildmatch/data/models/bid_model.dart';
 import '../../shared/widgets/glass_card.dart';
 import '../../../core/constants/colors.dart';
@@ -6,16 +7,27 @@ import '../../../core/utils/formatters.dart';
 
 class KontraktorBidDetailScreen extends StatelessWidget {
   final BidModel bid;
-
   const KontraktorBidDetailScreen({
     super.key,
     required this.bid,
   });
 
+  Future<void> _openUrl(BuildContext context, String url) async {
+    final uri = Uri.tryParse(url);
+    if (uri == null) return;
+    final ok =
+        await launchUrl(uri, mode: LaunchMode.externalApplication);
+    if (!ok && context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+            content: Text('Tidak dapat membuka file RAB.')),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final project = bid.project;
-
     final isAccepted = bid.status == 'accepted';
 
     return Scaffold(
@@ -26,17 +38,14 @@ class KontraktorBidDetailScreen extends StatelessWidget {
         title: const Text(
           'Detail Penawaran',
           style: TextStyle(
-            color: Colors.black87,
-            fontWeight: FontWeight.bold,
-          ),
+              color: Colors.black87, fontWeight: FontWeight.bold),
         ),
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(20),
         child: Column(
           children: [
-
-            /// HERO STATUS CARD
+            // ── Hero Status Card ──
             IOSGlassCard(
               blur: 15,
               child: Container(
@@ -45,46 +54,33 @@ class KontraktorBidDetailScreen extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-
                     _statusChip(bid.status),
-
                     const SizedBox(height: 16),
-
                     Text(
                       project?.title ?? 'Proyek',
                       style: const TextStyle(
-                        fontSize: 22,
-                        fontWeight: FontWeight.bold,
-                      ),
+                          fontSize: 22,
+                          fontWeight: FontWeight.bold),
                     ),
-
                     const SizedBox(height: 10),
-
                     Text(
                       AppFormatters.formatRupiah(bid.price),
                       style: const TextStyle(
-                        fontSize: 28,
-                        fontWeight: FontWeight.w900,
-                        color: AppColors.primary,
-                      ),
+                          fontSize: 28,
+                          fontWeight: FontWeight.w900,
+                          color: AppColors.primary),
                     ),
-
                     const SizedBox(height: 8),
-
                     Row(
                       children: [
-                        const Icon(
-                          Icons.location_on_outlined,
-                          size: 16,
-                          color: Colors.black54,
-                        ),
+                        const Icon(Icons.location_on_outlined,
+                            size: 16, color: Colors.black54),
                         const SizedBox(width: 4),
                         Expanded(
                           child: Text(
                             project?.location ?? '-',
                             style: const TextStyle(
-                              color: Colors.black54,
-                            ),
+                                color: Colors.black54),
                           ),
                         ),
                       ],
@@ -93,80 +89,70 @@ class KontraktorBidDetailScreen extends StatelessWidget {
                 ),
               ),
             ),
-
             const SizedBox(height: 22),
 
-            /// DETAIL INFO
+            // ── Informasi Penawaran ──
             _sectionTitle('Informasi Penawaran'),
-
             const SizedBox(height: 14),
-
             IOSGlassCard(
               blur: 12,
               child: Padding(
                 padding: const EdgeInsets.all(18),
                 child: Column(
                   children: [
-
                     _infoTile(
                       Icons.account_balance_wallet_outlined,
                       'Budget Klien',
                       AppFormatters.formatRupiah(
-                        project?.budget ?? 0,
-                      ),
+                          project?.budget ?? 0),
                     ),
-
                     const SizedBox(height: 16),
-
                     _infoTile(
                       Icons.payments_outlined,
                       'Penawaran Anda',
-                      AppFormatters.formatRupiah(
-                        bid.price,
-                      ),
+                      AppFormatters.formatRupiah(bid.price),
                     ),
-
                     const SizedBox(height: 16),
-
                     _infoTile(
                       Icons.calendar_month_outlined,
                       'Status',
                       bid.status.toUpperCase(),
                     ),
+                    // ── Estimasi bulan ──
+                    if (bid.estimationMonths != null) ...[
+                      const SizedBox(height: 16),
+                      _infoTile(
+                        Icons.schedule_rounded,
+                        'Estimasi Pengerjaan',
+                        '${bid.estimationMonths} Bulan',
+                      ),
+                    ],
+                    // ── Tombol buka RAB ──
+                    if (bid.rabUrl != null &&
+                        bid.rabUrl!.isNotEmpty) ...[
+                      const SizedBox(height: 16),
+                      _rabTile(context, bid.rabUrl!),
+                    ],
                   ],
                 ),
               ),
             ),
-
             const SizedBox(height: 22),
 
-            /// TIMELINE
+            // ── Timeline Progress Penawaran ──
             _sectionTitle('Progress Penawaran'),
-
             const SizedBox(height: 14),
-
             IOSGlassCard(
               blur: 12,
               child: Padding(
                 padding: const EdgeInsets.all(18),
                 child: Column(
                   children: [
-
+                    _timelineItem(true, 'Penawaran Terkirim'),
                     _timelineItem(
-                      true,
-                      'Penawaran Terkirim',
-                    ),
-
+                        true, 'Sedang Direview Klien'),
                     _timelineItem(
-                      true,
-                      'Sedang Direview Klien',
-                    ),
-
-                    _timelineItem(
-                      isAccepted,
-                      'Penawaran Diterima',
-                    ),
-
+                        isAccepted, 'Penawaran Diterima'),
                     _timelineItem(
                       isAccepted &&
                           (project?.progressPercent ?? 0) > 0,
@@ -177,15 +163,12 @@ class KontraktorBidDetailScreen extends StatelessWidget {
               ),
             ),
 
+            // ── Catatan Kontraktor ──
             if (bid.message != null &&
                 bid.message!.isNotEmpty) ...[
-
               const SizedBox(height: 22),
-
               _sectionTitle('Catatan Anda'),
-
               const SizedBox(height: 14),
-
               IOSGlassCard(
                 blur: 12,
                 child: Padding(
@@ -193,60 +176,48 @@ class KontraktorBidDetailScreen extends StatelessWidget {
                   child: Text(
                     bid.message!,
                     style: const TextStyle(
-                      height: 1.5,
-                      color: Colors.black87,
-                    ),
+                        height: 1.5, color: Colors.black87),
                   ),
                 ),
               ),
             ],
 
+            // ── Progress Pembangunan (jika sudah accepted) ──
             if (isAccepted) ...[
-
               const SizedBox(height: 22),
-
               _sectionTitle('Progress Pembangunan'),
-
               const SizedBox(height: 14),
-
               IOSGlassCard(
                 blur: 12,
                 child: Padding(
                   padding: const EdgeInsets.all(18),
                   child: Column(
                     children: [
-
                       Row(
                         mainAxisAlignment:
                             MainAxisAlignment.spaceBetween,
                         children: [
-                          const Text(
-                            'Progress Saat Ini',
-                            style: TextStyle(
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
+                          const Text('Progress Saat Ini',
+                              style: TextStyle(
+                                  fontWeight: FontWeight.w600)),
                           Text(
                             '${project?.progressPercent ?? 0}%',
                             style: const TextStyle(
-                              color: AppColors.primary,
-                              fontWeight: FontWeight.bold,
-                            ),
+                                color: AppColors.primary,
+                                fontWeight: FontWeight.bold),
                           ),
                         ],
                       ),
-
                       const SizedBox(height: 12),
-
                       ClipRRect(
                         borderRadius:
                             BorderRadius.circular(20),
                         child: LinearProgressIndicator(
                           value:
-                              (project?.progressPercent ?? 0) / 100,
+                              (project?.progressPercent ?? 0) /
+                                  100,
                           minHeight: 10,
-                          backgroundColor:
-                              AppColors.cardCream,
+                          backgroundColor: AppColors.cardCream,
                           color: AppColors.primary,
                         ),
                       ),
@@ -263,64 +234,43 @@ class KontraktorBidDetailScreen extends StatelessWidget {
     );
   }
 
+  // ─────────────────────────────────────────────
+  // WIDGET HELPERS
+  // ─────────────────────────────────────────────
+
   Widget _sectionTitle(String text) {
     return Align(
       alignment: Alignment.centerLeft,
-      child: Text(
-        text,
-        style: const TextStyle(
-          fontSize: 17,
-          fontWeight: FontWeight.bold,
-        ),
-      ),
+      child: Text(text,
+          style: const TextStyle(
+              fontSize: 17, fontWeight: FontWeight.bold)),
     );
   }
 
-  Widget _infoTile(
-    IconData icon,
-    String title,
-    String value,
-  ) {
+  Widget _infoTile(IconData icon, String title, String value) {
     return Row(
       children: [
-
         Container(
           padding: const EdgeInsets.all(10),
           decoration: BoxDecoration(
             color: AppColors.cardCream,
             borderRadius: BorderRadius.circular(12),
           ),
-          child: Icon(
-            icon,
-            color: AppColors.primary,
-          ),
+          child: Icon(icon, color: AppColors.primary),
         ),
-
         const SizedBox(width: 14),
-
         Expanded(
           child: Column(
-            crossAxisAlignment:
-                CrossAxisAlignment.start,
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-
-              Text(
-                title,
-                style: const TextStyle(
-                  fontSize: 12,
-                  color: Colors.black54,
-                ),
-              ),
-
+              Text(title,
+                  style: const TextStyle(
+                      fontSize: 12, color: Colors.black54)),
               const SizedBox(height: 2),
-
-              Text(
-                value,
-                style: const TextStyle(
-                  fontWeight: FontWeight.bold,
-                  fontSize: 14,
-                ),
-              ),
+              Text(value,
+                  style: const TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 14)),
             ],
           ),
         ),
@@ -328,15 +278,59 @@ class KontraktorBidDetailScreen extends StatelessWidget {
     );
   }
 
-  Widget _timelineItem(
-    bool active,
-    String title,
-  ) {
+  Widget _rabTile(BuildContext context, String url) {
+    return InkWell(
+      onTap: () => _openUrl(context, url),
+      borderRadius: BorderRadius.circular(12),
+      child: Container(
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: Colors.red.shade50,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: Colors.red.shade100),
+        ),
+        child: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: Colors.red.shade100,
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Icon(Icons.picture_as_pdf_rounded,
+                  color: Colors.red.shade700),
+            ),
+            const SizedBox(width: 14),
+            const Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('Dokumen RAB',
+                      style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 14)),
+                  SizedBox(height: 2),
+                  Text(
+                    'Rancangan Anggaran Biaya · Ketuk untuk buka',
+                    style: TextStyle(
+                        fontSize: 11, color: Colors.black54),
+                  ),
+                ],
+              ),
+            ),
+            Icon(Icons.open_in_new_rounded,
+                size: 18, color: Colors.red.shade700),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _timelineItem(bool active, String title) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 18),
       child: Row(
         children: [
-
           Container(
             width: 24,
             height: 24,
@@ -346,69 +340,50 @@ class KontraktorBidDetailScreen extends StatelessWidget {
                   : Colors.grey.shade300,
               shape: BoxShape.circle,
             ),
-            child: Icon(
-              Icons.check,
-              size: 14,
-              color: active
-                  ? Colors.white
-                  : Colors.grey,
-            ),
+            child: Icon(Icons.check,
+                size: 14,
+                color: active ? Colors.white : Colors.grey),
           ),
-
           const SizedBox(width: 14),
-
-          Text(
-            title,
-            style: TextStyle(
-              fontWeight: FontWeight.w600,
-              color: active
-                  ? Colors.black87
-                  : Colors.black38,
-            ),
-          ),
+          Text(title,
+              style: TextStyle(
+                  fontWeight: FontWeight.w600,
+                  color: active
+                      ? Colors.black87
+                      : Colors.black38)),
         ],
       ),
     );
   }
 
   Widget _statusChip(String status) {
-
     Color color;
     String text;
-
     switch (status) {
       case 'accepted':
         color = Colors.green;
         text = 'DITERIMA';
         break;
-
       case 'rejected':
         color = Colors.red;
         text = 'DITOLAK';
         break;
-
       default:
         color = Colors.orange;
         text = 'MENUNGGU';
     }
-
     return Container(
       padding: const EdgeInsets.symmetric(
-        horizontal: 14,
-        vertical: 7,
-      ),
+          horizontal: 14, vertical: 7),
       decoration: BoxDecoration(
         color: color.withOpacity(0.12),
         borderRadius: BorderRadius.circular(30),
       ),
-      child: Text(
-        text,
-        style: TextStyle(
-          color: color,
-          fontWeight: FontWeight.bold,
-          fontSize: 11,
-        ),
-      ),
+      child: Text(text,
+          style: TextStyle(
+              color: color,
+              fontWeight: FontWeight.bold,
+              fontSize: 11)),
     );
   }
 }

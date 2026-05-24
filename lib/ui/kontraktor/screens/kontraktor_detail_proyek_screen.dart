@@ -1,7 +1,9 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:file_picker/file_picker.dart';
 import 'package:buildmatch/data/providers/project_provider.dart';
 import 'package:buildmatch/data/models/project_model.dart';
 import '../../shared/widgets/glass_card.dart';
@@ -10,14 +12,17 @@ import '../../../core/utils/formatters.dart';
 
 class _ThousandsSeparatorFormatter extends TextInputFormatter {
   @override
-  TextEditingValue formatEditUpdate(TextEditingValue oldValue, TextEditingValue newValue) {
+  TextEditingValue formatEditUpdate(
+      TextEditingValue oldValue, TextEditingValue newValue) {
     final digits = newValue.text.replaceAll('.', '');
     if (digits.isEmpty) return newValue.copyWith(text: '');
+
     final buffer = StringBuffer();
     for (int i = 0; i < digits.length; i++) {
       if (i > 0 && (digits.length - i) % 3 == 0) buffer.write('.');
       buffer.write(digits[i]);
     }
+
     final formatted = buffer.toString();
     return newValue.copyWith(
       text: formatted,
@@ -28,19 +33,28 @@ class _ThousandsSeparatorFormatter extends TextInputFormatter {
 
 class KontraktorDetailProyekScreen extends StatefulWidget {
   final ProjectModel project;
-  const KontraktorDetailProyekScreen({super.key, required this.project});
+  const KontraktorDetailProyekScreen(
+      {super.key, required this.project});
 
   @override
-  State<KontraktorDetailProyekScreen> createState() => _KontraktorDetailProyekScreenState();
+  State<KontraktorDetailProyekScreen> createState() =>
+      _KontraktorDetailProyekScreenState();
 }
 
-class _KontraktorDetailProyekScreenState extends State<KontraktorDetailProyekScreen> {
+class _KontraktorDetailProyekScreenState
+    extends State<KontraktorDetailProyekScreen> {
   final _priceController = TextEditingController();
   final _messageController = TextEditingController();
+
   bool _alreadyBid = false;
   bool _checkingBid = true;
   int _bidCount = 0;
   bool _specExpanded = false;
+
+  // ── State untuk fitur baru ──
+  int _estimationMonths = 3;
+  File? _rabFile;
+  String? _rabFileName;
 
   @override
   void initState() {
@@ -49,7 +63,8 @@ class _KontraktorDetailProyekScreenState extends State<KontraktorDetailProyekScr
   }
 
   Future<void> _loadMeta() async {
-    final provider = Provider.of<ProjectProvider>(context, listen: false);
+    final provider =
+        Provider.of<ProjectProvider>(context, listen: false);
     final projectId = widget.project.id ?? '';
     final results = await Future.wait([
       provider.hasVendorBidOnProject(projectId),
@@ -70,37 +85,66 @@ class _KontraktorDetailProyekScreenState extends State<KontraktorDetailProyekScr
     super.dispose();
   }
 
+  // ── Pick file RAB ──
+  Future<void> _pickRabFile() async {
+    final result = await FilePicker.platform.pickFiles(
+      type: FileType.custom,
+      allowedExtensions: ['pdf', 'xlsx', 'xls', 'doc', 'docx'],
+    );
+    if (result != null && result.files.single.path != null) {
+      setState(() {
+        _rabFile = File(result.files.single.path!);
+        _rabFileName = result.files.single.name;
+      });
+    }
+  }
+
   void _submitBid() async {
     if (_alreadyBid) return;
+
     if (_priceController.text.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Harga penawaran wajib diisi!')));
+      ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+              content: Text('Harga penawaran wajib diisi!')));
       return;
     }
 
-    final provider = Provider.of<ProjectProvider>(context, listen: false);
+    final provider =
+        Provider.of<ProjectProvider>(context, listen: false);
     bool success = await provider.submitBid(
       projectId: widget.project.id ?? '',
-      price: double.tryParse(_priceController.text.replaceAll('.', '')) ?? 0,
+      price: double.tryParse(
+              _priceController.text.replaceAll('.', '')) ??
+          0,
       message: _messageController.text.trim(),
+      estimationMonths: _estimationMonths,
+      rabFile: _rabFile,
     );
 
     if (!mounted) return;
     if (success) {
       setState(() => _alreadyBid = true);
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Penawaran (Bid) berhasil dikirim!'), backgroundColor: Colors.green));
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('Penawaran (Bid) berhasil dikirim!'),
+          backgroundColor: Colors.green));
       Navigator.pop(context);
     } else {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Gagal mengirim penawaran.'), backgroundColor: Colors.red));
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('Gagal mengirim penawaran.'),
+          backgroundColor: Colors.red));
     }
   }
 
   Future<void> _openUrl(String url) async {
     final uri = Uri.tryParse(url);
     if (uri == null) return;
-    final ok = await launchUrl(uri, mode: LaunchMode.externalApplication);
+    final ok =
+        await launchUrl(uri, mode: LaunchMode.externalApplication);
     if (!ok && mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Tidak dapat membuka tautan.'), backgroundColor: Colors.red),
+        const SnackBar(
+            content: Text('Tidak dapat membuka tautan.'),
+            backgroundColor: Colors.red),
       );
     }
   }
@@ -118,12 +162,19 @@ class _KontraktorDetailProyekScreenState extends State<KontraktorDetailProyekScr
           crossAxisAlignment: CrossAxisAlignment.start,
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Text('Detail Proyek', style: TextStyle(color: Colors.black87, fontWeight: FontWeight.bold, fontSize: 16)),
+            const Text('Detail Proyek',
+                style: TextStyle(
+                    color: Colors.black87,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 16)),
             Text(
               widget.project.title,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: const TextStyle(color: Colors.black54, fontSize: 11, fontWeight: FontWeight.normal),
+              style: const TextStyle(
+                  color: Colors.black54,
+                  fontSize: 11,
+                  fontWeight: FontWeight.normal),
             ),
           ],
         ),
@@ -132,7 +183,9 @@ class _KontraktorDetailProyekScreenState extends State<KontraktorDetailProyekScr
           if (widget.project.status != null)
             Padding(
               padding: const EdgeInsets.only(right: 16),
-              child: Center(child: _buildStatusBadge(widget.project.status!)),
+              child: Center(
+                  child:
+                      _buildStatusBadge(widget.project.status!)),
             ),
         ],
       ),
@@ -141,7 +194,7 @@ class _KontraktorDetailProyekScreenState extends State<KontraktorDetailProyekScr
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Gambar Proyek (Hero)
+            // ── Hero Image ──
             ClipRRect(
               borderRadius: BorderRadius.circular(20),
               child: Container(
@@ -165,26 +218,35 @@ class _KontraktorDetailProyekScreenState extends State<KontraktorDetailProyekScr
                             fit: BoxFit.cover,
                             errorBuilder: (_, __, ___) => Container(
                               color: Colors.grey.shade200,
-                              child: const Icon(Icons.image_not_supported_outlined, size: 56, color: Colors.black26),
+                              child: const Icon(
+                                  Icons.image_not_supported_outlined,
+                                  size: 56,
+                                  color: Colors.black26),
                             ),
                             loadingBuilder: (ctx, child, p) => p == null
                                 ? child
                                 : Container(
                                     color: Colors.grey.shade100,
-                                    child: const Center(child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.primary)),
+                                    child: const Center(
+                                        child: CircularProgressIndicator(
+                                            strokeWidth: 2,
+                                            color: AppColors.primary)),
                                   ),
                           )
                         : Container(
                             color: Colors.grey.shade200,
-                            child: const Icon(Icons.image_outlined, size: 56, color: Colors.black26),
+                            child: const Icon(Icons.image_outlined,
+                                size: 56, color: Colors.black26),
                           ),
-                    // Gradient overlay untuk kedalaman
                     DecoratedBox(
                       decoration: BoxDecoration(
                         gradient: LinearGradient(
                           begin: Alignment.topCenter,
                           end: Alignment.bottomCenter,
-                          colors: [Colors.transparent, Colors.black.withOpacity(0.3)],
+                          colors: [
+                            Colors.transparent,
+                            Colors.black.withOpacity(0.3)
+                          ],
                         ),
                       ),
                     ),
@@ -194,53 +256,53 @@ class _KontraktorDetailProyekScreenState extends State<KontraktorDetailProyekScr
             ),
             const SizedBox(height: 20),
 
-            // Title Card: judul + budget badge + chip ringkas
             _buildTitleCard(),
             const SizedBox(height: 16),
-
-            // Client Info Card
             _buildClientInfoCard(),
             const SizedBox(height: 20),
-
-            // Deskripsi + mini specs
             _buildDescriptionCard(),
             const SizedBox(height: 20),
-
-            // Spesifikasi Teknis (Collapsible)
             _buildTechnicalSpecsCard(),
 
-            // Section: Lampiran & Lokasi (jika tersedia)
-            if ((widget.project.referencePdfUrl != null && widget.project.referencePdfUrl!.isNotEmpty) ||
-                (widget.project.latitude != null && widget.project.longitude != null)) ...[
+            // ── Lampiran & Lokasi ──
+            if ((widget.project.referencePdfUrl != null &&
+                    widget.project.referencePdfUrl!.isNotEmpty) ||
+                (widget.project.latitude != null &&
+                    widget.project.longitude != null)) ...[
               const SizedBox(height: 24),
-              Row(
-                children: const [
-                  Icon(Icons.attachment_rounded, size: 20, color: AppColors.primary),
-                  SizedBox(width: 8),
-                  Text('Lampiran Klien', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                ],
-              ),
+              Row(children: const [
+                Icon(Icons.attachment_rounded,
+                    size: 20, color: AppColors.primary),
+                SizedBox(width: 8),
+                Text('Lampiran Klien',
+                    style: TextStyle(
+                        fontSize: 18, fontWeight: FontWeight.bold)),
+              ]),
               const SizedBox(height: 16),
-              if (widget.project.referencePdfUrl != null && widget.project.referencePdfUrl!.isNotEmpty)
+              if (widget.project.referencePdfUrl != null &&
+                  widget.project.referencePdfUrl!.isNotEmpty)
                 _attachmentTile(
                   icon: Icons.picture_as_pdf_rounded,
                   iconColor: Colors.red.shade600,
                   title: 'Dokumen Referensi',
                   subtitle: 'Denah / sketsa / brief dari klien',
                   actionLabel: 'Buka',
-                  onTap: () => _openUrl(widget.project.referencePdfUrl!),
+                  onTap: () =>
+                      _openUrl(widget.project.referencePdfUrl!),
                 ),
               if (widget.project.referencePdfUrl != null &&
                   widget.project.referencePdfUrl!.isNotEmpty &&
                   widget.project.latitude != null &&
                   widget.project.longitude != null)
                 const SizedBox(height: 12),
-              if (widget.project.latitude != null && widget.project.longitude != null)
+              if (widget.project.latitude != null &&
+                  widget.project.longitude != null)
                 _attachmentTile(
                   icon: Icons.map_rounded,
                   iconColor: Colors.green.shade600,
                   title: 'Lokasi Proyek di Peta',
-                  subtitle: '${widget.project.latitude!.toStringAsFixed(5)}, ${widget.project.longitude!.toStringAsFixed(5)}',
+                  subtitle:
+                      '${widget.project.latitude!.toStringAsFixed(5)}, ${widget.project.longitude!.toStringAsFixed(5)}',
                   actionLabel: 'Maps',
                   onTap: () => _openUrl(
                     'https://www.google.com/maps/search/?api=1&query=${widget.project.latitude},${widget.project.longitude}',
@@ -250,14 +312,15 @@ class _KontraktorDetailProyekScreenState extends State<KontraktorDetailProyekScr
 
             const SizedBox(height: 24),
 
-            // Form Bid
-            Row(
-              children: const [
-                Icon(Icons.gavel_rounded, size: 20, color: AppColors.primary),
-                SizedBox(width: 8),
-                Text('Formulir Penawaran', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-              ],
-            ),
+            // ── Header Form Bid ──
+            Row(children: const [
+              Icon(Icons.gavel_rounded,
+                  size: 20, color: AppColors.primary),
+              SizedBox(width: 8),
+              Text('Formulir Penawaran',
+                  style: TextStyle(
+                      fontSize: 18, fontWeight: FontWeight.bold)),
+            ]),
             const SizedBox(height: 4),
             const Padding(
               padding: EdgeInsets.only(left: 28),
@@ -267,42 +330,229 @@ class _KontraktorDetailProyekScreenState extends State<KontraktorDetailProyekScr
               ),
             ),
             const SizedBox(height: 16),
+
+            // ── Form Bid Card ──
             IOSGlassCard(
               blur: 15,
               child: Padding(
                 padding: const EdgeInsets.all(16.0),
                 child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
+                    // Info budget client
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 14, vertical: 10),
+                      decoration: BoxDecoration(
+                        color: AppColors.primary.withOpacity(0.08),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                            color:
+                                AppColors.primary.withOpacity(0.2)),
+                      ),
+                      child: Row(
+                        children: [
+                          const Icon(Icons.info_outline,
+                              size: 16, color: AppColors.primary),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: RichText(
+                              text: TextSpan(
+                                style: const TextStyle(
+                                    fontSize: 12,
+                                    color: Colors.black54),
+                                children: [
+                                  const TextSpan(
+                                      text: 'Budget klien: '),
+                                  TextSpan(
+                                    text: AppFormatters.formatRupiah(
+                                        widget.project.budget),
+                                    style: const TextStyle(
+                                      fontWeight: FontWeight.bold,
+                                      color: AppColors.primary,
+                                    ),
+                                  ),
+                                  const TextSpan(
+                                      text:
+                                          ' · Anda bisa menawar lebih rendah atau lebih tinggi'),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+
+                    // Input harga penawaran
                     TextField(
                       controller: _priceController,
                       keyboardType: TextInputType.number,
                       enabled: !_alreadyBid,
-                      style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
+                      style: const TextStyle(
+                          fontSize: 18, fontWeight: FontWeight.w600),
                       inputFormatters: [
                         FilteringTextInputFormatter.digitsOnly,
                         _ThousandsSeparatorFormatter(),
                       ],
                       decoration: InputDecoration(
                         labelText: 'Harga Penawaran Anda',
-                        prefixIcon: const Icon(Icons.monetization_on_outlined, color: AppColors.primary),
+                        prefixIcon: const Icon(
+                            Icons.monetization_on_outlined,
+                            color: AppColors.primary),
                         prefixText: 'Rp  ',
-                        prefixStyle: const TextStyle(fontSize: 18, fontWeight: FontWeight.w600, color: Colors.black87),
-                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+                        prefixStyle: const TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.w600,
+                            color: Colors.black87),
+                        border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                            borderSide: BorderSide.none),
                         filled: true,
                         fillColor: Colors.white.withOpacity(0.8),
                       ),
                     ),
                     const SizedBox(height: 16),
+
+                    // Estimasi waktu pengerjaan
+                    const Text(
+                      'Estimasi Waktu Pengerjaan',
+                      style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.black87),
+                    ),
+                    const SizedBox(height: 8),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 14, vertical: 12),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withOpacity(0.8),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Row(
+                        children: [
+                          const Icon(Icons.schedule_rounded,
+                              color: AppColors.primary, size: 20),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Text(
+                              '$_estimationMonths Bulan',
+                              style: const TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w600),
+                            ),
+                          ),
+                          _buildRoundCounter(
+                            icon: Icons.remove,
+                            onTap: !_alreadyBid &&
+                                    _estimationMonths > 1
+                                ? () => setState(
+                                    () => _estimationMonths--)
+                                : null,
+                          ),
+                          const SizedBox(width: 12),
+                          _buildRoundCounter(
+                            icon: Icons.add,
+                            onTap: !_alreadyBid &&
+                                    _estimationMonths < 60
+                                ? () => setState(
+                                    () => _estimationMonths++)
+                                : null,
+                            isActive: true,
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+
+                    // Upload RAB
+                    const Text(
+                      'Upload RAB (Opsional)',
+                      style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.black87),
+                    ),
+                    const SizedBox(height: 4),
+                    const Text(
+                      'Rancangan Anggaran Biaya · PDF / Excel / Word · Maks. 5MB',
+                      style: TextStyle(
+                          fontSize: 11, color: Colors.black45),
+                    ),
+                    const SizedBox(height: 8),
+                    GestureDetector(
+                      onTap: _alreadyBid ? null : _pickRabFile,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                            vertical: 16, horizontal: 14),
+                        decoration: BoxDecoration(
+                          color: _rabFile != null
+                              ? AppColors.primary.withOpacity(0.06)
+                              : Colors.white.withOpacity(0.8),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(
+                            color: _rabFile != null
+                                ? AppColors.primary
+                                : Colors.grey.shade300,
+                            width: 1.5,
+                          ),
+                        ),
+                        child: Row(
+                          children: [
+                            Icon(
+                              _rabFile != null
+                                  ? Icons.check_circle_rounded
+                                  : Icons.upload_file_rounded,
+                              color: AppColors.primary,
+                            ),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: Text(
+                                _rabFileName ?? 'Pilih file RAB...',
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  fontWeight: FontWeight.w600,
+                                  color: _rabFile != null
+                                      ? AppColors.primary
+                                      : Colors.black45,
+                                  fontSize: 13,
+                                ),
+                              ),
+                            ),
+                            if (_rabFile != null)
+                              GestureDetector(
+                                onTap: () => setState(() {
+                                  _rabFile = null;
+                                  _rabFileName = null;
+                                }),
+                                child: const Icon(Icons.close,
+                                    size: 18, color: Colors.black38),
+                              ),
+                          ],
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+
+                    // Pesan / catatan
                     TextField(
                       controller: _messageController,
                       maxLines: 3,
                       enabled: !_alreadyBid,
                       decoration: InputDecoration(
                         labelText: 'Pesan / Catatan ke Klien',
-                        hintText: 'Contoh: Estimasi waktu 4 bulan, sudah termasuk material premium...',
-                        hintStyle: TextStyle(color: Colors.black38, fontSize: 12),
-                        prefixIcon: const Icon(Icons.message_outlined, color: AppColors.primary),
-                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+                        hintText:
+                            'Contoh: Sudah termasuk material premium, garansi 1 tahun...',
+                        hintStyle: const TextStyle(
+                            color: Colors.black38, fontSize: 12),
+                        prefixIcon: const Icon(
+                            Icons.message_outlined,
+                            color: AppColors.primary),
+                        border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                            borderSide: BorderSide.none),
                         filled: true,
                         fillColor: Colors.white.withOpacity(0.8),
                       ),
@@ -311,8 +561,10 @@ class _KontraktorDetailProyekScreenState extends State<KontraktorDetailProyekScr
                 ),
               ),
             ),
+
             const SizedBox(height: 24),
 
+            // ── Tombol Submit ──
             Container(
               width: double.infinity,
               height: 55,
@@ -329,31 +581,47 @@ class _KontraktorDetailProyekScreenState extends State<KontraktorDetailProyekScr
                       ],
               ),
               child: ElevatedButton.icon(
-                onPressed: (isLoading || _alreadyBid || _checkingBid) ? null : _submitBid,
+                onPressed: (isLoading ||
+                        _alreadyBid ||
+                        _checkingBid)
+                    ? null
+                    : _submitBid,
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: _alreadyBid ? Colors.grey.shade400 : AppColors.primary,
+                  backgroundColor: _alreadyBid
+                      ? Colors.grey.shade400
+                      : AppColors.primary,
                   disabledBackgroundColor: _alreadyBid
                       ? Colors.grey.shade400
                       : AppColors.primary.withOpacity(0.6),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(16)),
                   elevation: 0,
                 ),
                 icon: isLoading
                     ? const SizedBox(
                         width: 22,
                         height: 22,
-                        child: CircularProgressIndicator(strokeWidth: 2.5, color: Colors.white),
+                        child: CircularProgressIndicator(
+                            strokeWidth: 2.5,
+                            color: Colors.white),
                       )
                     : Icon(
-                        _alreadyBid ? Icons.check_circle_rounded : Icons.send_rounded,
+                        _alreadyBid
+                            ? Icons.check_circle_rounded
+                            : Icons.send_rounded,
                         color: Colors.white,
                         size: 20,
                       ),
                 label: Text(
                   _alreadyBid
                       ? 'Anda Sudah Menawarkan'
-                      : (isLoading ? 'Mengirim...' : 'Kirim Penawaran ke Klien'),
-                  style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white),
+                      : (isLoading
+                          ? 'Mengirim...'
+                          : 'Kirim Penawaran ke Klien'),
+                  style: const TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.white),
                 ),
               ),
             ),
@@ -364,13 +632,41 @@ class _KontraktorDetailProyekScreenState extends State<KontraktorDetailProyekScr
     );
   }
 
-  Widget _specChip(IconData icon, String label, String value) {
+  // ─────────────────────────────────────────────
+  // WIDGET HELPERS
+  // ─────────────────────────────────────────────
+
+  Widget _buildRoundCounter({
+    required IconData icon,
+    VoidCallback? onTap,
+    bool isActive = false,
+  }) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(20),
+      child: Container(
+        padding: const EdgeInsets.all(8),
+        decoration: BoxDecoration(
+          color: isActive ? AppColors.primary : AppColors.cardCream,
+          shape: BoxShape.circle,
+        ),
+        child: Icon(icon,
+            size: 16,
+            color: isActive ? Colors.white : AppColors.primary),
+      ),
+    );
+  }
+
+  Widget _specChip(
+      IconData icon, String label, String value) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      padding:
+          const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       decoration: BoxDecoration(
         color: Colors.white.withOpacity(0.6),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.white.withOpacity(0.8), width: 1),
+        border: Border.all(
+            color: Colors.white.withOpacity(0.8), width: 1),
       ),
       child: Row(
         children: [
@@ -380,7 +676,8 @@ class _KontraktorDetailProyekScreenState extends State<KontraktorDetailProyekScr
               color: AppColors.primary.withOpacity(0.12),
               borderRadius: BorderRadius.circular(8),
             ),
-            child: Icon(icon, size: 16, color: AppColors.primary),
+            child:
+                Icon(icon, size: 16, color: AppColors.primary),
           ),
           const SizedBox(width: 10),
           Expanded(
@@ -388,17 +685,19 @@ class _KontraktorDetailProyekScreenState extends State<KontraktorDetailProyekScr
               crossAxisAlignment: CrossAxisAlignment.start,
               mainAxisSize: MainAxisSize.min,
               children: [
-                Text(
-                  label,
-                  style: const TextStyle(fontSize: 11, color: Colors.black54, fontWeight: FontWeight.w500),
-                ),
+                Text(label,
+                    style: const TextStyle(
+                        fontSize: 11,
+                        color: Colors.black54,
+                        fontWeight: FontWeight.w500)),
                 const SizedBox(height: 2),
-                Text(
-                  value,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(fontSize: 13, color: Colors.black87, fontWeight: FontWeight.w700),
-                ),
+                Text(value,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                        fontSize: 13,
+                        color: Colors.black87,
+                        fontWeight: FontWeight.w700)),
               ],
             ),
           ),
@@ -439,23 +738,24 @@ class _KontraktorDetailProyekScreenState extends State<KontraktorDetailProyekScr
                   crossAxisAlignment: CrossAxisAlignment.start,
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Text(
-                      title,
-                      style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: Colors.black87),
-                    ),
+                    Text(title,
+                        style: const TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w700,
+                            color: Colors.black87)),
                     const SizedBox(height: 2),
-                    Text(
-                      subtitle,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(fontSize: 12, color: Colors.black54),
-                    ),
+                    Text(subtitle,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                            fontSize: 12, color: Colors.black54)),
                   ],
                 ),
               ),
               const SizedBox(width: 8),
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                padding: const EdgeInsets.symmetric(
+                    horizontal: 14, vertical: 8),
                 decoration: BoxDecoration(
                   color: AppColors.primary,
                   borderRadius: BorderRadius.circular(10),
@@ -463,12 +763,14 @@ class _KontraktorDetailProyekScreenState extends State<KontraktorDetailProyekScr
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Text(
-                      actionLabel,
-                      style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
-                    ),
+                    Text(actionLabel,
+                        style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 12,
+                            fontWeight: FontWeight.bold)),
                     const SizedBox(width: 4),
-                    const Icon(Icons.open_in_new_rounded, size: 14, color: Colors.white),
+                    const Icon(Icons.open_in_new_rounded,
+                        size: 14, color: Colors.white),
                   ],
                 ),
               ),
@@ -478,8 +780,6 @@ class _KontraktorDetailProyekScreenState extends State<KontraktorDetailProyekScr
       ),
     );
   }
-
-  // ----- NEW HELPERS -----
 
   Widget _buildStatusBadge(String status) {
     Color bg;
@@ -502,9 +802,15 @@ class _KontraktorDetailProyekScreenState extends State<KontraktorDetailProyekScr
         label = status;
     }
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-      decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(20)),
-      child: Text(label, style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold)),
+      padding:
+          const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      decoration: BoxDecoration(
+          color: bg, borderRadius: BorderRadius.circular(20)),
+      child: Text(label,
+          style: const TextStyle(
+              color: Colors.white,
+              fontSize: 11,
+              fontWeight: FontWeight.bold)),
     );
   }
 
@@ -515,7 +821,12 @@ class _KontraktorDetailProyekScreenState extends State<KontraktorDetailProyekScr
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(18),
-        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 10, offset: const Offset(0, 4))],
+        boxShadow: [
+          BoxShadow(
+              color: Colors.black.withOpacity(0.04),
+              blurRadius: 10,
+              offset: const Offset(0, 4))
+        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -524,18 +835,27 @@ class _KontraktorDetailProyekScreenState extends State<KontraktorDetailProyekScr
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Expanded(
-                child: Text(
-                  widget.project.title,
-                  style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: Colors.black87, letterSpacing: -0.3),
-                ),
+                child: Text(widget.project.title,
+                    style: const TextStyle(
+                        fontSize: 20,
+                        fontWeight: FontWeight.w800,
+                        color: Colors.black87,
+                        letterSpacing: -0.3)),
               ),
               const SizedBox(width: 10),
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                decoration: BoxDecoration(color: AppColors.primary, borderRadius: BorderRadius.circular(20)),
+                padding: const EdgeInsets.symmetric(
+                    horizontal: 10, vertical: 6),
+                decoration: BoxDecoration(
+                    color: AppColors.primary,
+                    borderRadius: BorderRadius.circular(20)),
                 child: Text(
-                  AppFormatters.formatRupiah(widget.project.budget),
-                  style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold),
+                  AppFormatters.formatRupiah(
+                      widget.project.budget),
+                  style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 11,
+                      fontWeight: FontWeight.bold),
                 ),
               ),
             ],
@@ -545,9 +865,12 @@ class _KontraktorDetailProyekScreenState extends State<KontraktorDetailProyekScr
             spacing: 8,
             runSpacing: 8,
             children: [
-              _miniChip(Icons.location_on_outlined, widget.project.location ?? '-'),
-              _miniChip(Icons.calendar_today_rounded, AppFormatters.timeAgo(widget.project.createdAt)),
-              _miniChip(Icons.gavel_outlined, '$_bidCount penawaran'),
+              _miniChip(Icons.location_on_outlined,
+                  widget.project.location ?? '-'),
+              _miniChip(Icons.calendar_today_rounded,
+                  AppFormatters.timeAgo(widget.project.createdAt)),
+              _miniChip(
+                  Icons.gavel_outlined, '$_bidCount penawaran'),
             ],
           ),
         ],
@@ -557,22 +880,33 @@ class _KontraktorDetailProyekScreenState extends State<KontraktorDetailProyekScr
 
   Widget _miniChip(IconData icon, String label) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-      decoration: BoxDecoration(color: AppColors.cardCream, borderRadius: BorderRadius.circular(14)),
+      padding:
+          const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+          color: AppColors.cardCream,
+          borderRadius: BorderRadius.circular(14)),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
           Icon(icon, size: 12, color: AppColors.primary),
           const SizedBox(width: 4),
-          Text(label, style: const TextStyle(fontSize: 11, color: Colors.black87, fontWeight: FontWeight.w500)),
+          Text(label,
+              style: const TextStyle(
+                  fontSize: 11,
+                  color: Colors.black87,
+                  fontWeight: FontWeight.w500)),
         ],
       ),
     );
   }
 
   Widget _buildClientInfoCard() {
-    final name = (widget.project.clientName?.isNotEmpty == true) ? widget.project.clientName! : 'Klien';
-    final initial = name.isNotEmpty ? name[0].toUpperCase() : '?';
+    final name = (widget.project.clientName?.isNotEmpty == true)
+        ? widget.project.clientName!
+        : 'Klien';
+    final initial =
+        name.isNotEmpty ? name[0].toUpperCase() : '?';
+
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
@@ -584,7 +918,11 @@ class _KontraktorDetailProyekScreenState extends State<KontraktorDetailProyekScr
           CircleAvatar(
             radius: 22,
             backgroundColor: AppColors.primary,
-            child: Text(initial, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)),
+            child: Text(initial,
+                style: const TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 16)),
           ),
           const SizedBox(width: 12),
           Expanded(
@@ -592,18 +930,26 @@ class _KontraktorDetailProyekScreenState extends State<KontraktorDetailProyekScr
               crossAxisAlignment: CrossAxisAlignment.start,
               mainAxisSize: MainAxisSize.min,
               children: [
-                Text(name, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.black87)),
+                Text(name,
+                    style: const TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.black87)),
                 const SizedBox(height: 2),
                 Text(
                   'Pemilik proyek · $_bidCount penawaran masuk',
-                  style: const TextStyle(fontSize: 11, color: Colors.black54),
+                  style: const TextStyle(
+                      fontSize: 11, color: Colors.black54),
                 ),
               ],
             ),
           ),
           Text(
             AppFormatters.timeAgo(widget.project.createdAt),
-            style: const TextStyle(fontSize: 11, color: AppColors.primary, fontWeight: FontWeight.w600),
+            style: const TextStyle(
+                fontSize: 11,
+                color: AppColors.primary,
+                fontWeight: FontWeight.w600),
           ),
         ],
       ),
@@ -617,39 +963,54 @@ class _KontraktorDetailProyekScreenState extends State<KontraktorDetailProyekScr
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(16),
-        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 10, offset: const Offset(0, 4))],
+        boxShadow: [
+          BoxShadow(
+              color: Colors.black.withOpacity(0.04),
+              blurRadius: 10,
+              offset: const Offset(0, 4))
+        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Row(
-            children: [
-              Icon(Icons.description_outlined, size: 18, color: AppColors.primary),
-              SizedBox(width: 8),
-              Text('Deskripsi Proyek', style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold)),
-            ],
-          ),
+          const Row(children: [
+            Icon(Icons.description_outlined,
+                size: 18, color: AppColors.primary),
+            SizedBox(width: 8),
+            Text('Deskripsi Proyek',
+                style: TextStyle(
+                    fontSize: 15, fontWeight: FontWeight.bold)),
+          ]),
           const SizedBox(height: 10),
           Text(
             widget.project.description?.isNotEmpty == true
                 ? widget.project.description!
                 : 'Tidak ada deskripsi rinci.',
-            style: const TextStyle(color: Colors.black54, height: 1.5, fontSize: 13),
+            style: const TextStyle(
+                color: Colors.black54, height: 1.5, fontSize: 13),
           ),
           const SizedBox(height: 14),
           Row(
             children: [
-              Expanded(child: _miniSpecTile('Luas Bangunan', '${widget.project.buildingSize.toStringAsFixed(0)} m²')),
+              Expanded(
+                  child: _miniSpecTile('Luas Bangunan',
+                      '${widget.project.buildingSize.toStringAsFixed(0)} m²')),
               const SizedBox(width: 10),
-              Expanded(child: _miniSpecTile('Luas Tanah', '${widget.project.landSize.toStringAsFixed(0)} m²')),
+              Expanded(
+                  child: _miniSpecTile('Luas Tanah',
+                      '${widget.project.landSize.toStringAsFixed(0)} m²')),
             ],
           ),
           const SizedBox(height: 10),
           Row(
             children: [
-              Expanded(child: _miniSpecTile('Gaya', widget.project.houseStyle)),
+              Expanded(
+                  child: _miniSpecTile(
+                      'Gaya', widget.project.houseStyle)),
               const SizedBox(width: 10),
-              Expanded(child: _miniSpecTile('Lantai', '${widget.project.floors}')),
+              Expanded(
+                  child: _miniSpecTile(
+                      'Lantai', '${widget.project.floors}')),
             ],
           ),
         ],
@@ -659,19 +1020,25 @@ class _KontraktorDetailProyekScreenState extends State<KontraktorDetailProyekScr
 
   Widget _miniSpecTile(String label, String value) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-      decoration: BoxDecoration(color: AppColors.cardCream, borderRadius: BorderRadius.circular(10)),
+      padding: const EdgeInsets.symmetric(
+          horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+          color: AppColors.cardCream,
+          borderRadius: BorderRadius.circular(10)),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(label, style: const TextStyle(fontSize: 11, color: Colors.black54)),
+          Text(label,
+              style: const TextStyle(
+                  fontSize: 11, color: Colors.black54)),
           const SizedBox(height: 2),
-          Text(
-            value,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: const TextStyle(fontSize: 13, color: Colors.black87, fontWeight: FontWeight.w700),
-          ),
+          Text(value,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                  fontSize: 13,
+                  color: Colors.black87,
+                  fontWeight: FontWeight.w700)),
         ],
       ),
     );
@@ -682,24 +1049,36 @@ class _KontraktorDetailProyekScreenState extends State<KontraktorDetailProyekScr
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(16),
-        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 10, offset: const Offset(0, 4))],
+        boxShadow: [
+          BoxShadow(
+              color: Colors.black.withOpacity(0.04),
+              blurRadius: 10,
+              offset: const Offset(0, 4))
+        ],
       ),
       child: Column(
         children: [
           InkWell(
-            onTap: () => setState(() => _specExpanded = !_specExpanded),
+            onTap: () =>
+                setState(() => _specExpanded = !_specExpanded),
             borderRadius: BorderRadius.circular(16),
             child: Padding(
               padding: const EdgeInsets.all(16),
               child: Row(
                 children: [
-                  const Icon(Icons.architecture_rounded, size: 18, color: AppColors.primary),
+                  const Icon(Icons.architecture_rounded,
+                      size: 18, color: AppColors.primary),
                   const SizedBox(width: 8),
                   const Expanded(
-                    child: Text('Spesifikasi Teknis Lengkap', style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold)),
+                    child: Text('Spesifikasi Teknis Lengkap',
+                        style: TextStyle(
+                            fontSize: 15,
+                            fontWeight: FontWeight.bold)),
                   ),
                   Icon(
-                    _specExpanded ? Icons.expand_less_rounded : Icons.expand_more_rounded,
+                    _specExpanded
+                        ? Icons.expand_less_rounded
+                        : Icons.expand_more_rounded,
                     color: Colors.black54,
                   ),
                 ],
@@ -711,37 +1090,56 @@ class _KontraktorDetailProyekScreenState extends State<KontraktorDetailProyekScr
               padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
               child: Column(
                 children: [
-                  Row(
-                    children: [
-                      Expanded(child: _specChip(Icons.account_balance_wallet_outlined, 'Anggaran', AppFormatters.formatRupiah(widget.project.budget))),
-                      const SizedBox(width: 12),
-                      Expanded(child: _specChip(Icons.terrain_outlined, 'Luas Tanah', '${widget.project.landSize.toStringAsFixed(0)} m²')),
-                    ],
-                  ),
+                  Row(children: [
+                    Expanded(
+                        child: _specChip(
+                            Icons.account_balance_wallet_outlined,
+                            'Anggaran',
+                            AppFormatters.formatRupiah(
+                                widget.project.budget))),
+                    const SizedBox(width: 12),
+                    Expanded(
+                        child: _specChip(
+                            Icons.terrain_outlined,
+                            'Luas Tanah',
+                            '${widget.project.landSize.toStringAsFixed(0)} m²')),
+                  ]),
                   const SizedBox(height: 12),
-                  Row(
-                    children: [
-                      Expanded(child: _specChip(Icons.home_outlined, 'Luas Bangunan', '${widget.project.buildingSize.toStringAsFixed(0)} m²')),
-                      const SizedBox(width: 12),
-                      Expanded(child: _specChip(Icons.layers_outlined, 'Lantai', '${widget.project.floors}')),
-                    ],
-                  ),
+                  Row(children: [
+                    Expanded(
+                        child: _specChip(
+                            Icons.home_outlined,
+                            'Luas Bangunan',
+                            '${widget.project.buildingSize.toStringAsFixed(0)} m²')),
+                    const SizedBox(width: 12),
+                    Expanded(
+                        child: _specChip(Icons.layers_outlined,
+                            'Lantai', '${widget.project.floors}')),
+                  ]),
                   const SizedBox(height: 12),
-                  Row(
-                    children: [
-                      Expanded(child: _specChip(Icons.bed_outlined, 'Kamar Tidur', '${widget.project.bedrooms}')),
-                      const SizedBox(width: 12),
-                      Expanded(child: _specChip(Icons.bathtub_outlined, 'Kamar Mandi', '${widget.project.bathrooms}')),
-                    ],
-                  ),
+                  Row(children: [
+                    Expanded(
+                        child: _specChip(Icons.bed_outlined,
+                            'Kamar Tidur',
+                            '${widget.project.bedrooms}')),
+                    const SizedBox(width: 12),
+                    Expanded(
+                        child: _specChip(Icons.bathtub_outlined,
+                            'Kamar Mandi',
+                            '${widget.project.bathrooms}')),
+                  ]),
                   const SizedBox(height: 12),
-                  Row(
-                    children: [
-                      Expanded(child: _specChip(Icons.style_outlined, 'Gaya', widget.project.houseStyle)),
-                      const SizedBox(width: 12),
-                      Expanded(child: _specChip(Icons.location_on_outlined, 'Lokasi', widget.project.location ?? '-')),
-                    ],
-                  ),
+                  Row(children: [
+                    Expanded(
+                        child: _specChip(Icons.style_outlined,
+                            'Gaya', widget.project.houseStyle)),
+                    const SizedBox(width: 12),
+                    Expanded(
+                        child: _specChip(
+                            Icons.location_on_outlined,
+                            'Lokasi',
+                            widget.project.location ?? '-')),
+                  ]),
                 ],
               ),
             ),
