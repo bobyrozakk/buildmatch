@@ -1,8 +1,10 @@
 import 'dart:io';
+import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/project_model.dart';
 import '../models/bid_model.dart';
+import '../models/payment_term_model.dart';
 
 /// Provider khusus untuk CRUD proyek dan penawaran (bid).
 /// Vendor-related functions sudah dipindah ke VendorProvider.
@@ -59,8 +61,7 @@ class ProjectProvider extends ChangeNotifier {
         final pdfName =
             '${userId}_${DateTime.now().millisecondsSinceEpoch}_Reference.$pdfExt';
         await _supabase.storage.from('documents').upload(pdfName, pdfFile);
-        pdfUrl =
-            _supabase.storage.from('documents').getPublicUrl(pdfName);
+        pdfUrl = _supabase.storage.from('documents').getPublicUrl(pdfName);
       }
 
       // 3. Insert ke database
@@ -119,8 +120,7 @@ class ProjectProvider extends ChangeNotifier {
       if (userId == null) throw Exception("User belum login!");
 
       final data = {
-        'title':
-            title.trim().isEmpty ? 'Draft Tanpa Judul' : title.trim(),
+        'title': title.trim().isEmpty ? 'Draft Tanpa Judul' : title.trim(),
         'description': description.trim(),
         'budget': budget,
         'land_size': landSize,
@@ -161,17 +161,15 @@ class ProjectProvider extends ChangeNotifier {
     try {
       final userId = _supabase.auth.currentUser?.id;
       if (userId == null) return [];
-
       final response = await _supabase
           .from('projects')
           .select('*')
           .eq('client_id', userId)
           .eq('status', 'draft')
           .order('created_at', ascending: false);
-
-      return List<Map<String, dynamic>>.from(response)
-          .map((json) => ProjectModel.fromJson(json))
-          .toList();
+      return List<Map<String, dynamic>>.from(
+        response,
+      ).map((json) => ProjectModel.fromJson(json)).toList();
     } catch (e) {
       debugPrint("Error fetch drafts: $e");
       return [];
@@ -198,17 +196,15 @@ class ProjectProvider extends ChangeNotifier {
     try {
       final userId = _supabase.auth.currentUser?.id;
       if (userId == null) return [];
-
       final response = await _supabase
           .from('projects')
           .select('*')
           .eq('client_id', userId)
           .neq('status', 'draft')
           .order('created_at', ascending: false);
-
-      return List<Map<String, dynamic>>.from(response)
-          .map((json) => ProjectModel.fromJson(json))
-          .toList();
+      return List<Map<String, dynamic>>.from(
+        response,
+      ).map((json) => ProjectModel.fromJson(json)).toList();
     } catch (e) {
       debugPrint("Error fetch projects: $e");
       return [];
@@ -225,10 +221,9 @@ class ProjectProvider extends ChangeNotifier {
           .select('*, profiles:client_id(name)')
           .eq('status', 'open')
           .order('created_at', ascending: false);
-
-      return List<Map<String, dynamic>>.from(response)
-          .map((json) => ProjectModel.fromJson(json))
-          .toList();
+      return List<Map<String, dynamic>>.from(
+        response,
+      ).map((json) => ProjectModel.fromJson(json)).toList();
     } catch (e) {
       debugPrint("Error fetch available projects: $e");
       return [];
@@ -242,17 +237,15 @@ class ProjectProvider extends ChangeNotifier {
     try {
       final vendorId = _supabase.auth.currentUser?.id;
       if (vendorId == null) return [];
-
       final response = await _supabase
           .from('projects')
           .select('*, profiles:client_id(name)')
           .neq('status', 'open')
           .neq('status', 'draft')
           .order('created_at', ascending: false);
-
-      return List<Map<String, dynamic>>.from(response)
-          .map((json) => ProjectModel.fromJson(json))
-          .toList();
+      return List<Map<String, dynamic>>.from(
+        response,
+      ).map((json) => ProjectModel.fromJson(json)).toList();
     } catch (e) {
       debugPrint("Error fetch vendor active projects: $e");
       return [];
@@ -266,23 +259,17 @@ class ProjectProvider extends ChangeNotifier {
     try {
       final vendorId = _supabase.auth.currentUser?.id;
       if (vendorId == null) return [];
-
       var query = _supabase
           .from('bids')
-          .select(
-              '*, projects:project_id(*, profiles:client_id(name))')
+          .select('*, projects:project_id(*, profiles:client_id(name))')
           .eq('vendor_id', vendorId);
-
       if (status != null) {
         query = query.eq('status', status);
       }
-
-      final response =
-          await query.order('created_at', ascending: false);
-
-      return List<Map<String, dynamic>>.from(response)
-          .map((json) => BidModel.fromJson(json))
-          .toList();
+      final response = await query.order('created_at', ascending: false);
+      return List<Map<String, dynamic>>.from(
+        response,
+      ).map((json) => BidModel.fromJson(json)).toList();
     } catch (e) {
       debugPrint("Error fetch vendor bids: $e");
       return [];
@@ -313,14 +300,12 @@ class ProjectProvider extends ChangeNotifier {
     try {
       final vendorId = _supabase.auth.currentUser?.id;
       if (vendorId == null || projectId.isEmpty) return false;
-
       final response = await _supabase
           .from('bids')
           .select('id')
           .eq('vendor_id', vendorId)
           .eq('project_id', projectId)
           .limit(1);
-
       return (response as List).isNotEmpty;
     } catch (e) {
       debugPrint("Error check vendor bid: $e");
@@ -336,7 +321,7 @@ class ProjectProvider extends ChangeNotifier {
     required double price,
     required String message,
     required int estimationMonths,
-    File? rabFile, // RAB dari kontraktor (PDF/Excel/Word)
+    File? rabFile,
   }) async {
     _isLoading = true;
     notifyListeners();
@@ -345,17 +330,12 @@ class ProjectProvider extends ChangeNotifier {
       if (vendorId == null) throw Exception("Vendor belum login!");
 
       String? rabUrl;
-
-      // Upload RAB jika ada
       if (rabFile != null) {
         final ext = rabFile.path.split('.').last;
         final fileName =
             '${vendorId}_RAB_${DateTime.now().millisecondsSinceEpoch}.$ext';
-        await _supabase.storage
-            .from('documents')
-            .upload(fileName, rabFile);
-        rabUrl =
-            _supabase.storage.from('documents').getPublicUrl(fileName);
+        await _supabase.storage.from('documents').upload(fileName, rabFile);
+        rabUrl = _supabase.storage.from('documents').getPublicUrl(fileName);
       }
 
       await _supabase.from('bids').insert({
@@ -385,31 +365,26 @@ class ProjectProvider extends ChangeNotifier {
     try {
       final userId = _supabase.auth.currentUser?.id;
       if (userId == null) return [];
-
       final projectsResponse = await _supabase
           .from('projects')
           .select('id')
           .eq('client_id', userId)
           .eq('status', 'open');
-
-      final projectIds =
-          List<Map<String, dynamic>>.from(projectsResponse)
-              .map((p) => p['id'] as String)
-              .toList();
-
+      final projectIds = List<Map<String, dynamic>>.from(
+        projectsResponse,
+      ).map((p) => p['id'] as String).toList();
       if (projectIds.isEmpty) return [];
-
       final bidsResponse = await _supabase
           .from('bids')
           .select(
-              '*, profiles:vendor_id(name), projects:project_id(title, budget, image_urls)')
+            '*, profiles:vendor_id(name), projects:project_id(title, budget, image_urls)',
+          )
           .inFilter('project_id', projectIds)
           .eq('status', 'pending')
           .order('created_at', ascending: false);
-
-      return List<Map<String, dynamic>>.from(bidsResponse)
-          .map((json) => BidModel.fromJson(json))
-          .toList();
+      return List<Map<String, dynamic>>.from(
+        bidsResponse,
+      ).map((json) => BidModel.fromJson(json)).toList();
     } catch (e) {
       debugPrint("Error fetch client incoming bids: $e");
       return [];
@@ -418,22 +393,17 @@ class ProjectProvider extends ChangeNotifier {
 
   // ─────────────────────────────────────────────
   // AMBIL SEMUA BID UNTUK SATU PROYEK (UNTUK CLIENT)
-  // Join profil vendor (name, experience_years) + tarik rating manual
   // ─────────────────────────────────────────────
   Future<List<BidModel>> fetchProjectBids(String projectId) async {
     try {
       if (projectId.isEmpty) return [];
-
-      // 1. Tarik bids + join profil vendor dasar (termasuk experience_years)
       final bidsResponse = await _supabase
           .from('bids')
           .select('*, profiles:vendor_id(name, experience_years)')
           .eq('project_id', projectId)
           .order('created_at', ascending: false);
-
       final bids = List<Map<String, dynamic>>.from(bidsResponse);
 
-      // 2. Kumpulkan semua vendor_id unik untuk narik rating
       final vendorIds = bids
           .map((b) => b['vendor_id'] as String?)
           .whereType<String>()
@@ -441,17 +411,12 @@ class ProjectProvider extends ChangeNotifier {
           .toList();
 
       Map<String, double> ratingMap = {};
-
-      // 3. Tarik semua data dari tabel reviews yang match dengan list vendor
       if (vendorIds.isNotEmpty) {
         final reviewsResponse = await _supabase
             .from('reviews')
             .select('vendor_id, rating')
             .inFilter('vendor_id', vendorIds);
-
         final reviews = List<Map<String, dynamic>>.from(reviewsResponse);
-
-        // Grouping & Hitung rata-rata rating per vendor
         final Map<String, List<int>> ratingGroups = {};
         for (final r in reviews) {
           final vid = r['vendor_id'] as String?;
@@ -460,23 +425,21 @@ class ProjectProvider extends ChangeNotifier {
             ratingGroups.putIfAbsent(vid, () => []).add(rat);
           }
         }
-
         ratingGroups.forEach((vid, ratings) {
           ratingMap[vid] = ratings.reduce((a, b) => a + b) / ratings.length;
         });
       }
 
-      // 4. Inject avg_rating ke dalam map profiles sebelum di-parse ke model
       final enrichedBids = bids.map((b) {
         final vendorId = b['vendor_id'] as String?;
-        final profiles = Map<String, dynamic>.from((b['profiles'] as Map?) ?? {});
-
+        final profiles = Map<String, dynamic>.from(
+          (b['profiles'] as Map?) ?? {},
+        );
         if (vendorId != null && ratingMap.containsKey(vendorId)) {
           profiles['avg_rating'] = ratingMap[vendorId];
         } else {
           profiles['avg_rating'] = null;
         }
-
         return {...b, 'profiles': profiles};
       }).toList();
 
@@ -499,12 +462,12 @@ class ProjectProvider extends ChangeNotifier {
     try {
       await _supabase
           .from('bids')
-          .update({'status': 'accepted'}).eq('id', bidId);
-
+          .update({'status': 'accepted'})
+          .eq('id', bidId);
       await _supabase
           .from('projects')
-          .update({'status': 'in_progress'}).eq('id', projectId);
-
+          .update({'status': 'in_progress'})
+          .eq('id', projectId);
       _isLoading = false;
       notifyListeners();
       return true;
@@ -525,8 +488,8 @@ class ProjectProvider extends ChangeNotifier {
     try {
       await _supabase
           .from('bids')
-          .update({'status': 'rejected'}).eq('id', bidId);
-
+          .update({'status': 'rejected'})
+          .eq('id', bidId);
       _isLoading = false;
       notifyListeners();
       return true;
@@ -536,5 +499,307 @@ class ProjectProvider extends ChangeNotifier {
       notifyListeners();
       return false;
     }
+  }
+
+  // ─────────────────────────────────────────────
+  // AMBIL SEMUA TERMIN PEMBAYARAN UNTUK SATU PROYEK
+  // ─────────────────────────────────────────────
+  Future<List<PaymentTermModel>> fetchPaymentTerms(String projectId) async {
+    try {
+      if (projectId.isEmpty) return [];
+      final response = await _supabase
+          .from('payment_terms')
+          .select('*')
+          .eq('project_id', projectId)
+          .order('order_index', ascending: true);
+      return List<Map<String, dynamic>>.from(
+        response,
+      ).map((json) => PaymentTermModel.fromJson(json)).toList();
+    } catch (e) {
+      debugPrint('Error fetch payment terms: $e');
+      return [];
+    }
+  }
+
+  // ─────────────────────────────────────────────
+  // TAMBAH SATU TERMIN BARU (KONTRAKTOR)
+  // ─────────────────────────────────────────────
+  Future<bool> addPaymentTerm({
+    required String projectId,
+    required String bidId,
+    required String name,
+    required double percentage,
+    required double dealPrice,
+    required int orderIndex,
+    String? notes,
+  }) async {
+    _isLoading = true;
+    notifyListeners();
+    try {
+      final vendorId = _supabase.auth.currentUser?.id;
+      if (vendorId == null) throw Exception('Vendor belum login!');
+      final amount = dealPrice * percentage / 100;
+      await _supabase.from('payment_terms').insert({
+        'project_id': projectId,
+        'bid_id': bidId,
+        'vendor_id': vendorId,
+        'name': name,
+        'percentage': percentage,
+        'amount': amount,
+        'status': 'pending',
+        'order_index': orderIndex,
+        if (notes != null && notes.isNotEmpty) 'notes': notes,
+      });
+      _isLoading = false;
+      notifyListeners();
+      return true;
+    } catch (e) {
+      debugPrint('Error add payment term: $e');
+      _isLoading = false;
+      notifyListeners();
+      rethrow;
+    }
+  }
+
+  // ─────────────────────────────────────────────
+  // EDIT TERMIN (KONTRAKTOR — hanya jika masih pending)
+  // ─────────────────────────────────────────────
+  Future<bool> editPaymentTerm({
+    required String termId,
+    required String name,
+    required double percentage,
+    required double dealPrice,
+    String? notes,
+  }) async {
+    _isLoading = true;
+    notifyListeners();
+    try {
+      final amount = dealPrice * percentage / 100;
+      await _supabase
+          .from('payment_terms')
+          .update({
+            'name': name,
+            'percentage': percentage,
+            'amount': amount,
+            if (notes != null) 'notes': notes,
+          })
+          .eq('id', termId);
+      _isLoading = false;
+      notifyListeners();
+      return true;
+    } catch (e) {
+      debugPrint('Error edit payment term: $e');
+      _isLoading = false;
+      notifyListeners();
+      rethrow;
+    }
+  }
+
+  // ─────────────────────────────────────────────
+  // HAPUS TERMIN (KONTRAKTOR — hanya jika masih pending)
+  // ─────────────────────────────────────────────
+  Future<bool> deletePaymentTerm(String termId) async {
+    _isLoading = true;
+    notifyListeners();
+    try {
+      await _supabase.from('payment_terms').delete().eq('id', termId);
+      _isLoading = false;
+      notifyListeners();
+      return true;
+    } catch (e) {
+      debugPrint('Error delete payment term: $e');
+      _isLoading = false;
+      notifyListeners();
+      return false;
+    }
+  }
+
+  // ─────────────────────────────────────────────
+  // CLIENT: TANDAI SUDAH BAYAR + PILIH BANK
+  // Mengupdate status → 'waiting_confirmation'
+  // ─────────────────────────────────────────────
+  Future<bool> clientMarkAsPaid({
+    required String termId,
+    required String paymentMethod,
+    required String virtualAccountNumber,
+  }) async {
+    _isLoading = true;
+    notifyListeners();
+    try {
+      await _supabase
+          .from('payment_terms')
+          .update({
+            'status': 'waiting_confirmation',
+            'payment_method': paymentMethod,
+            'virtual_account_number': virtualAccountNumber,
+            'paid_at': DateTime.now().toIso8601String(),
+          })
+          .eq('id', termId);
+      _isLoading = false;
+      notifyListeners();
+      return true;
+    } catch (e) {
+      debugPrint('Error client mark as paid: $e');
+      _isLoading = false;
+      notifyListeners();
+      // Propagate error agar UI bisa tampilkan pesan asli
+      rethrow;
+    }
+  }
+
+  // ─────────────────────────────────────────────
+  // KONTRAKTOR: KONFIRMASI TERIMA PEMBAYARAN
+  // Mengupdate status → 'confirmed'
+  // ─────────────────────────────────────────────
+  Future<bool> vendorConfirmPayment(String termId) async {
+    _isLoading = true;
+    notifyListeners();
+    try {
+      await _supabase
+          .from('payment_terms')
+          .update({
+            'status': 'confirmed',
+            'confirmed_at': DateTime.now().toIso8601String(),
+          })
+          .eq('id', termId);
+      _isLoading = false;
+      notifyListeners();
+      return true;
+    } catch (e) {
+      debugPrint('Error vendor confirm payment: $e');
+      _isLoading = false;
+      notifyListeners();
+      rethrow;
+    }
+  }
+
+  // ─────────────────────────────────────────────
+  // KONTRAKTOR: KIRIM LAPORAN PROGRES TERMIN
+  // Upload max 5 gambar ke project-renders, PDF opsional ke documents
+  // Mengupdate status → 'progress_submitted'
+  //
+  // Dependency: pastikan pubspec.yaml sudah include:
+  //   image_picker: ^1.0.0
+  //   file_picker: ^6.0.0
+  // ─────────────────────────────────────────────
+  Future<bool> submitTermProgress({
+    required String termId,
+    required String description,
+    List<File>? images, // max 5 file, masing-masing max 5MB
+    File? pdfFile,
+  }) async {
+    _isLoading = true;
+    notifyListeners();
+    try {
+      final vendorId = _supabase.auth.currentUser?.id;
+      if (vendorId == null) throw Exception('Vendor belum login!');
+
+      // Validasi jumlah gambar
+      if (images != null && images.length > 5) {
+        throw Exception('Maksimal 5 gambar untuk laporan progres.');
+      }
+
+      // Validasi ukuran setiap gambar (max 5MB)
+      if (images != null) {
+        for (final img in images) {
+          final size = await img.length();
+          if (size > 5 * 1024 * 1024) {
+            throw Exception('Ukuran setiap gambar tidak boleh melebihi 5MB.');
+          }
+        }
+      }
+
+      // 1. Upload gambar progres ke bucket project-renders
+      final List<String> imageUrls = [];
+      if (images != null && images.isNotEmpty) {
+        for (int i = 0; i < images.length; i++) {
+          final img = images[i];
+          final ext = img.path.split('.').last.toLowerCase();
+          final fileName =
+              '${vendorId}_progress_${termId}_${i}_${DateTime.now().millisecondsSinceEpoch}.$ext';
+          await _supabase.storage.from('project-renders').upload(fileName, img);
+          final url = _supabase.storage
+              .from('project-renders')
+              .getPublicUrl(fileName);
+          imageUrls.add(url);
+        }
+      }
+
+      // 2. Upload PDF laporan ke bucket documents (opsional)
+      String? pdfUrl;
+      if (pdfFile != null) {
+        final ext = pdfFile.path.split('.').last.toLowerCase();
+        final fileName =
+            '${vendorId}_progress_pdf_${termId}_${DateTime.now().millisecondsSinceEpoch}.$ext';
+        await _supabase.storage.from('documents').upload(fileName, pdfFile);
+        pdfUrl = _supabase.storage.from('documents').getPublicUrl(fileName);
+      }
+
+      // 3. Update payment_term di database
+      await _supabase
+          .from('payment_terms')
+          .update({
+            'status': 'progress_submitted',
+            'progress_description': description.trim(),
+            'progress_images': imageUrls,
+            if (pdfUrl != null) 'progress_pdf_url': pdfUrl,
+            'progress_submitted_at': DateTime.now().toIso8601String(),
+          })
+          .eq('id', termId);
+
+      _isLoading = false;
+      notifyListeners();
+      return true;
+    } catch (e) {
+      debugPrint('Error submit term progress: $e');
+      _isLoading = false;
+      notifyListeners();
+      rethrow; // Propagate agar UI tampilkan pesan error asli
+    }
+  }
+
+  // ─────────────────────────────────────────────
+  // CLIENT: TINJAU & SETUJUI LAPORAN PROGRES
+  // Mengupdate status → 'completed'
+  // ─────────────────────────────────────────────
+  Future<bool> clientReviewProgress(String termId) async {
+    _isLoading = true;
+    notifyListeners();
+    try {
+      await _supabase
+          .from('payment_terms')
+          .update({
+            'status': 'completed',
+            'progress_reviewed_at': DateTime.now().toIso8601String(),
+          })
+          .eq('id', termId);
+      _isLoading = false;
+      notifyListeners();
+      return true;
+    } catch (e) {
+      debugPrint('Error client review progress: $e');
+      _isLoading = false;
+      notifyListeners();
+      rethrow;
+    }
+  }
+
+  // ─────────────────────────────────────────────
+  // HELPER: GENERATE NOMOR VIRTUAL ACCOUNT ACAK
+  // ─────────────────────────────────────────────
+  static String generateVirtualAccount(String bankCode) {
+    final random = Random();
+    final Map<String, String> prefixes = {
+      'bca': '70012',
+      'bni': '98801',
+      'mandiri': '88908',
+      'bri': '15009',
+    };
+    final prefix = prefixes[bankCode] ?? '88888';
+    final suffix = List.generate(
+      12,
+      (_) => random.nextInt(10).toString(),
+    ).join();
+    return '$prefix$suffix';
   }
 }

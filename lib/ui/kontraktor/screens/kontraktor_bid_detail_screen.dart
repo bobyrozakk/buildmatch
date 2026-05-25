@@ -4,6 +4,7 @@ import 'package:buildmatch/data/models/bid_model.dart';
 import '../../shared/widgets/glass_card.dart';
 import '../../../core/constants/colors.dart';
 import '../../../core/utils/formatters.dart';
+import 'kontraktor_payment_terms_screen.dart';
 
 class KontraktorBidDetailScreen extends StatelessWidget {
   final BidModel bid;
@@ -223,6 +224,98 @@ class KontraktorBidDetailScreen extends StatelessWidget {
                       ),
                     ],
                   ),
+                ),
+              ),
+            ],
+
+            // ── Tombol Lanjut Pembayaran (hanya jika accepted) ──
+            if (isAccepted) ...[
+              const SizedBox(height: 22),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(18),
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: [
+                      AppColors.primary,
+                      AppColors.primary.withOpacity(0.8),
+                    ],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  ),
+                  borderRadius: BorderRadius.circular(20),
+                  boxShadow: [
+                    BoxShadow(
+                      color: AppColors.primary.withOpacity(0.35),
+                      blurRadius: 16,
+                      offset: const Offset(0, 6),
+                    ),
+                  ],
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Row(
+                      children: [
+                        Icon(Icons.celebration_rounded,
+                            color: Colors.white, size: 20),
+                        SizedBox(width: 8),
+                        Text(
+                          'Penawaran Diterima!',
+                          style: TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 16),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 6),
+                    const Text(
+                      'Atur termin pembayaran untuk proyek ini. Tentukan berapa tahap dan persentase tiap tahap.',
+                      style: TextStyle(
+                          color: Colors.white70,
+                          fontSize: 12,
+                          height: 1.4),
+                    ),
+                    const SizedBox(height: 16),
+                    SizedBox(
+                      width: double.infinity,
+                      height: 48,
+                      child: ElevatedButton.icon(
+                        onPressed: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => KontraktorPaymentTermsScreen(
+                                projectId: bid.projectId, // FIX: gunakan bid.projectId yg selalu ada
+                                bidId: bid.id ?? '',
+                                dealPrice: bid.price,
+                                projectTitle:
+                                    project?.title ?? 'Proyek',
+                              ),
+                            ),
+                          );
+                        },
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.white,
+                          elevation: 0,
+                          shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(14)),
+                        ),
+                        icon: const Icon(
+                            Icons.payments_rounded,
+                            color: AppColors.primary,
+                            size: 20),
+                        label: const Text(
+                          'Kelola Termin Pembayaran',
+                          style: TextStyle(
+                              color: AppColors.primary,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 14),
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ],

@@ -6,6 +6,7 @@ import '../../../data/models/project_model.dart';
 import '../../../data/models/bid_model.dart';
 import '../../../data/providers/project_provider.dart';
 import 'bid_detail_screen.dart';
+import 'client_payment_terms_screen.dart';
 
 // ── Enum Opsi Sorting ──
 enum BidSortOption {
@@ -590,6 +591,43 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
               ),
             ),
           ),
+
+          // Tombol lihat termin (hanya jika accepted)
+          if (isAccepted) ...[
+            const SizedBox(height: 8),
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton.icon(
+                onPressed: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => ClientPaymentTermsScreen(
+                        projectId: _project.id ?? '',
+                        dealPrice: bid.price,
+                        projectTitle: _project.title,
+                        contractorName: bid.vendorName ?? 'Kontraktor',
+                      ),
+                    ),
+                  );
+                },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.green,
+                  elevation: 0,
+                  padding: const EdgeInsets.symmetric(vertical: 11),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12)),
+                ),
+                icon: const Icon(Icons.payments_rounded,
+                    size: 16, color: Colors.white),
+                label: const Text(
+                  'Lihat Termin Pembayaran',
+                  style: TextStyle(
+                      fontWeight: FontWeight.bold, color: Colors.white),
+                ),
+              ),
+            ),
+          ],
         ],
       ),
     );
