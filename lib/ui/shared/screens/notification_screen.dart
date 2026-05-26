@@ -15,7 +15,11 @@ class _NotificationScreenState extends State<NotificationScreen> {
   @override
   void initState() {
     super.initState();
-    Provider.of<NotificationProvider>(context, listen: false).fetchNotifications();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        Provider.of<NotificationProvider>(context, listen: false).fetchNotifications();
+      }
+    });
   }
 
   @override

@@ -41,8 +41,12 @@ class _KontraktorHomeTabState extends State<KontraktorHomeTab> {
     final vendor = Provider.of<VendorProvider>(context, listen: false);
     final project = Provider.of<ProjectProvider>(context, listen: false);
     
-    Provider.of<NotificationProvider>(context, listen: false).fetchNotifications();
-    Provider.of<ChatProvider>(context, listen: false).fetchChats();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        Provider.of<NotificationProvider>(context, listen: false).fetchNotifications();
+        Provider.of<ChatProvider>(context, listen: false).fetchChats();
+      }
+    });
 
     _dataFuture = Future.wait([
       vendor.fetchVendorProfile(),

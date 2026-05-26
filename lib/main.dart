@@ -8,6 +8,7 @@ import 'data/providers/auth_provider.dart';
 import 'data/providers/vendor_provider.dart';
 import 'data/providers/chat_provider.dart';
 import 'data/providers/notification_provider.dart';
+import 'data/providers/architect_provider.dart';
 
 // --- IMPORT SCREENS ---
 import 'ui/shared/screens/main_nav.dart';
@@ -44,6 +45,7 @@ void main() async {
         ChangeNotifierProvider(create: (_) => VendorProvider()),
         ChangeNotifierProvider(create: (_) => ChatProvider()),
         ChangeNotifierProvider(create: (_) => NotificationProvider()),
+        ChangeNotifierProvider(create: (_) => ArchitectProvider()),
       ],
       child: const BuildMatchApp(),
     ),
@@ -55,26 +57,34 @@ class BuildMatchApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Consumer<AuthProvider>(
-      builder: (context, auth, _) {
-        return MaterialApp(
-          debugShowCheckedModeBanner: false,
-          title: 'BuildMatch',
-          theme: ThemeData(
-            scaffoldBackgroundColor: AppColors.backgroundCream,
-            colorScheme: ColorScheme.fromSeed(
-              seedColor: AppColors.primary,
-            ),
-            useMaterial3: true,
-            fontFamily: 'Inter',
-          ),
-
-          // Auth check: jika belum login → Onboarding, sudah login → MainNav
-          home: auth.currentUser != null
-              ? const MainNavScreen()
-              : const SplashScreen(),
-        );
-      },
+    return MaterialApp(
+      debugShowCheckedModeBanner: false,
+      title: 'BuildMatch',
+      theme: ThemeData(
+        scaffoldBackgroundColor: AppColors.backgroundCream,
+        colorScheme: ColorScheme.fromSeed(
+          seedColor: AppColors.primary,
+        ),
+        useMaterial3: true,
+        fontFamily: 'Inter',
+      ),
+      // Gunakan StreamBuilder untuk mendengarkan auth state secara real-time
+      // Setiap kali login/logout terjadi, UI otomatis diperbarui
+      home: StreamBuilder(
+        stream: Supabase.instance.client.auth.onAuthStateChange,
+        builder: (context, snapshot) {
+          // Jika stream belum ready, tampilkan splash dulu
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return const SplashScreen();
+          }
+          // Cek apakah ada sesi aktif
+          final session = snapshot.data?.session;
+          if (session != null) {
+            return const MainNavScreen();
+          }
+          return const SplashScreen();
+        },
+      ),
     );
   }
 }

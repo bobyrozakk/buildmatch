@@ -59,11 +59,6 @@ class _ChatListScreenState extends State<ChatListScreen> {
                     separatorBuilder: (context, index) => const Divider(height: 1, indent: 70),
                     itemBuilder: (context, index) {
                       final chat = chats[index];
-                      // For client, display vendor info, for vendor display client info
-                      // We assume if clientAvatar is not empty, it's a valid url
-                      // Normally we need to know current user's role
-                      final isClient = true; // Temporary mock, ideally check user role
-                      
                       final displayName = chat.vendorName ?? 'Kontraktor';
                       final displayAvatar = chat.vendorAvatar;
 
@@ -106,8 +101,9 @@ class _ChatListScreenState extends State<ChatListScreen> {
                               ),
                           ],
                         ),
-                        onTap: () {
-                          Navigator.push(
+                        onTap: () async {
+                          final chatProv = Provider.of<ChatProvider>(context, listen: false);
+                          await Navigator.push(
                             context,
                             MaterialPageRoute(
                               builder: (_) => ChatDetailScreen(
@@ -115,10 +111,9 @@ class _ChatListScreenState extends State<ChatListScreen> {
                                 receiverName: displayName,
                               ),
                             ),
-                          ).then((_) {
-                            // Refresh unread counts when returning
-                            Provider.of<ChatProvider>(context, listen: false).fetchChats();
-                          });
+                          );
+                          // Refresh unread counts when returning
+                          chatProv.fetchChats();
                         },
                       );
                     },

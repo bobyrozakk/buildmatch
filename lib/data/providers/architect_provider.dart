@@ -1,0 +1,431 @@
+import 'dart:convert';
+import 'dart:io';
+import 'package:flutter/material.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+import '../models/profile_model.dart';
+import '../models/certification_model.dart';
+
+class ArchitectProvider extends ChangeNotifier {
+  final _supabase = Supabase.instance.client;
+  bool _isLoading = false;
+  bool get isLoading => _isLoading;
+
+  // =========================================================
+  // PROFILE MANAGEMENT (PERSISTENT VIA 'NIB' COLUMN JSON)
+  // =========================================================
+
+  Future<ProfileModel?> fetchProfile() async {
+    try {
+      final userId = _supabase.auth.currentUser?.id;
+      if (userId == null) return null;
+
+      final response = await _supabase
+          .from('profiles')
+          .select()
+          .eq('id', userId)
+          .single();
+
+      return ProfileModel.fromJson(response);
+    } catch (e) {
+      debugPrint('Error fetch architect profile: $e');
+      return null;
+    }
+  }
+
+  Future<Map<String, dynamic>?> fetchArchitectDetails(String architectId) async {
+    try {
+      final response = await _supabase
+          .from('profiles')
+          .select()
+          .eq('id', architectId)
+          .single();
+
+      final profile = ProfileModel.fromJson(response);
+      Map<String, dynamic> specializations = {};
+      String bio = "";
+      if (profile.nib != null && profile.nib!.startsWith('{')) {
+        try {
+          final data = jsonDecode(profile.nib!);
+          bio = data['bio'] ?? "";
+          specializations = Map<String, dynamic>.from(data['specializations'] ?? {});
+        } catch (_) {}
+      }
+
+      return {
+        'profile': profile,
+        'bio': bio,
+        'specializations': specializations,
+      };
+    } catch (e) {
+      debugPrint('Error fetch architect details: $e');
+      return null;
+    }
+  }
+
+  Future<bool> updateProfile({
+    required String name,
+    required String studioName,
+    required String bio,
+    required String experience,
+    required String location,
+    required List<String> styles,
+    required List<String> projectTypes,
+    required List<String> technicalSkills,
+  }) async {
+    _isLoading = true;
+    notifyListeners();
+
+    try {
+      final userId = _supabase.auth.currentUser?.id;
+      if (userId == null) throw Exception('Belum login');
+
+      // Pack Bio + Specializations into 'nib' column as JSON
+      final nibJson = jsonEncode({
+        'bio': bio,
+        'specializations': {
+          'styles': styles,
+          'project_types': projectTypes,
+          'technical_skills': technicalSkills,
+        },
+        'location': location,
+      });
+
+      await _supabase.from('profiles').update({
+        'name': name,
+        'company_name': studioName, // studio name in company_name
+        'experience_years': experience,
+        'nib': nibJson,
+      }).eq('id', userId);
+
+      await _supabase.auth.updateUser(
+        UserAttributes(
+          data: {
+            'name': name,
+            'company_name': studioName,
+          },
+        ),
+      );
+
+      _isLoading = false;
+      notifyListeners();
+      return true;
+    } catch (e) {
+      debugPrint('Error update architect profile: $e');
+      _isLoading = false;
+      notifyListeners();
+      return false;
+    }
+  }
+
+  // =========================================================
+  // PORTFOLIO MANAGEMENT (COMPLEX FIELDS PACKED IN 'TITLE')
+  // =========================================================
+
+  Future<List<Map<String, dynamic>>> fetchPortfolios(String architectId) async {
+    try {
+      final response = await _supabase
+          .from('portfolios')
+          .select()
+          .eq('vendor_id', architectId)
+          .order('created_at', ascending: false);
+
+      final result = <Map<String, dynamic>>[];
+      for (final row in response) {
+        final rawTitle = row['title'] as String? ?? "";
+        String title = rawTitle;
+        String style = "Modern";
+        String projectType = "Rumah Tinggal";
+        double area = 120.0;
+        double cost = 100000000.0;
+        String description = "";
+        List<String> imageUrls = [];
+
+        if (rawTitle.startsWith('{')) {
+          try {
+            final data = jsonDecode(rawTitle);
+            title = data['title'] ?? "Desain Tanpa Judul";
+            style = data['style'] ?? "Modern";
+            projectType = data['project_type'] ?? "Rumah Tinggal";
+            area = (data['area'] as num?)?.toDouble() ?? 120.0;
+            cost = (data['cost'] as num?)?.toDouble() ?? 100000000.0;
+            description = data['description'] ?? "";
+            imageUrls = List<String>.from(data['image_urls'] ?? []);
+          } catch (_) {}
+        }
+
+        final singleImage = row['image_url'] as String? ?? (imageUrls.isNotEmpty ? imageUrls.first : null);
+
+        result.add({
+          'id': row['id'] as String,
+          'title': title,
+          'year': row['year'] as String? ?? "2026",
+          'image_url': singleImage,
+          'image_urls': imageUrls.isEmpty && singleImage != null ? [singleImage] : imageUrls,
+          'style': style,
+          'project_type': projectType,
+          'area': area,
+          'cost': cost,
+          'description': description,
+        });
+      }
+      return result;
+    } catch (e) {
+      debugPrint('Error fetch portfolios: $e');
+      return [];
+    }
+  }
+
+  Future<bool> addPortfolio({
+    required String title,
+    required String style,
+    required String projectType,
+    required double area,
+    required double cost,
+    required String description,
+    required List<File> imageFiles,
+    required String year,
+    bool isPublic = true,
+  }) async {
+    _isLoading = true;
+    notifyListeners();
+
+    try {
+      final userId = _supabase.auth.currentUser?.id;
+      if (userId == null) throw Exception('Belum login');
+
+      final List<String> imageUrls = [];
+      for (int i = 0; i < imageFiles.length; i++) {
+        final file = imageFiles[i];
+        final ext = file.path.split('.').last;
+        final fileName = '${userId}_porto_${DateTime.now().millisecondsSinceEpoch}_$i.$ext';
+
+        await _supabase.storage.from('portfolios').upload(fileName, file);
+        final url = _supabase.storage.from('portfolios').getPublicUrl(fileName);
+        imageUrls.add(url);
+      }
+
+      final String mainImageUrl = imageUrls.isNotEmpty ? imageUrls.first : "";
+
+      // Pack extra details into title column as JSON
+      final packedTitle = jsonEncode({
+        'title': title,
+        'style': style,
+        'project_type': projectType,
+        'area': area,
+        'cost': cost,
+        'description': description,
+        'image_urls': imageUrls,
+        'is_public': isPublic,
+      });
+
+      await _supabase.from('portfolios').insert({
+        'vendor_id': userId,
+        'title': packedTitle,
+        'year': year,
+        'image_url': mainImageUrl.isEmpty ? null : mainImageUrl,
+      });
+
+      _isLoading = false;
+      notifyListeners();
+      return true;
+    } catch (e) {
+      debugPrint('Error add portfolio: $e');
+      _isLoading = false;
+      notifyListeners();
+      return false;
+    }
+  }
+
+  Future<bool> deletePortfolio(String id) async {
+    try {
+      await _supabase.from('portfolios').delete().eq('id', id);
+      notifyListeners();
+      return true;
+    } catch (e) {
+      debugPrint('Error delete portfolio: $e');
+      return false;
+    }
+  }
+
+  // =========================================================
+  // CERTIFICATION MANAGEMENT
+  // =========================================================
+
+  Future<List<CertificationModel>> fetchCertifications(String userId) async {
+    try {
+      final response = await _supabase
+          .from('certifications')
+          .select()
+          .eq('vendor_id', userId)
+          .order('created_at', ascending: false);
+
+      return List<Map<String, dynamic>>.from(response)
+          .map((e) => CertificationModel.fromJson(e))
+          .toList();
+    } catch (e) {
+      debugPrint('Error fetch certifications: $e');
+      return [];
+    }
+  }
+
+  Future<bool> addCertification({
+    required String title,
+    required String issuer,
+  }) async {
+    _isLoading = true;
+    notifyListeners();
+
+    try {
+      final userId = _supabase.auth.currentUser?.id;
+      if (userId == null) throw Exception('Belum login');
+
+      await _supabase.from('certifications').insert({
+        'vendor_id': userId,
+        'title': title,
+        'issuer': issuer,
+      });
+
+      _isLoading = false;
+      notifyListeners();
+      return true;
+    } catch (e) {
+      debugPrint('Error add certification: $e');
+      _isLoading = false;
+      notifyListeners();
+      return false;
+    }
+  }
+
+  Future<bool> deleteCertification(String id) async {
+    try {
+      await _supabase.from('certifications').delete().eq('id', id);
+      notifyListeners();
+      return true;
+    } catch (e) {
+      debugPrint('Error delete certification: $e');
+      return false;
+    }
+  }
+
+  // =========================================================
+  // BIDS & DEALS (DYNAMIC REAL-TIME CYCLES)
+  // =========================================================
+
+  Future<String?> submitArchitectOffer({
+    required String clientId,
+    required double price,
+    required String title,
+    required String description,
+    required int revisions,
+    required int durationDays,
+  }) async {
+    try {
+      final userId = _supabase.auth.currentUser?.id;
+      if (userId == null) return null;
+
+      // 1. Create a dummy/active project if no project exists in the chat.
+      // In a real flow, a chat has a project_id. If not, we find one or create one.
+      String projectId = "";
+      final activeProjects = await _supabase
+          .from('projects')
+          .select('id')
+          .eq('client_id', clientId)
+          .neq('status', 'draft')
+          .limit(1);
+
+      if (activeProjects.isNotEmpty) {
+        projectId = activeProjects.first['id'] as String;
+      } else {
+        // Create an automated project placeholder
+        final response = await _supabase.from('projects').insert({
+          'title': 'Konsultasi Desain dengan Arsitek',
+          'description': 'Proyek konsultasi dan desain perumahan',
+          'budget': price,
+          'client_id': clientId,
+          'status': 'open',
+          'location': 'Jakarta, Indonesia',
+          'latitude': -6.2088,
+          'longitude': 106.8456,
+        }).select('id').single();
+        projectId = response['id'] as String;
+      }
+
+      // 2. Pack title, revisions count and description into bid's message as JSON
+      final packedMessage = jsonEncode({
+        'title': title,
+        'description': description,
+        'revisions': revisions,
+        'duration_days': durationDays,
+      });
+
+      // 3. Insert into bids table
+      final bidResponse = await _supabase.from('bids').insert({
+        'project_id': projectId,
+        'vendor_id': userId,
+        'price': price,
+        'message': packedMessage,
+        'status': 'pending',
+        'estimation_months': (durationDays / 30).ceil(), // fallback mapping
+      }).select('id').single();
+
+      return bidResponse['id'] as String;
+    } catch (e) {
+      debugPrint('Error submit architect offer: $e');
+      return null;
+    }
+  }
+
+  Future<Map<String, dynamic>?> fetchBidOfferDetails(String bidId) async {
+    try {
+      final response = await _supabase
+          .from('bids')
+          .select('*, projects(*, profiles:client_id(name))')
+          .eq('id', bidId)
+          .single();
+
+      final rawMessage = response['message'] as String? ?? "";
+      String title = "Desain Rumah Minimalis 2 Lantai";
+      String description = "Layanan desain lengkap...";
+      int revisions = 2;
+      int durationDays = 14;
+
+      if (rawMessage.startsWith('{')) {
+        try {
+          final data = jsonDecode(rawMessage);
+          title = data['title'] ?? title;
+          description = data['description'] ?? description;
+          revisions = data['revisions'] ?? revisions;
+          durationDays = data['duration_days'] ?? durationDays;
+        } catch (_) {}
+      }
+
+      return {
+        'id': response['id'] as String,
+        'project_id': response['project_id'] as String,
+        'vendor_id': response['vendor_id'] as String,
+        'price': (response['price'] as num?)?.toDouble() ?? 0.0,
+        'status': response['status'] as String? ?? 'pending',
+        'created_at': DateTime.parse(response['created_at']),
+        'title': title,
+        'description': description,
+        'revisions': revisions,
+        'duration_days': durationDays,
+        'project': response['projects'],
+      };
+    } catch (e) {
+      debugPrint('Error fetch bid offer details: $e');
+      return null;
+    }
+  }
+
+  Future<bool> updateOfferStatus(String bidId, String status) async {
+    try {
+      await _supabase.from('bids').update({'status': status}).eq('id', bidId);
+      notifyListeners();
+      return true;
+    } catch (e) {
+      debugPrint('Error update offer status: $e');
+      return false;
+    }
+  }
+}

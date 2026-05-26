@@ -30,22 +30,34 @@ class _LoginScreenState extends State<LoginScreen> {
 
   void _submit() async {
     final provider = Provider.of<AuthProvider>(context, listen: false);
-    bool success = await provider.login(
+    String? errorMessage = await provider.login(
       email: _emailController.text.trim(),
       password: _passwordController.text,
     );
     if (!mounted) return;
-    if (success) {
+    if (errorMessage == null) {
       Navigator.pushAndRemoveUntil(
         context,
         MaterialPageRoute(builder: (_) => const MainNavScreen()),
         (route) => false,
       );
     } else {
+      String userFriendlyMessage = 'Email atau password salah.';
+      
+      final lowerError = errorMessage.toLowerCase();
+      if (lowerError.contains('email not confirmed')) {
+        userFriendlyMessage = 'Email Anda belum dikonfirmasi. Silakan periksa kotak masuk email Anda (termasuk folder spam) untuk memverifikasi akun.';
+      } else if (lowerError.contains('invalid login credentials')) {
+        userFriendlyMessage = 'Email atau password salah.';
+      } else {
+        userFriendlyMessage = errorMessage;
+      }
+
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Email atau password salah.'),
+        SnackBar(
+          content: Text(userFriendlyMessage),
           backgroundColor: Colors.redAccent,
+          duration: const Duration(seconds: 5),
         ),
       );
     }

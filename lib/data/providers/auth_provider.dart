@@ -128,18 +128,22 @@ class AuthProvider extends ChangeNotifier {
   }
 
   // FUNGSI LOGIN
-  Future<bool> login({required String email, required String password}) async {
+  Future<String?> login({required String email, required String password}) async {
     _isLoading = true;
     notifyListeners();
     try {
       await _supabase.auth.signInWithPassword(email: email, password: password);
       _isLoading = false;
       notifyListeners();
-      return true;
+      return null;
+    } on AuthException catch (e) {
+      _isLoading = false;
+      notifyListeners();
+      return e.message;
     } catch (e) {
       _isLoading = false;
       notifyListeners();
-      return false;
+      return e.toString();
     }
   }
 

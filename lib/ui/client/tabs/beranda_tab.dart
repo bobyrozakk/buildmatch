@@ -36,9 +36,13 @@ class _BerandaTabState extends State<BerandaTab> {
     final project = Provider.of<ProjectProvider>(context, listen: false);
     final vendor = Provider.of<VendorProvider>(context, listen: false);
     
-    // Fetch notifications and chats in background
-    Provider.of<NotificationProvider>(context, listen: false).fetchNotifications();
-    Provider.of<ChatProvider>(context, listen: false).fetchChats();
+    // Fetch notifications and chats in background after initial build frame
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        Provider.of<NotificationProvider>(context, listen: false).fetchNotifications();
+        Provider.of<ChatProvider>(context, listen: false).fetchChats();
+      }
+    });
 
     _dataFuture = Future.wait([
       project.fetchProjects(), // 0: client projects (non-draft)
