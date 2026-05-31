@@ -5,6 +5,7 @@ import 'package:buildmatch/data/models/bid_model.dart';
 import '../../../core/constants/colors.dart';
 import '../../../core/utils/formatters.dart';
 import '../screens/kontraktor_bid_detail_screen.dart';
+import '../../shared/widgets/animated_success_dialog.dart';
 
 class KontraktorProgressTab extends StatefulWidget {
   const KontraktorProgressTab({super.key});
@@ -61,7 +62,17 @@ class _KontraktorProgressTabState extends State<KontraktorProgressTab> {
             );
           }
 
-          final bids = snapshot.data ?? [];
+          final allBids = snapshot.data ?? [];
+          // Urutkan: accepted dulu, lalu pending, lalu rejected/diabaikan
+          final bids = [...allBids]..sort((a, b) {
+            int rank(BidModel bid) {
+              if (bid.status == 'accepted') return 0;
+              final isOld = bid.status == 'pending' && bid.createdAt != null && DateTime.now().difference(bid.createdAt!).inDays > 7;
+              if (bid.status == 'pending' && !isOld) return 1;
+              return 2;
+            }
+            return rank(a).compareTo(rank(b));
+          });
 
           if (bids.isEmpty) {
             return _buildEmptyState();
@@ -75,6 +86,8 @@ class _KontraktorProgressTabState extends State<KontraktorProgressTab> {
               final project = bid.project;
 
               final isAccepted = bid.status == 'accepted';
+              final isRejectedOrIgnored = bid.status == 'rejected' || (bid.status == 'pending' && bid.createdAt != null && DateTime.now().difference(bid.createdAt!).inDays > 7);
+              final isCancelable = bid.status == 'pending' && bid.createdAt != null && DateTime.now().difference(bid.createdAt!).inHours < 24;
 
               final progress = project?.progressPercent ?? 0;
 
@@ -105,6 +118,35 @@ class _KontraktorProgressTabState extends State<KontraktorProgressTab> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
+                      // Gambar Proyek
+                      if (project != null && project.imageUrls.isNotEmpty)
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(12),
+                          child: Image.network(
+                            project.imageUrls[0],
+                            height: 140,
+                            width: double.infinity,
+                            fit: BoxFit.cover,
+                            errorBuilder: (ctx, err, stack) => Container(
+                              height: 140,
+                              width: double.infinity,
+                              color: Colors.grey.shade200,
+                              child: const Icon(Icons.image_not_supported_outlined, color: Colors.grey),
+                            ),
+                          ),
+                        )
+                      else
+                        Container(
+                          height: 140,
+                          width: double.infinity,
+                          decoration: BoxDecoration(
+                            color: Colors.grey.shade200,
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: const Icon(Icons.image_outlined, color: Colors.grey),
+                        ),
+                      const SizedBox(height: 16),
+
                       /// STATUS
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -119,7 +161,7 @@ class _KontraktorProgressTabState extends State<KontraktorProgressTab> {
                             ),
                           ),
 
-                          _statusChip(bid.status),
+                          _statusChip(bid.status, bid.createdAt),
                         ],
                       ),
 
@@ -195,6 +237,40 @@ class _KontraktorProgressTabState extends State<KontraktorProgressTab> {
                         ),
                       ),
 
+                      if (isCancelable) ...[
+                        const SizedBox(height: 16),
+                        SizedBox(
+                          width: double.infinity,
+                          child: OutlinedButton.icon(
+                            onPressed: () => _confirmCancelBid(context, bid.id ?? ''),
+                            icon: const Icon(Icons.cancel_outlined, size: 18, color: Colors.orange),
+                            label: const Text('Batalkan Penawaran', style: TextStyle(color: Colors.orange, fontWeight: FontWeight.bold)),
+                            style: OutlinedButton.styleFrom(
+                              padding: const EdgeInsets.symmetric(vertical: 12),
+                              side: const BorderSide(color: Colors.orange),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                            ),
+                          ),
+                        ),
+                      ],
+
+                      if (isRejectedOrIgnored) ...[
+                        const SizedBox(height: 16),
+                        SizedBox(
+                          width: double.infinity,
+                          child: OutlinedButton.icon(
+                            onPressed: () => _confirmDeleteBid(context, bid.id ?? ''),
+                            icon: const Icon(Icons.delete_outline_rounded, size: 18, color: Colors.red),
+                            label: const Text('Hapus Penawaran', style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold)),
+                            style: OutlinedButton.styleFrom(
+                              padding: const EdgeInsets.symmetric(vertical: 12),
+                              side: const BorderSide(color: Colors.red),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                            ),
+                          ),
+                        ),
+                      ],
+
                       if (isAccepted) ...[
                         const SizedBox(height: 18),
 
@@ -242,24 +318,20 @@ class _KontraktorProgressTabState extends State<KontraktorProgressTab> {
     );
   }
 
-  Widget _statusChip(String status) {
+  Widget _statusChip(String status, DateTime? createdAt) {
+    final isOldPending = status == 'pending' && createdAt != null && DateTime.now().difference(createdAt).inDays > 7;
     Color color;
     String label;
 
-    switch (status) {
-      case 'accepted':
-        color = Colors.green;
-        label = 'Diterima';
-        break;
-
-      case 'rejected':
-        color = Colors.red;
-        label = 'Ditolak';
-        break;
-
-      default:
-        color = Colors.orange;
-        label = 'Menunggu';
+    if (isOldPending || status == 'rejected') {
+      color = Colors.red;
+      label = isOldPending ? 'Diabaikan' : 'Ditolak';
+    } else if (status == 'accepted') {
+      color = Colors.green;
+      label = 'Diterima';
+    } else {
+      color = Colors.orange;
+      label = 'Menunggu';
     }
 
     return Container(
@@ -277,6 +349,148 @@ class _KontraktorProgressTabState extends State<KontraktorProgressTab> {
         ),
       ),
     );
+  }
+
+  Future<void> _confirmDeleteBid(BuildContext context, String bidId) async {
+    if (bidId.isEmpty) return;
+    
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: Colors.white,
+        surfaceTintColor: Colors.transparent,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+        title: const Row(
+          children: [
+            Icon(Icons.warning_amber_rounded, color: Colors.redAccent, size: 22),
+            SizedBox(width: 10),
+            Text('Hapus Penawaran', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 17, color: Colors.black87)),
+          ],
+        ),
+        content: const Text(
+          'Penawaran ini sudah tidak aktif.\nApakah Anda yakin ingin menghapusnya secara permanen?',
+          style: TextStyle(color: Colors.black54, height: 1.5, fontSize: 14),
+        ),
+        actionsPadding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            style: TextButton.styleFrom(
+              foregroundColor: Colors.black54,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            ),
+            child: const Text('Batal', style: TextStyle(fontWeight: FontWeight.w600)),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.red.shade50,
+              foregroundColor: Colors.red.shade700,
+              elevation: 0,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+            ),
+            child: const Text('Ya, Hapus', style: TextStyle(fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm != true || !mounted) return;
+
+    final provider = Provider.of<ProjectProvider>(context, listen: false);
+    final success = await provider.deleteBid(bidId: bidId);
+
+    if (!mounted) return;
+
+    if (success) {
+      _refresh(); // refresh the list
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => const AnimatedSuccessDialog(
+          message: 'Penawaran Berhasil Dihapus',
+        ),
+      );
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Gagal menghapus penawaran.'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+
+  Future<void> _confirmCancelBid(BuildContext context, String bidId) async {
+    if (bidId.isEmpty) return;
+    
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: Colors.white,
+        surfaceTintColor: Colors.transparent,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+        title: const Row(
+          children: [
+            Icon(Icons.info_outline_rounded, color: Colors.orange, size: 22),
+            SizedBox(width: 10),
+            Text('Batalkan Penawaran', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 17, color: Colors.black87)),
+          ],
+        ),
+        content: const Text(
+          'Apakah Anda yakin ingin membatalkan penawaran ini?\nAnda masih bisa mengajukan penawaran baru setelah dibatalkan.',
+          style: TextStyle(color: Colors.black54, height: 1.5, fontSize: 14),
+        ),
+        actionsPadding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            style: TextButton.styleFrom(
+              foregroundColor: Colors.black54,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            ),
+            child: const Text('Tutup', style: TextStyle(fontWeight: FontWeight.w600)),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.orange.shade50,
+              foregroundColor: Colors.orange.shade800,
+              elevation: 0,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+            ),
+            child: const Text('Ya, Batalkan', style: TextStyle(fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm != true || !mounted) return;
+
+    final provider = Provider.of<ProjectProvider>(context, listen: false);
+    final success = await provider.deleteBid(bidId: bidId);
+
+    if (!mounted) return;
+
+    if (success) {
+      _refresh(); // refresh the list
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => const AnimatedSuccessDialog(
+          message: 'Penawaran Berhasil Dibatalkan',
+        ),
+      );
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Gagal membatalkan penawaran.'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
   }
 
   Widget _buildEmptyState() {

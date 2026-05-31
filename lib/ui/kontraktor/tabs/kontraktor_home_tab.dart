@@ -117,7 +117,7 @@ class _KontraktorHomeTabState extends State<KontraktorHomeTab> {
                     const SizedBox(height: 20),
                     _buildWelcomeCard(profile),
                     const SizedBox(height: 24),
-                    _buildStatsRow(activeProjects.length),
+                    _buildStatsRow(activeProjects),
                     const SizedBox(height: 28),
                     _buildSectionHeader('Penawaran Masuk', onTap: _goToProyekTab),
                     const SizedBox(height: 12),
@@ -316,16 +316,19 @@ class _KontraktorHomeTabState extends State<KontraktorHomeTab> {
 
   // --- STATS ---
 
-  Widget _buildStatsRow(int activeCount) {
+  Widget _buildStatsRow(List<ProjectModel> activeProjects) {
+    final activeCount = activeProjects.where((p) => p.status == 'in_progress').length;
+    final completedCount = activeProjects.where((p) => p.status == 'completed').length;
+
     return Row(
       children: [
         _buildStatItem('$activeCount', 'Proyek Aktif'),
         const SizedBox(width: 10),
-        _buildStatItem('12', 'Selesai'),
+        _buildStatItem('$completedCount', 'Selesai'),
         const SizedBox(width: 10),
-        _buildStatItem('45jt', 'Pendapatan'),
+        _buildStatItem('Rp 0', 'Pendapatan'),
         const SizedBox(width: 10),
-        _buildStatItemWithIcon('4.9', 'Rating', Icons.star_rounded),
+        _buildStatItemWithIcon('0.0', 'Rating', Icons.star_rounded),
       ],
     );
   }
@@ -337,7 +340,7 @@ class _KontraktorHomeTabState extends State<KontraktorHomeTab> {
         decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(14)),
         child: Column(
           children: [
-            Text(val, style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 16, color: AppColors.primary)),
+            Text(val, style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 14, color: AppColors.primary)),
             const SizedBox(height: 2),
             Text(label, style: const TextStyle(fontSize: 10, color: Colors.black54), textAlign: TextAlign.center),
           ],
@@ -356,9 +359,9 @@ class _KontraktorHomeTabState extends State<KontraktorHomeTab> {
             Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Text(val, style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 16, color: AppColors.primary)),
+                Text(val, style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 14, color: AppColors.primary)),
                 const SizedBox(width: 2),
-                Icon(icon, color: Colors.amber, size: 16),
+                Icon(icon, color: Colors.amber, size: 14),
               ],
             ),
             const SizedBox(height: 2),
@@ -392,7 +395,7 @@ class _KontraktorHomeTabState extends State<KontraktorHomeTab> {
     }
     final list = tenders.take(5).toList();
     return SizedBox(
-      height: 200,
+      height: 300,
       child: ListView.builder(
         scrollDirection: Axis.horizontal,
         itemCount: list.length,
@@ -412,6 +415,14 @@ class _KontraktorHomeTabState extends State<KontraktorHomeTab> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
+                  if (p.imageUrls.isNotEmpty)
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(8),
+                      child: Image.network(p.imageUrls[0], height: 100, width: double.infinity, fit: BoxFit.cover, errorBuilder: (_, __, ___) => Container(height: 100, color: Colors.grey.shade200, child: const Icon(Icons.image_not_supported_outlined, color: Colors.grey))),
+                    )
+                  else
+                    Container(height: 100, width: double.infinity, decoration: BoxDecoration(color: Colors.grey.shade200, borderRadius: BorderRadius.circular(8)), child: const Icon(Icons.image_outlined, color: Colors.grey)),
+                  const SizedBox(height: 8),
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                     decoration: BoxDecoration(color: AppColors.primary.withOpacity(0.1), borderRadius: BorderRadius.circular(8)),
@@ -470,7 +481,7 @@ class _KontraktorHomeTabState extends State<KontraktorHomeTab> {
     }
     final list = bids.take(5).toList();
     return SizedBox(
-      height: 180,
+      height: 300,
       child: ListView.builder(
         scrollDirection: Axis.horizontal,
         itemCount: list.length,
@@ -491,18 +502,32 @@ class _KontraktorHomeTabState extends State<KontraktorHomeTab> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                    decoration: BoxDecoration(color: Colors.orange.withOpacity(0.1), borderRadius: BorderRadius.circular(8)),
-                    child: const Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(Icons.access_time_rounded, size: 11, color: Colors.orange),
-                        SizedBox(width: 4),
-                        Text('Menunggu', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.orange)),
-                      ],
-                    ),
-                  ),
+                  if (p?.imageUrls.isNotEmpty == true)
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(8),
+                      child: Image.network(p!.imageUrls[0], height: 100, width: double.infinity, fit: BoxFit.cover, errorBuilder: (_, __, ___) => Container(height: 100, color: Colors.grey.shade200, child: const Icon(Icons.image_not_supported_outlined, color: Colors.grey))),
+                    )
+                  else
+                    Container(height: 100, width: double.infinity, decoration: BoxDecoration(color: Colors.grey.shade200, borderRadius: BorderRadius.circular(8)), child: const Icon(Icons.image_outlined, color: Colors.grey)),
+                  const SizedBox(height: 8),
+                  Builder(builder: (context) {
+                    final isRejected = b.status == 'rejected' || (b.status == 'pending' && b.createdAt != null && DateTime.now().difference(b.createdAt!).inDays > 7);
+                    final statusLabel = isRejected ? 'Diabaikan' : 'Menunggu';
+                    final statusColor = isRejected ? Colors.red : Colors.orange;
+                    final statusIcon = isRejected ? Icons.cancel_outlined : Icons.access_time_rounded;
+                    return Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                      decoration: BoxDecoration(color: statusColor.withOpacity(0.1), borderRadius: BorderRadius.circular(8)),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(statusIcon, size: 11, color: statusColor),
+                          const SizedBox(width: 4),
+                          Text(statusLabel, style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: statusColor)),
+                        ],
+                      ),
+                    );
+                  }),
                   const SizedBox(height: 8),
                   Text(
                     p?.title ?? 'Proyek tidak tersedia',
@@ -550,6 +575,14 @@ class _KontraktorHomeTabState extends State<KontraktorHomeTab> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                if (p.imageUrls.isNotEmpty)
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(12),
+                    child: Image.network(p.imageUrls[0], height: 120, width: double.infinity, fit: BoxFit.cover, errorBuilder: (_, __, ___) => Container(height: 120, color: Colors.grey.shade200, child: const Icon(Icons.image_not_supported_outlined, color: Colors.grey))),
+                  )
+                else
+                  Container(height: 120, width: double.infinity, decoration: BoxDecoration(color: Colors.grey.shade200, borderRadius: BorderRadius.circular(12)), child: const Icon(Icons.image_outlined, color: Colors.grey)),
+                const SizedBox(height: 12),
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [

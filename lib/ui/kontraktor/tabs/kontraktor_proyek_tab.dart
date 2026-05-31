@@ -138,7 +138,7 @@ class _KontraktorProyekTabState extends State<KontraktorProyekTab> {
                             padding: const EdgeInsets.only(bottom: 14),
                             child: _isBidFilter
                                 ? _buildBidCard(filteredBids[i])
-                                : _buildProjectCard(filteredProjects[i]),
+                                : _buildProjectCard(filteredProjects[i], hasBid: allBids.any((b) => b.projectId == filteredProjects[i].id)),
                           ),
                           childCount: itemCount,
                         ),
@@ -158,34 +158,12 @@ class _KontraktorProyekTabState extends State<KontraktorProyekTab> {
   Widget _buildHeader(int totalCount) {
     final title = _isBidFilter ? _selectedFilter : 'Proyek Tersedia';
     final subtitle = _isBidFilter ? '$totalCount penawaran' : '$totalCount proyek aktif';
-    return Row(
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(title, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
-              const SizedBox(height: 2),
-              Text(subtitle, style: const TextStyle(fontSize: 12, color: Colors.black54)),
-            ],
-          ),
-        ),
-        GestureDetector(
-          onTap: () {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('Filter lanjutan akan segera hadir')),
-            );
-          },
-          child: Container(
-            padding: const EdgeInsets.all(10),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: Colors.grey.shade200),
-            ),
-            child: const Icon(Icons.tune_rounded, size: 20, color: Colors.black54),
-          ),
-        ),
+        Text(title, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
+        const SizedBox(height: 2),
+        Text(subtitle, style: const TextStyle(fontSize: 12, color: Colors.black54)),
       ],
     );
   }
@@ -291,7 +269,7 @@ class _KontraktorProyekTabState extends State<KontraktorProyekTab> {
 
   // --- PROJECT CARD ---
 
-  Widget _buildProjectCard(ProjectModel p) {
+  Widget _buildProjectCard(ProjectModel p, {bool hasBid = false}) {
     return GestureDetector(
       onTap: () => _openDetail(p),
       child: Container(
@@ -304,6 +282,30 @@ class _KontraktorProyekTabState extends State<KontraktorProyekTab> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            // Gambar Proyek
+            ClipRRect(
+              borderRadius: BorderRadius.circular(12),
+              child: p.imageUrls.isNotEmpty
+                  ? Image.network(
+                      p.imageUrls[0],
+                      height: 140,
+                      width: double.infinity,
+                      fit: BoxFit.cover,
+                      errorBuilder: (ctx, err, stack) => Container(
+                        height: 140,
+                        width: double.infinity,
+                        color: Colors.grey.shade200,
+                        child: const Icon(Icons.image_not_supported_outlined, color: Colors.grey),
+                      ),
+                    )
+                  : Container(
+                      height: 140,
+                      width: double.infinity,
+                      color: Colors.grey.shade200,
+                      child: const Icon(Icons.image_outlined, color: Colors.grey),
+                    ),
+            ),
+            const SizedBox(height: 12),
             // Top row: budget + time
             Row(
               children: [
@@ -391,16 +393,16 @@ class _KontraktorProyekTabState extends State<KontraktorProyekTab> {
                 ),
                 const SizedBox(width: 8),
                 ElevatedButton(
-                  onPressed: () => _openDetail(p),
+                  onPressed: () => _openDetail(p), // Selalu bisa diklik untuk melihat detail/membatalkan
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: AppColors.primary,
+                    backgroundColor: hasBid ? Colors.grey.shade400 : AppColors.primary,
                     elevation: 0,
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
                     padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                   ),
-                  child: const Text(
-                    'Ajukan Penawaran',
-                    style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w600),
+                  child: Text(
+                    hasBid ? 'Sudah Menawar' : 'Ajukan Penawaran',
+                    style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w600),
                   ),
                 ),
               ],
@@ -416,8 +418,10 @@ class _KontraktorProyekTabState extends State<KontraktorProyekTab> {
   Widget _buildBidCard(BidModel bid) {
     final p = bid.project;
     final isAccepted = bid.status == 'accepted';
-    final statusLabel = isAccepted ? 'Diterima' : 'Menunggu';
-    final statusColor = isAccepted ? Colors.green : Colors.orange;
+    final isRejected = bid.status == 'rejected' || (bid.status == 'pending' && bid.createdAt != null && DateTime.now().difference(bid.createdAt!).inDays > 7);
+    final statusLabel = isAccepted ? 'Diterima' : (isRejected ? 'Diabaikan' : 'Menunggu');
+    final statusColor = isAccepted ? Colors.green : (isRejected ? Colors.red : Colors.orange);
+    final statusIcon = isAccepted ? Icons.check_circle_rounded : (isRejected ? Icons.cancel_outlined : Icons.access_time_rounded);
 
     return GestureDetector(
       onTap: p == null ? null : () => _openDetail(p),
@@ -431,6 +435,31 @@ class _KontraktorProyekTabState extends State<KontraktorProyekTab> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            // Gambar Proyek
+            if (p != null)
+              ClipRRect(
+                borderRadius: BorderRadius.circular(12),
+                child: p.imageUrls.isNotEmpty
+                    ? Image.network(
+                        p.imageUrls[0],
+                        height: 140,
+                        width: double.infinity,
+                        fit: BoxFit.cover,
+                        errorBuilder: (ctx, err, stack) => Container(
+                          height: 140,
+                          width: double.infinity,
+                          color: Colors.grey.shade200,
+                          child: const Icon(Icons.image_not_supported_outlined, color: Colors.grey),
+                        ),
+                      )
+                    : Container(
+                        height: 140,
+                        width: double.infinity,
+                        color: Colors.grey.shade200,
+                        child: const Icon(Icons.image_outlined, color: Colors.grey),
+                      ),
+              ),
+            if (p != null) const SizedBox(height: 12),
             Row(
               children: [
                 Container(
@@ -439,7 +468,7 @@ class _KontraktorProyekTabState extends State<KontraktorProyekTab> {
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Icon(isAccepted ? Icons.check_circle_rounded : Icons.access_time_rounded, size: 12, color: statusColor),
+                      Icon(statusIcon, size: 12, color: statusColor),
                       const SizedBox(width: 4),
                       Text(statusLabel, style: TextStyle(color: statusColor, fontSize: 11, fontWeight: FontWeight.bold)),
                     ],

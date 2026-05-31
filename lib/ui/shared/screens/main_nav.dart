@@ -35,7 +35,13 @@ class _MainNavScreenState extends State<MainNavScreen> {
     // 1. CEK ROLE USER YANG LAGI LOGIN
     final user = Supabase.instance.client.auth.currentUser;
     // Ambil role dari metadata, default ke 'client' kalau kosong
-    final role = user?.userMetadata?['role'] ?? 'client'; 
+    final role = user?.userMetadata?['role'] ?? 'client';
+    // DEBUG: lihat nilai role yang dibaca
+    debugPrint('=== DEBUG MainNav ===');
+    debugPrint('User ID: ${user?.id}');
+    debugPrint('userMetadata: ${user?.userMetadata}');
+    debugPrint('Role terbaca: $role');
+    debugPrint('====================');
 
     // Cek apakah user ini vendor/kontraktor/arsitek
     final isVendor = role == 'vendor' || role == 'kontraktor';

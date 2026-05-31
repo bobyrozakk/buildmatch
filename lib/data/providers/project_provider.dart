@@ -237,15 +237,17 @@ class ProjectProvider extends ChangeNotifier {
     try {
       final vendorId = _supabase.auth.currentUser?.id;
       if (vendorId == null) return [];
+      // Ambil semua bid yang accepted milik vendor ini, lalu ambil data proyeknya
       final response = await _supabase
-          .from('projects')
-          .select('*, profiles:client_id(name)')
-          .neq('status', 'open')
-          .neq('status', 'draft')
-          .order('created_at', ascending: false);
-      return List<Map<String, dynamic>>.from(
-        response,
-      ).map((json) => ProjectModel.fromJson(json)).toList();
+          .from('bids')
+          .select('projects:project_id(*, profiles:client_id(name))')
+          .eq('vendor_id', vendorId)
+          .eq('status', 'accepted');
+      final list = List<Map<String, dynamic>>.from(response);
+      return list
+          .where((e) => e['projects'] is Map)
+          .map((e) => ProjectModel.fromJson(Map<String, dynamic>.from(e['projects'] as Map)))
+          .toList();
     } catch (e) {
       debugPrint("Error fetch vendor active projects: $e");
       return [];
@@ -310,6 +312,25 @@ class ProjectProvider extends ChangeNotifier {
     } catch (e) {
       debugPrint("Error check vendor bid: $e");
       return false;
+    }
+  }
+
+  Future<BidModel?> getVendorBidOnProject(String projectId) async {
+    try {
+      final vendorId = _supabase.auth.currentUser?.id;
+      if (vendorId == null || projectId.isEmpty) return null;
+      final response = await _supabase
+          .from('bids')
+          .select('*, projects:project_id(*, profiles:client_id(name))')
+          .eq('vendor_id', vendorId)
+          .eq('project_id', projectId)
+          .limit(1)
+          .maybeSingle();
+      if (response == null) return null;
+      return BidModel.fromJson(response);
+    } catch (e) {
+      debugPrint("Error get vendor bid: $e");
+      return null;
     }
   }
 
@@ -495,6 +516,25 @@ class ProjectProvider extends ChangeNotifier {
       return true;
     } catch (e) {
       debugPrint("Error reject bid: $e");
+      _isLoading = false;
+      notifyListeners();
+      return false;
+    }
+  }
+
+  // ─────────────────────────────────────────────
+  // HAPUS BID (KONTRAKTOR)
+  // ─────────────────────────────────────────────
+  Future<bool> deleteBid({required String bidId}) async {
+    _isLoading = true;
+    notifyListeners();
+    try {
+      await _supabase.from('bids').delete().eq('id', bidId);
+      _isLoading = false;
+      notifyListeners();
+      return true;
+    } catch (e) {
+      debugPrint("Error delete bid: $e");
       _isLoading = false;
       notifyListeners();
       return false;

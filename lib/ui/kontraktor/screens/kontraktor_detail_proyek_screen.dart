@@ -6,7 +6,9 @@ import 'package:url_launcher/url_launcher.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:buildmatch/data/providers/project_provider.dart';
 import 'package:buildmatch/data/models/project_model.dart';
+import 'package:buildmatch/data/models/bid_model.dart';
 import '../../shared/widgets/glass_card.dart';
+import '../../shared/widgets/animated_success_dialog.dart';
 import '../../../core/constants/colors.dart';
 import '../../../core/utils/formatters.dart';
 
@@ -50,6 +52,7 @@ class _KontraktorDetailProyekScreenState
   bool _checkingBid = true;
   int _bidCount = 0;
   bool _specExpanded = false;
+  BidModel? _myBid;
 
   // ── State untuk fitur baru ──
   int _estimationMonths = 3;
@@ -67,15 +70,37 @@ class _KontraktorDetailProyekScreenState
         Provider.of<ProjectProvider>(context, listen: false);
     final projectId = widget.project.id ?? '';
     final results = await Future.wait([
-      provider.hasVendorBidOnProject(projectId),
+      provider.getVendorBidOnProject(projectId),
       provider.fetchProjectBidCount(projectId),
     ]);
     if (!mounted) return;
+    
+    final bid = results[0] as BidModel?;
     setState(() {
-      _alreadyBid = results[0] as bool;
+      _myBid = bid;
+      _alreadyBid = bid != null;
       _bidCount = results[1] as int;
       _checkingBid = false;
+
+      if (bid != null) {
+        final digits = bid.price.toInt().toString();
+        final buffer = StringBuffer();
+        for (int i = 0; i < digits.length; i++) {
+          if (i > 0 && (digits.length - i) % 3 == 0) buffer.write('.');
+          buffer.write(digits[i]);
+        }
+        _priceController.text = buffer.toString();
+        _messageController.text = bid.message ?? '';
+        _estimationMonths = bid.estimationMonths ?? 3;
+      }
     });
+  }
+
+  bool get _isCancelable {
+    if (_myBid == null) return false;
+    return _myBid!.status == 'pending' && 
+           _myBid!.createdAt != null && 
+           DateTime.now().difference(_myBid!.createdAt!).inHours < 24;
   }
 
   @override
@@ -124,14 +149,108 @@ class _KontraktorDetailProyekScreenState
     if (!mounted) return;
     if (success) {
       setState(() => _alreadyBid = true);
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-          content: Text('Penawaran (Bid) berhasil dikirim!'),
-          backgroundColor: Colors.green));
-      Navigator.pop(context);
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => const AnimatedSuccessDialog(
+          message: 'Penawaran Berhasil Dikirim',
+        ),
+      );
+      Future.delayed(const Duration(milliseconds: 1800), () {
+        if (mounted) Navigator.pop(context);
+      });
     } else {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
           content: Text('Gagal mengirim penawaran.'),
           backgroundColor: Colors.red));
+    }
+  }
+
+  Future<void> _cancelBid() async {
+    final bidId = _myBid?.id;
+    if (bidId == null) return;
+
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: Colors.white,
+        surfaceTintColor: Colors.transparent,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+        title: const Row(
+          children: [
+            Icon(Icons.info_outline_rounded, color: Colors.orange, size: 22),
+            SizedBox(width: 10),
+            Text('Batalkan Penawaran', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 17, color: Colors.black87)),
+          ],
+        ),
+        content: const Text(
+          'Apakah Anda yakin ingin membatalkan penawaran ini?\nAnda masih bisa mengajukan penawaran baru setelah dibatalkan.',
+          style: TextStyle(color: Colors.black54, height: 1.5, fontSize: 14),
+        ),
+        actionsPadding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            style: TextButton.styleFrom(
+              foregroundColor: Colors.black54,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            ),
+            child: const Text('Tutup', style: TextStyle(fontWeight: FontWeight.w600)),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.orange.shade50,
+              foregroundColor: Colors.orange.shade800,
+              elevation: 0,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+            ),
+            child: const Text('Ya, Batalkan', style: TextStyle(fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm != true || !mounted) return;
+
+    setState(() {
+      _checkingBid = true;
+    });
+
+    final provider = Provider.of<ProjectProvider>(context, listen: false);
+    final success = await provider.deleteBid(bidId: bidId);
+
+    if (!mounted) return;
+
+    if (success) {
+      setState(() {
+        _myBid = null;
+        _alreadyBid = false;
+        _priceController.clear();
+        _messageController.clear();
+        _rabFile = null;
+        _rabFileName = null;
+        _checkingBid = false;
+        if (_bidCount > 0) _bidCount--;
+      });
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => const AnimatedSuccessDialog(
+          message: 'Penawaran Berhasil Dibatalkan',
+        ),
+      );
+    } else {
+      setState(() {
+        _checkingBid = false;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Gagal membatalkan penawaran.'),
+          backgroundColor: Colors.red,
+        ),
+      );
     }
   }
 
@@ -581,14 +700,14 @@ class _KontraktorDetailProyekScreenState
                       ],
               ),
               child: ElevatedButton.icon(
-                onPressed: (isLoading ||
-                        _alreadyBid ||
-                        _checkingBid)
+                onPressed: isLoading || _checkingBid
                     ? null
-                    : _submitBid,
+                    : (_alreadyBid
+                        ? (_isCancelable ? _cancelBid : null)
+                        : _submitBid),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: _alreadyBid
-                      ? Colors.grey.shade400
+                      ? (_isCancelable ? Colors.orange : Colors.grey.shade400)
                       : AppColors.primary,
                   disabledBackgroundColor: _alreadyBid
                       ? Colors.grey.shade400
@@ -607,14 +726,14 @@ class _KontraktorDetailProyekScreenState
                       )
                     : Icon(
                         _alreadyBid
-                            ? Icons.check_circle_rounded
+                            ? (_isCancelable ? Icons.cancel_outlined : Icons.check_circle_rounded)
                             : Icons.send_rounded,
                         color: Colors.white,
                         size: 20,
                       ),
                 label: Text(
                   _alreadyBid
-                      ? 'Anda Sudah Menawarkan'
+                      ? (_isCancelable ? 'Batalkan Penawaran' : 'Sudah Menawar')
                       : (isLoading
                           ? 'Mengirim...'
                           : 'Kirim Penawaran ke Klien'),

@@ -44,23 +44,65 @@ class _KontraktorProfileTabState
   }
 
   Future<void> _logout() async {
-    final provider =
-        Provider.of<AuthProvider>(
-      context,
-      listen: false,
-    );
-
-    await provider.logout();
-
-    if (!mounted) return;
-
-    Navigator.pushAndRemoveUntil(
-      context,
-      MaterialPageRoute(
-        builder: (_) => const LoginScreen(),
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        backgroundColor: const Color(0xFFFCF8F5),
+        title: const Row(
+          children: [
+            Icon(Icons.logout_rounded, color: AppColors.primary, size: 22),
+            SizedBox(width: 10),
+            Text(
+              'Keluar Akun',
+              style: TextStyle(
+                fontWeight: FontWeight.bold,
+                color: AppColors.primary,
+                fontSize: 16,
+              ),
+            ),
+          ],
+        ),
+        content: const Text(
+          'Apakah kamu yakin ingin keluar dari akun ini?',
+          style: TextStyle(color: Colors.black54, fontSize: 13),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Batal', style: TextStyle(color: Colors.black54)),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.primary,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+            ),
+            child: const Text('Ya, Keluar', style: TextStyle(color: Colors.white)),
+          ),
+        ],
       ),
-      (_) => false,
     );
+
+    if (confirm == true && mounted) {
+      final provider =
+          Provider.of<AuthProvider>(
+        context,
+        listen: false,
+      );
+
+      await provider.logout();
+
+      if (!mounted) return;
+
+      Navigator.pushAndRemoveUntil(
+        context,
+        MaterialPageRoute(
+          builder: (_) => const LoginScreen(),
+        ),
+        (_) => false,
+      );
+    }
   }
 
   @override
