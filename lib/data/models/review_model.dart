@@ -17,13 +17,12 @@ class ReviewModel {
     this.comment,
     this.createdAt,
   });
-
   factory ReviewModel.fromJson(Map<String, dynamic> json) {
     return ReviewModel(
       id: json['id'] as String?,
       projectId: json['project_id'] as String? ?? '',
       vendorId: json['vendor_id'] as String? ?? '',
-      clientId: json['client_id'] as String? ?? '',
+      clientId: (json['client_id'] ?? json['user_id']) as String? ?? '',
       rating: json['rating'] as int? ?? 0,
       comment: json['comment'] as String?,
       createdAt: json['created_at'] != null
@@ -37,9 +36,8 @@ class ReviewModel {
       if (id != null) 'id': id,
       'project_id': projectId,
       'vendor_id': vendorId,
-      'client_id': clientId,
+      'user_id': clientId,
       'rating': rating,
       if (comment != null) 'comment': comment,
     };
-  }
-}
+  }}

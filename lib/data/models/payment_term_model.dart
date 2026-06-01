@@ -5,7 +5,8 @@
 /// - 'waiting_confirmation' → Client klik "Sudah Membayar", kontraktor belum konfirmasi
 /// - 'confirmed'            → Kontraktor konfirmasi pembayaran diterima, progres bisa dimulai
 /// - 'progress_submitted'   → Kontraktor submit laporan progres, client belum review
-/// - 'completed'            → Client sudah meninjau laporan progres, termin selesai
+/// - 'revision_requested'   → Client meminta perbaikan, kontraktor harus upload ulang
+/// - 'completed'            → Client sudah menyetujui laporan progres, termin selesai
 class PaymentTermModel {
   final String? id;
   final String projectId;
@@ -21,7 +22,7 @@ class PaymentTermModel {
   /// Nominal uang yang harus dibayar = bid.price * percentage / 100
   final double amount;
 
-  /// 'pending' | 'waiting_confirmation' | 'confirmed' | 'progress_submitted' | 'completed'
+  /// 'pending' | 'waiting_confirmation' | 'confirmed' | 'progress_submitted' | 'revision_requested' | 'completed'
   final String status;
 
   /// Urutan termin (1, 2, 3, ...)
@@ -44,12 +45,19 @@ class PaymentTermModel {
 
   final DateTime? createdAt;
 
-  // ── Field Baru untuk Pelaporan Progres ──
+  // ── Field Pelaporan Progres ──
   final String? progressDescription;
   final List<String>? progressImages;
   final String? progressPdfUrl;
   final DateTime? progressSubmittedAt;
   final DateTime? progressReviewedAt;
+
+  // ── Field Revisi (baru) ──
+  /// Catatan revisi dari client ketika mengajukan perubahan
+  final String? revisionNotes;
+
+  /// Waktu client mengajukan perubahan
+  final DateTime? revisionRequestedAt;
 
   const PaymentTermModel({
     this.id,
@@ -72,13 +80,14 @@ class PaymentTermModel {
     this.progressPdfUrl,
     this.progressSubmittedAt,
     this.progressReviewedAt,
+    this.revisionNotes,
+    this.revisionRequestedAt,
   });
 
   // ──────────────────────────────────────────
   // fromJson: dari response Supabase
   // ──────────────────────────────────────────
   factory PaymentTermModel.fromJson(Map<String, dynamic> json) {
-    // Parse list progress_images
     List<String>? imagesList;
     if (json['progress_images'] != null) {
       imagesList = List<String>.from(json['progress_images'] as List);
@@ -115,6 +124,10 @@ class PaymentTermModel {
       progressReviewedAt: json['progress_reviewed_at'] != null
           ? DateTime.tryParse(json['progress_reviewed_at'] as String)
           : null,
+      revisionNotes: json['revision_notes'] as String?,
+      revisionRequestedAt: json['revision_requested_at'] != null
+          ? DateTime.tryParse(json['revision_requested_at'] as String)
+          : null,
     );
   }
 
@@ -143,6 +156,9 @@ class PaymentTermModel {
         'progress_submitted_at': progressSubmittedAt!.toIso8601String(),
       if (progressReviewedAt != null)
         'progress_reviewed_at': progressReviewedAt!.toIso8601String(),
+      if (revisionNotes != null) 'revision_notes': revisionNotes,
+      if (revisionRequestedAt != null)
+        'revision_requested_at': revisionRequestedAt!.toIso8601String(),
     };
   }
 
@@ -167,6 +183,8 @@ class PaymentTermModel {
     String? progressPdfUrl,
     DateTime? progressSubmittedAt,
     DateTime? progressReviewedAt,
+    String? revisionNotes,
+    DateTime? revisionRequestedAt,
   }) {
     return PaymentTermModel(
       id: id ?? this.id,
@@ -189,6 +207,8 @@ class PaymentTermModel {
       progressPdfUrl: progressPdfUrl ?? this.progressPdfUrl,
       progressSubmittedAt: progressSubmittedAt ?? this.progressSubmittedAt,
       progressReviewedAt: progressReviewedAt ?? this.progressReviewedAt,
+      revisionNotes: revisionNotes ?? this.revisionNotes,
+      revisionRequestedAt: revisionRequestedAt ?? this.revisionRequestedAt,
     );
   }
 
@@ -208,10 +228,16 @@ class PaymentTermModel {
   /// Kontraktor sudah kirim laporan progres, menunggu tinjauan client
   bool get isProgressSubmitted => status == 'progress_submitted';
 
-  /// Client sudah meninjau laporan progres → termin selesai
+  /// Client meminta perbaikan, kontraktor harus upload ulang
+  bool get isRevisionRequested => status == 'revision_requested';
+
+  /// Client sudah menyetujui laporan progres → termin selesai
   bool get isCompleted => status == 'completed';
 
   /// Helper: apakah pembayaran sudah diterima (confirmed atau lebih lanjut)
   bool get isPaymentReceived =>
-      isConfirmed || isProgressSubmitted || isCompleted;
+      isConfirmed ||
+      isProgressSubmitted ||
+      isRevisionRequested ||
+      isCompleted;
 }

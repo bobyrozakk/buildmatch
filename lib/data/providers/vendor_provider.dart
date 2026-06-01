@@ -265,14 +265,10 @@ class VendorProvider extends ChangeNotifier {
 
       return true;
     } catch (e) {
-      debugPrint(
-        'Error add portfolio: $e',
-      );
-
+      debugPrint('Error add portfolio: $e');
       _isLoading = false;
       notifyListeners();
-
-      return false;
+      rethrow;
     }
   }
 
@@ -436,14 +432,10 @@ class VendorProvider extends ChangeNotifier {
 
       return true;
     } catch (e) {
-      debugPrint(
-        'Error add certification: $e',
-      );
-
+      debugPrint('Error add certification: $e');
       _isLoading = false;
       notifyListeners();
-
-      return false;
+      rethrow;
     }
   }
 

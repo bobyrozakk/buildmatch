@@ -128,12 +128,14 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
   }
 
   void _openBidDetail(BidModel bid) {
+    final isInProgress = _project.status == 'in_progress';
     Navigator.push(
       context,
       MaterialPageRoute(
         builder: (_) => BidDetailScreen(
           bid: bid,
           projectBudget: _project.budget,
+          isProjectInProgress: isInProgress,
           onAccepted: () {
             setState(() {
               _project = _project.copyWith(status: 'in_progress');
@@ -435,7 +437,6 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
   Widget _buildBidCard(BidModel bid, int rank) {
     final isAccepted = bid.status == 'accepted';
     final isRejected = bid.status == 'rejected';
-    final isPending = bid.status == 'pending';
 
     Color statusColor = Colors.orange;
     String statusLabel = 'Menunggu';
@@ -571,14 +572,14 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
             width: double.infinity,
             child: OutlinedButton.icon(
               onPressed: () => _openBidDetail(bid),
-              icon: Icon(
-                isPending ? Icons.visibility_rounded : Icons.info_outline_rounded,
+              icon: const Icon(
+                Icons.info_outline_rounded,
                 size: 16,
                 color: AppColors.primary,
               ),
-              label: Text(
-                isPending ? 'Tinjau & Putuskan' : 'Lihat Detail',
-                style: const TextStyle(
+              label: const Text(
+                'Lihat Detail',
+                style: TextStyle(
                     fontWeight: FontWeight.bold, color: AppColors.primary),
               ),
               style: OutlinedButton.styleFrom(

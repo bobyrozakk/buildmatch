@@ -5,6 +5,8 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/project_model.dart';
 import '../models/bid_model.dart';
 import '../models/payment_term_model.dart';
+import '../models/review_model.dart';
+
 
 /// Provider khusus untuk CRUD proyek dan penawaran (bid).
 /// Vendor-related functions sudah dipindah ke VendorProvider.
@@ -398,7 +400,7 @@ class ProjectProvider extends ChangeNotifier {
       final bidsResponse = await _supabase
           .from('bids')
           .select(
-            '*, profiles:vendor_id(name), projects:project_id(title, budget, image_urls)',
+            '*, profiles:vendor_id(name), projects:project_id(id, title, description, budget, land_size, building_size, floors, bedrooms, bathrooms, house_style, location, latitude, longitude, image_urls, reference_pdf_url, status, progress_percent, created_at, client_id)',
           )
           .inFilter('project_id', projectIds)
           .eq('status', 'pending')
@@ -806,6 +808,15 @@ class ProjectProvider extends ChangeNotifier {
     _isLoading = true;
     notifyListeners();
     try {
+      // 1. Ambil project_id dari payment_term
+      final termData = await _supabase
+          .from('payment_terms')
+          .select('project_id')
+          .eq('id', termId)
+          .single();
+      final projectId = termData['project_id'] as String;
+
+      // 2. Update status termin tersebut menjadi 'completed'
       await _supabase
           .from('payment_terms')
           .update({
@@ -813,6 +824,30 @@ class ProjectProvider extends ChangeNotifier {
             'progress_reviewed_at': DateTime.now().toIso8601String(),
           })
           .eq('id', termId);
+
+      // 3. Ambil semua termin proyek untuk menghitung akumulasi persentase yang selesai (completed)
+      final termsList = await _supabase
+          .from('payment_terms')
+          .select('status, percentage')
+          .eq('project_id', projectId);
+
+      double completedPct = 0.0;
+      for (final t in termsList) {
+        final status = t['status'] as String?;
+        final percentage = (t['percentage'] as num?)?.toDouble() ?? 0.0;
+        if (status == 'completed') {
+          completedPct += percentage;
+        }
+      }
+
+      // 4. Update progress_percent pada proyek di database
+      await _supabase
+          .from('projects')
+          .update({
+            'progress_percent': completedPct.round(),
+          })
+          .eq('id', projectId);
+
       _isLoading = false;
       notifyListeners();
       return true;
@@ -823,6 +858,161 @@ class ProjectProvider extends ChangeNotifier {
       rethrow;
     }
   }
+
+  /// Client mengajukan perubahan / menolak laporan progres kontraktor.
+  /// Status termin berubah ke 'revision_requested' agar kontraktor bisa upload ulang.
+  Future<bool> clientRequestRevision({
+    required String termId,
+    required String revisionNotes,
+  }) async {
+    _isLoading = true;
+    notifyListeners();
+    try {
+      await _supabase
+          .from('payment_terms')
+          .update({
+            'status': 'revision_requested',
+            'revision_notes': revisionNotes,
+            'revision_requested_at': DateTime.now().toIso8601String(),
+          })
+          .eq('id', termId);
+      _isLoading = false;
+      notifyListeners();
+      return true;
+    } catch (e) {
+      debugPrint('Error client request revision: $e');
+      _isLoading = false;
+      notifyListeners();
+      rethrow;
+    }
+  }
+
+  /// Mengambil detail satu proyek berdasarkan ID
+  Future<ProjectModel?> fetchProjectById(String projectId) async {
+    try {
+      final response = await _supabase
+          .from('projects')
+          .select('*, profiles:client_id(name)')
+          .eq('id', projectId)
+          .single();
+      return ProjectModel.fromJson(response);
+    } catch (e) {
+      debugPrint("Error fetch project by id: $e");
+      return null;
+    }
+  }
+
+  /// Mengambil daftar proyek milik client beserta nama kontraktornya (jika ada accepted bid)
+  Future<List<Map<String, dynamic>>> fetchClientProjectsWithContractor() async {
+    try {
+      final userId = _supabase.auth.currentUser?.id;
+      if (userId == null) return [];
+      
+      final projectsResponse = await _supabase
+          .from('projects')
+          .select('*, bids(vendor_id, status, profiles:vendor_id(name, company_name))')
+          .eq('client_id', userId)
+          .neq('status', 'draft')
+          .order('created_at', ascending: false);
+          
+      final projects = List<Map<String, dynamic>>.from(projectsResponse);
+      
+      List<Map<String, dynamic>> result = [];
+      for (final p in projects) {
+        String contractorName = 'Belum ada kontraktor';
+        final bids = p['bids'] as List?;
+        if (bids != null) {
+          final acceptedBid = bids.firstWhere(
+            (b) => b['status'] == 'accepted',
+            orElse: () => null,
+          );
+          if (acceptedBid != null) {
+            final profiles = acceptedBid['profiles'] as Map?;
+            if (profiles != null) {
+              contractorName = profiles['company_name'] as String? ?? 
+                               profiles['name'] as String? ?? 
+                               'Kontraktor';
+            }
+          }
+        }
+        result.add({
+          'project': ProjectModel.fromJson(p),
+          'contractorName': contractorName,
+        });
+      }
+      return result;
+    } catch (e) {
+      debugPrint("Error fetch client projects with contractor: $e");
+      return [];
+    }
+  }
+
+  /// Kontraktor menandai proyek selesai (mengakhiri kontrak kerja)
+  Future<bool> completeProject(String projectId) async {
+    _isLoading = true;
+    notifyListeners();
+    try {
+      await _supabase
+          .from('projects')
+          .update({'status': 'completed'})
+          .eq('id', projectId);
+      _isLoading = false;
+      notifyListeners();
+      return true;
+    } catch (e) {
+      debugPrint("Error complete project: $e");
+      _isLoading = false;
+      notifyListeners();
+      return false;
+    }
+  }
+
+  /// Mengambil rating/review yang diberikan klien untuk proyek ini
+  Future<ReviewModel?> fetchProjectReview(String projectId) async {
+    try {
+      final response = await _supabase
+          .from('reviews')
+          .select('*')
+          .eq('project_id', projectId)
+          .maybeSingle();
+      if (response == null) return null;
+      return ReviewModel.fromJson(response);
+    } catch (e) {
+      debugPrint("Error fetch project review: $e");
+      return null;
+    }
+  }
+
+  /// Menambahkan review/rating baru dari klien
+  Future<bool> addReview({
+    required String projectId,
+    required String vendorId,
+    required int rating,
+    required String comment,
+  }) async {
+    _isLoading = true;
+    notifyListeners();
+    try {
+      final clientId = _supabase.auth.currentUser?.id;
+      if (clientId == null) throw Exception('Client belum login!');
+      await _supabase.from('reviews').insert({
+        'project_id': projectId,
+        'vendor_id': vendorId,
+        'user_id': clientId,
+        'rating': rating,
+        'comment': comment.trim(),
+      });
+      _isLoading = false;
+      notifyListeners();
+      return true;
+    } catch (e) {
+      debugPrint("Error add review: $e");
+      _isLoading = false;
+      notifyListeners();
+      return false;
+    }
+  }
+
 
   // ─────────────────────────────────────────────
   // HELPER: GENERATE NOMOR VIRTUAL ACCOUNT ACAK

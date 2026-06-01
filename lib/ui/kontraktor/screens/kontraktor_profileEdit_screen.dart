@@ -336,61 +336,64 @@ class _TabPortoFormState
       });
     }
   }
-
   Future<void> _save() async {
-
-    if (_titleCtrl.text.isEmpty ||
-        _imageFile == null) {
-
-      ScaffoldMessenger.of(context)
-          .showSnackBar(
+    if (_titleCtrl.text.isEmpty || _imageFile == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text(
-            'Lengkapi data terlebih dahulu',
-          ),
+          content: Text('Lengkapi data terlebih dahulu'),
         ),
       );
-
       return;
     }
 
-    final provider =
-        Provider.of<VendorProvider>(
+    final provider = Provider.of<VendorProvider>(
       context,
       listen: false,
     );
 
-    final success =
-        await provider.addPortfolio(
-      title: _titleCtrl.text.trim(),
-      year: _yearCtrl.text.trim(),
-      imageFile: _imageFile,
-    );
-
-    if (!mounted) return;
-
-    if (success) {
-
-      _titleCtrl.clear();
-      _yearCtrl.clear();
-
-      setState(() {
-        _imageFile = null;
-        _load();
-      });
-
-      ScaffoldMessenger.of(context)
-          .showSnackBar(
-        const SnackBar(
-          backgroundColor: Colors.green,
-          content: Text(
-            'Portofolio berhasil ditambah',
-          ),
-        ),
+    try {
+      final success = await provider.addPortfolio(
+        title: _titleCtrl.text.trim(),
+        year: _yearCtrl.text.trim(),
+        imageFile: _imageFile,
       );
+
+      if (!mounted) return;
+
+      if (success) {
+        _titleCtrl.clear();
+        _yearCtrl.clear();
+
+        setState(() {
+          _imageFile = null;
+          _load();
+        });
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            backgroundColor: Colors.green,
+            content: Text('Portofolio berhasil ditambah'),
+          ),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            backgroundColor: Colors.red,
+            content: Text('Gagal menambah portofolio. Pastikan storage "portfolios" terkonfigurasi.'),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            backgroundColor: Colors.red,
+            content: Text('Gagal menyimpan: $e'),
+          ),
+        );
+      }
     }
   }
-
   @override
   Widget build(BuildContext context) {
 
@@ -696,54 +699,52 @@ class _TabSertifFormState
   }
 
   Future<void> _save() async {
-
-    if (_titleCtrl.text.isEmpty ||
-        _issuerCtrl.text.isEmpty) {
-
-      ScaffoldMessenger.of(context)
-          .showSnackBar(
-        const SnackBar(
-          content: Text(
-            'Lengkapi data terlebih dahulu',
-          ),
-        ),
+    if (_titleCtrl.text.isEmpty || _issuerCtrl.text.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Lengkapi data terlebih dahulu')),
       );
-
       return;
     }
 
-    final provider =
-        Provider.of<VendorProvider>(
-      context,
-      listen: false,
-    );
+    final provider = Provider.of<VendorProvider>(context, listen: false);
 
-    final success =
-        await provider.addCertification(
-      title: _titleCtrl.text.trim(),
-      issuer: _issuerCtrl.text.trim(),
-    );
-
-    if (!mounted) return;
-
-    if (success) {
-
-      _titleCtrl.clear();
-      _issuerCtrl.clear();
-
-      setState(() {
-        _load();
-      });
-
-      ScaffoldMessenger.of(context)
-          .showSnackBar(
-        const SnackBar(
-          backgroundColor: Colors.green,
-          content: Text(
-            'Sertifikasi berhasil ditambah',
-          ),
-        ),
+    try {
+      final success = await provider.addCertification(
+        title: _titleCtrl.text.trim(),
+        issuer: _issuerCtrl.text.trim(),
       );
+
+      if (!mounted) return;
+
+      if (success) {
+        _titleCtrl.clear();
+        _issuerCtrl.clear();
+        setState(() {
+          _load();
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            backgroundColor: Colors.green,
+            content: Text('Sertifikasi berhasil ditambah'),
+          ),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            backgroundColor: Colors.red,
+            content: Text('Gagal menambah sertifikasi.'),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            backgroundColor: Colors.red,
+            content: Text('Gagal menyimpan: $e'),
+          ),
+        );
+      }
     }
   }
 

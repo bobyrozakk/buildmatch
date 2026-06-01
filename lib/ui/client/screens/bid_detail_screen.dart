@@ -16,6 +16,10 @@ class BidDetailScreen extends StatelessWidget {
   /// agar tidak bergantung pada bid.project (yang bisa null).
   final double projectBudget;
 
+  /// True jika proyek sudah in_progress (ada bid lain yang sudah diterima).
+  /// Digunakan untuk menyembunyikan tombol Terima/Tolak pada bid pending.
+  final bool isProjectInProgress;
+
   final VoidCallback? onAccepted;
   final VoidCallback? onRejected;
 
@@ -23,6 +27,7 @@ class BidDetailScreen extends StatelessWidget {
     super.key,
     required this.bid,
     required this.projectBudget,
+    this.isProjectInProgress = false,
     this.onAccepted,
     this.onRejected,
   });
@@ -175,8 +180,8 @@ class BidDetailScreen extends StatelessWidget {
         ],
       ),
 
-      // ── Tombol sticky di bawah (hanya jika pending) ──
-      bottomNavigationBar: isPending
+      // ── Tombol sticky di bawah (hanya jika pending DAN proyek belum in_progress) ──
+      bottomNavigationBar: isPending && !isProjectInProgress
           ? Container(
               padding: const EdgeInsets.fromLTRB(20, 12, 20, 28),
               decoration: const BoxDecoration(
@@ -565,6 +570,33 @@ class BidDetailScreen extends StatelessWidget {
                           color: Colors.green,
                           fontWeight: FontWeight.bold,
                           fontSize: 13),
+                    ),
+                  ],
+                ),
+              ),
+
+            // ── Banner jika proyek sudah berjalan (bid pending tapi tidak bisa diterima) ──
+            if (isPending && isProjectInProgress)
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: Colors.blue.shade50,
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: Colors.blue.shade200),
+                ),
+                child: const Row(
+                  children: [
+                    Icon(Icons.info_rounded, color: Colors.blue, size: 20),
+                    SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        'Proyek ini sudah berjalan · Penawaran Anda tidak dapat diproses lagi',
+                        style: TextStyle(
+                            color: Colors.blue,
+                            fontWeight: FontWeight.w600,
+                            fontSize: 13),
+                      ),
                     ),
                   ],
                 ),

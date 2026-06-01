@@ -111,7 +111,7 @@ class _ProgressTabState extends State<ProgressTab> {
         child: ListView(
           padding: const EdgeInsets.all(20),
           children: [
-            // ── SECTION PENAWARAN MASUK ──
+            // ── SECTION PENAWARAN MASUK (GROUPED PER PROYEK) ──
             FutureBuilder<List<BidModel>>(
               future: _incomingBidsFuture,
               builder: (context, snapshot) {
@@ -121,6 +121,12 @@ class _ProgressTabState extends State<ProgressTab> {
 
                 final bids = snapshot.data ?? [];
                 if (bids.isEmpty) return const SizedBox.shrink();
+
+                // Group bids by projectId
+                final Map<String, List<BidModel>> grouped = {};
+                for (final bid in bids) {
+                  grouped.putIfAbsent(bid.projectId, () => []).add(bid);
+                }
 
                 return Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -138,7 +144,7 @@ class _ProgressTabState extends State<ProgressTab> {
                         ),
                         const SizedBox(width: 8),
                         Text(
-                          'Penawaran Masuk (${bids.length})',
+                          'Penawaran Masuk (${grouped.length} proyek)',
                           style: const TextStyle(
                             fontSize: 15,
                             fontWeight: FontWeight.bold,
@@ -149,7 +155,16 @@ class _ProgressTabState extends State<ProgressTab> {
                     ),
                     const SizedBox(height: 12),
 
-                    ...bids.map((bid) => _buildIncomingBidCard(bid)),
+                    // Satu card per proyek
+                    ...grouped.entries.map((entry) {
+                      final projectBids = entry.value;
+                      final firstBid = projectBids.first;
+                      final project = firstBid.project;
+                      return _buildGroupedBidCard(
+                        projectBids: projectBids,
+                        project: project,
+                      );
+                    }),
 
                     const SizedBox(height: 8),
                     const Divider(height: 32),
@@ -266,6 +281,259 @@ class _ProgressTabState extends State<ProgressTab> {
                 );
               },
             ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // --- CARD GROUPED BID PER PROYEK ---
+  Widget _buildGroupedBidCard({
+    required List<BidModel> projectBids,
+    required ProjectModel? project,
+  }) {
+    final projectTitle = project?.title ?? projectBids.first.project?.title ?? 'Proyek';
+    // Preview maks 3 kontraktor
+    final previewBids = projectBids.take(3).toList();
+    final remaining = projectBids.length - previewBids.length;
+
+    // Gunakan project dari bid (bisa null jika tidak di-join)
+    // Buat ProjectModel minimal untuk navigasi
+    final ProjectModel? navProject = project;
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 14),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(
+          color: Colors.orange.withOpacity(0.2),
+          width: 1,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.04),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // ── Header proyek ──
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 14, 16, 0),
+            child: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: Colors.orange.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: const Icon(Icons.home_work_outlined,
+                      size: 18, color: Colors.orange),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        projectTitle,
+                        style: const TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 14,
+                          color: Colors.black87,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      Text(
+                        '${projectBids.length} kontraktor menawar',
+                        style: const TextStyle(
+                          fontSize: 11,
+                          color: Colors.orange,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: Colors.orange.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Text(
+                    '${projectBids.length} bid',
+                    style: const TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.orange,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+
+          const SizedBox(height: 12),
+          const Divider(height: 1, indent: 16, endIndent: 16),
+          const SizedBox(height: 10),
+
+          // ── Preview 1–3 kontraktor ──
+          ...previewBids.asMap().entries.map((entry) {
+            final index = entry.key;
+            final bid = entry.value;
+            return _buildBidPreviewRow(bid, index, navProject);
+          }),
+
+          // ── Sisa kontraktor (jika > 3) ──
+          if (remaining > 0)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 2, 16, 0),
+              child: Text(
+                '+$remaining kontraktor lainnya',
+                style: const TextStyle(
+                  fontSize: 11,
+                  color: Colors.black45,
+                ),
+              ),
+            ),
+
+          // ── Tombol Lihat Detail Seluruhnya ──
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 14),
+            child: SizedBox(
+              width: double.infinity,
+              child: OutlinedButton.icon(
+                onPressed: () {
+                  if (navProject != null) {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => ProjectDetailScreen(project: navProject),
+                      ),
+                    ).then((_) => _refresh());
+                  }
+                },
+                icon: const Icon(
+                  Icons.open_in_new_rounded,
+                  size: 15,
+                  color: AppColors.primary,
+                ),
+                label: const Text(
+                  'Lihat Detail Seluruhnya',
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    color: AppColors.primary,
+                    fontSize: 13,
+                  ),
+                ),
+                style: OutlinedButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(vertical: 10),
+                  side: BorderSide(
+                      color: AppColors.primary.withOpacity(0.4), width: 1.5),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12)),
+                  backgroundColor: AppColors.primary.withOpacity(0.04),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // --- ROW PREVIEW SATU KONTRAKTOR ---
+  Widget _buildBidPreviewRow(BidModel bid, int index, ProjectModel? project) {
+    final vendorName = bid.vendorName ?? 'Kontraktor';
+    final initial = vendorName.isNotEmpty ? vendorName[0].toUpperCase() : 'K';
+
+    return InkWell(
+      onTap: () {
+        // Tap nama kontraktor → langsung ke ProjectDetailScreen agar bisa lihat semua bid
+        if (project != null) {
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) => ProjectDetailScreen(project: project),
+            ),
+          ).then((_) => _refresh());
+        }
+      },
+      borderRadius: BorderRadius.circular(8),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 6, 16, 6),
+        child: Row(
+          children: [
+            // Badge nomor urut
+            Container(
+              width: 20,
+              height: 20,
+              decoration: BoxDecoration(
+                color: index == 0
+                    ? AppColors.primary.withOpacity(0.15)
+                    : Colors.grey.shade100,
+                shape: BoxShape.circle,
+              ),
+              child: Center(
+                child: Text(
+                  '${index + 1}',
+                  style: TextStyle(
+                    fontSize: 10,
+                    fontWeight: FontWeight.bold,
+                    color: index == 0 ? AppColors.primary : Colors.black45,
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(width: 8),
+
+            // Avatar
+            CircleAvatar(
+              radius: 16,
+              backgroundColor: AppColors.primary.withOpacity(0.1),
+              child: Text(
+                initial,
+                style: const TextStyle(
+                    color: AppColors.primary,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 12),
+              ),
+            ),
+            const SizedBox(width: 10),
+
+            // Nama kontraktor
+            Expanded(
+              child: Text(
+                vendorName,
+                style: const TextStyle(
+                  fontWeight: FontWeight.w600,
+                  fontSize: 13,
+                  color: Colors.black87,
+                ),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+
+            // Harga bid
+            Text(
+              AppFormatters.formatRupiah(bid.price),
+              style: const TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.bold,
+                color: AppColors.primary,
+              ),
+            ),
+            const SizedBox(width: 4),
+            const Icon(Icons.chevron_right_rounded,
+                size: 16, color: Colors.black38),
           ],
         ),
       ),
@@ -508,118 +776,6 @@ class _ProgressTabState extends State<ProgressTab> {
                 color: Colors.black54,
                 fontWeight: FontWeight.bold,
               ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  // --- CARD PENAWARAN MASUK ---
-  Widget _buildIncomingBidCard(BidModel bid) {
-    final projectTitle = bid.project?.title ?? 'Proyek';
-    final vendorName = bid.vendorName ?? 'Kontraktor';
-
-    return GestureDetector(
-      onTap: () {
-        if (bid.project != null) {
-          Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (_) => ProjectDetailScreen(project: bid.project!),
-            ),
-          ).then((_) => _refresh());
-        }
-      },
-      child: Container(
-        margin: const EdgeInsets.only(bottom: 12),
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(
-            color: Colors.orange.withOpacity(0.2),
-            width: 1,
-          ),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.03),
-              blurRadius: 8,
-              offset: const Offset(0, 3),
-            ),
-          ],
-        ),
-        child: Row(
-          children: [
-            // Avatar kontraktor
-            CircleAvatar(
-              radius: 22,
-              backgroundColor: AppColors.primary.withOpacity(0.1),
-              child: const Icon(Icons.person, color: AppColors.primary, size: 20),
-            ),
-            const SizedBox(width: 12),
-
-            // Info
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    vendorName,
-                    style: const TextStyle(
-                      fontWeight: FontWeight.bold,
-                      fontSize: 14,
-                      color: Colors.black87,
-                    ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    projectTitle,
-                    style: const TextStyle(fontSize: 12, color: Colors.black54),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    AppFormatters.formatRupiah(bid.price),
-                    style: const TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.bold,
-                      color: AppColors.primary,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-
-            // Timestamp + arrow
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.end,
-              children: [
-                if (bid.createdAt != null)
-                  Text(
-                    _formatDate(bid.createdAt!),
-                    style: const TextStyle(fontSize: 10, color: Colors.black38),
-                  ),
-                const SizedBox(height: 8),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: Colors.orange.withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: const Text(
-                    'Menunggu',
-                    style: TextStyle(
-                      fontSize: 10,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.orange,
-                    ),
-                  ),
-                ),
-              ],
             ),
           ],
         ),

@@ -2,6 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../data/providers/auth_provider.dart';
+import '../../../data/providers/project_provider.dart';
+import '../../../data/models/project_model.dart';
+import '../screens/project_detail_screen.dart';
 import '../../auth/login_screen.dart';
 import '../../shared/widgets/glass_card.dart';
 import '../../../core/constants/colors.dart';
@@ -15,7 +18,68 @@ class ProfileTab extends StatefulWidget {
 
 class _ProfileTabState extends State<ProfileTab> {
   final _supabase = Supabase.instance.client;
-  bool _isLoading = false;
+  bool _isLoading = true;
+  List<Map<String, dynamic>> _projects = [];
+  int _activeProjectsCount = 0;
+  int _completedProjectsCount = 0;
+  int _reviewsCount = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  void _load() async {
+    final prov = Provider.of<ProjectProvider>(context, listen: false);
+    if (!mounted) return;
+    setState(() {
+      _isLoading = true;
+    });
+    try {
+      final list = await prov.fetchClientProjectsWithContractor();
+      
+      int activeCount = 0;
+      int completedCount = 0;
+      for (final item in list) {
+        final project = item['project'] as ProjectModel;
+        if (project.status == 'in_progress') {
+          activeCount++;
+        } else if (project.status == 'completed') {
+          completedCount++;
+        }
+      }
+      
+      final userId = _supabase.auth.currentUser?.id;
+      int reviewsCount = 0;
+      if (userId != null) {
+        final reviewsResponse = await _supabase
+            .from('reviews')
+            .select('id')
+            .eq('user_id', userId);
+        reviewsCount = (reviewsResponse as List).length;
+      }
+      
+      if (mounted) {
+        setState(() {
+          _projects = list;
+          _activeProjectsCount = activeCount;
+          _completedProjectsCount = completedCount;
+          _reviewsCount = reviewsCount;
+          _isLoading = false;
+        });
+      }
+    } catch (e) {
+      debugPrint("Error load profile stats: $e");
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
+    }
+  }
+
+  void _refresh() => _load();
 
   // --- ACTIONS ---
 
@@ -297,11 +361,11 @@ class _ProfileTabState extends State<ProfileTab> {
   Widget _buildStatsRow() {
     return Row(
       children: [
-        _buildStatItem("2", "Proyek Aktif"),
+        _buildStatItem("$_activeProjectsCount", "Proyek Aktif"),
         const SizedBox(width: 12),
-        _buildStatItem("3", "Selesai"),
+        _buildStatItem("$_completedProjectsCount", "Selesai"),
         const SizedBox(width: 12),
-        _buildStatItem("4", "Ulasan"),
+        _buildStatItem("$_reviewsCount", "Ulasan"),
       ],
     );
   }
@@ -331,16 +395,102 @@ class _ProfileTabState extends State<ProfileTab> {
   }
 
   Widget _buildProjectCard() {
+    if (_projects.isEmpty) {
+      return Container(
+        padding: const EdgeInsets.all(24),
+        alignment: Alignment.center,
+        decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(20)),
+        child: const Column(
+          children: [
+            Icon(Icons.assignment_late_outlined, color: Colors.black38, size: 36),
+            SizedBox(height: 10),
+            Text(
+              'Belum ada proyek',
+              style: TextStyle(fontWeight: FontWeight.bold, color: Colors.black54),
+            ),
+            SizedBox(height: 4),
+            Text(
+              'Proyek yang Anda buat akan muncul di sini.',
+              style: TextStyle(fontSize: 12, color: Colors.black38),
+            ),
+          ],
+        ),
+      );
+    }
+
     return Container(
       decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(20)),
       child: Column(
-        children: [
-          _buildProjectItem(Icons.home_rounded, "Renovasi Rumah Induk", "PT Bangun Jaya", "Selesai", Colors.green),
-          _divider(),
-          _buildProjectItem(Icons.architecture_rounded, "Desain Interior Dapur", "Studio Arsitek A", "Berjalan", const Color(0xFFD85A31)),
-          _divider(),
-          _buildProjectItem(Icons.business_rounded, "Pembangunan Pagar", "CV Karya Mandiri", "Menunggu", Colors.grey.shade600),
-        ],
+        children: List.generate(_projects.length * 2 - 1, (index) {
+          if (index.isOdd) return _divider();
+          final itemIndex = index ~/ 2;
+          final data = _projects[itemIndex];
+          final ProjectModel project = data['project'] as ProjectModel;
+          final String contractorName = data['contractorName'] as String;
+
+          final Color statusColor;
+          final String statusLabel;
+          final IconData statusIcon;
+
+          switch (project.status) {
+            case 'completed':
+              statusColor = Colors.green;
+              statusLabel = 'Selesai';
+              statusIcon = Icons.home_rounded;
+              break;
+            case 'in_progress':
+              statusColor = const Color(0xFFD85A31);
+              statusLabel = 'Berjalan';
+              statusIcon = Icons.architecture_rounded;
+              break;
+            case 'cancelled':
+              statusColor = Colors.red;
+              statusLabel = 'Dibatalkan';
+              statusIcon = Icons.cancel_rounded;
+              break;
+            default:
+              statusColor = Colors.grey.shade600;
+              statusLabel = 'Terbuka';
+              statusIcon = Icons.business_rounded;
+          }
+
+          return ListTile(
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => ProjectDetailScreen(project: project),
+                ),
+              ).then((_) => _refresh());
+            },
+            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+            leading: Container(
+              padding: const EdgeInsets.all(10),
+              decoration: const BoxDecoration(color: AppColors.backgroundCream, shape: BoxShape.circle),
+              child: Icon(statusIcon, color: AppColors.primary, size: 24),
+            ),
+            title: Text(
+              project.title.isNotEmpty ? project.title : 'Tanpa Judul',
+              style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+            subtitle: Text(
+              contractorName,
+              style: const TextStyle(fontSize: 12, color: Colors.black54),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+            trailing: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+              decoration: BoxDecoration(color: statusColor.withOpacity(0.1), borderRadius: BorderRadius.circular(12)),
+              child: Text(
+                statusLabel,
+                style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: statusColor),
+              ),
+            ),
+          );
+        }),
       ),
     );
   }
