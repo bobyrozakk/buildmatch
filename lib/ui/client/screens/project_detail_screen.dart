@@ -77,8 +77,10 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
   }
 
   void _loadBids() {
-    _bidsFuture = Provider.of<ProjectProvider>(context, listen: false)
-        .fetchProjectBids(_project.id ?? '');
+    _bidsFuture = Provider.of<ProjectProvider>(
+      context,
+      listen: false,
+    ).fetchProjectBids(_project.id ?? '');
   }
 
   void _refresh() {
@@ -90,8 +92,11 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
     final sorted = List<BidModel>.from(bids);
     switch (_sortOption) {
       case BidSortOption.newest:
-        sorted.sort((a, b) =>
-            (b.createdAt ?? DateTime(0)).compareTo(a.createdAt ?? DateTime(0)));
+        sorted.sort(
+          (a, b) => (b.createdAt ?? DateTime(0)).compareTo(
+            a.createdAt ?? DateTime(0),
+          ),
+        );
         break;
       case BidSortOption.priceLow:
         sorted.sort((a, b) => a.price.compareTo(b.price));
@@ -203,7 +208,9 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
                         image: NetworkImage(_project.imageUrls[0]),
                         fit: BoxFit.cover,
                         colorFilter: ColorFilter.mode(
-                            Colors.black.withOpacity(0.4), BlendMode.darken),
+                          Colors.black.withOpacity(0.4),
+                          BlendMode.darken,
+                        ),
                       )
                     : null,
               ),
@@ -213,7 +220,10 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 4,
+                    ),
                     decoration: BoxDecoration(
                       color: isInProgress ? Colors.blue : Colors.green,
                       borderRadius: BorderRadius.circular(8),
@@ -221,18 +231,20 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
                     child: Text(
                       isInProgress ? 'BERJALAN' : 'LIVE TENDER',
                       style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 10,
-                          fontWeight: FontWeight.bold),
+                        color: Colors.white,
+                        fontSize: 10,
+                        fontWeight: FontWeight.bold,
+                      ),
                     ),
                   ),
                   const SizedBox(height: 8),
                   Text(
                     _project.title,
                     style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 20,
-                        fontWeight: FontWeight.bold),
+                      color: Colors.white,
+                      fontSize: 20,
+                      fontWeight: FontWeight.bold,
+                    ),
                   ),
                   const SizedBox(height: 4),
                   Text(
@@ -253,8 +265,9 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
             Row(
               children: [
                 _buildInfoChip(
-                    Icons.square_foot,
-                    '${_project.buildingSize.toStringAsFixed(0)} m²'),
+                  Icons.square_foot,
+                  '${_project.buildingSize.toStringAsFixed(0)} m²',
+                ),
                 const SizedBox(width: 12),
                 _buildInfoChip(Icons.layers, '${_project.floors} Lantai'),
                 const SizedBox(width: 12),
@@ -275,7 +288,10 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
                 if (isInProgress)
                   Container(
                     margin: const EdgeInsets.only(right: 8),
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 4,
+                    ),
                     decoration: BoxDecoration(
                       color: Colors.blue.withOpacity(0.1),
                       borderRadius: BorderRadius.circular(20),
@@ -283,15 +299,19 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
                     child: const Text(
                       'Proyek Berjalan',
                       style: TextStyle(
-                          fontSize: 11,
-                          color: Colors.blue,
-                          fontWeight: FontWeight.bold),
+                        fontSize: 11,
+                        color: Colors.blue,
+                        fontWeight: FontWeight.bold,
+                      ),
                     ),
                   ),
                 GestureDetector(
                   onTap: _showFilterSheet,
                   child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 7,
+                    ),
                     decoration: BoxDecoration(
                       color: _sortOption != BidSortOption.newest
                           ? AppColors.primary
@@ -318,11 +338,12 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
                               ? 'Filter'
                               : _sortOption.label,
                           style: TextStyle(
-                              fontSize: 12,
-                              fontWeight: FontWeight.bold,
-                              color: _sortOption != BidSortOption.newest
-                                  ? Colors.white
-                                  : Colors.black54),
+                            fontSize: 12,
+                            fontWeight: FontWeight.bold,
+                            color: _sortOption != BidSortOption.newest
+                                ? Colors.white
+                                : Colors.black54,
+                          ),
                         ),
                       ],
                     ),
@@ -341,19 +362,22 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
                   Text(
                     'Urutan: ${_sortOption.label}',
                     style: const TextStyle(
-                        fontSize: 12,
-                        color: AppColors.primary,
-                        fontWeight: FontWeight.w500),
+                      fontSize: 12,
+                      color: AppColors.primary,
+                      fontWeight: FontWeight.w500,
+                    ),
                   ),
                   const Spacer(),
                   GestureDetector(
-                    onTap: () => setState(() => _sortOption = BidSortOption.newest),
+                    onTap: () =>
+                        setState(() => _sortOption = BidSortOption.newest),
                     child: const Text(
                       'Reset',
                       style: TextStyle(
-                          fontSize: 12,
-                          color: Colors.black38,
-                          decoration: TextDecoration.underline),
+                        fontSize: 12,
+                        color: Colors.black38,
+                        decoration: TextDecoration.underline,
+                      ),
                     ),
                   ),
                 ],
@@ -369,7 +393,9 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
                   return const Center(
                     child: Padding(
                       padding: EdgeInsets.all(32),
-                      child: CircularProgressIndicator(color: AppColors.primary),
+                      child: CircularProgressIndicator(
+                        color: AppColors.primary,
+                      ),
                     ),
                   );
                 }
@@ -387,13 +413,18 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
                     child: const Center(
                       child: Column(
                         children: [
-                          Icon(Icons.inbox_outlined, size: 48, color: Colors.black26),
+                          Icon(
+                            Icons.inbox_outlined,
+                            size: 48,
+                            color: Colors.black26,
+                          ),
                           SizedBox(height: 12),
                           Text(
                             'Belum ada penawaran masuk',
                             style: TextStyle(
-                                color: Colors.black45,
-                                fontWeight: FontWeight.w500),
+                              color: Colors.black45,
+                              fontWeight: FontWeight.w500,
+                            ),
                           ),
                         ],
                       ),
@@ -420,13 +451,17 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
       child: Container(
         padding: const EdgeInsets.symmetric(vertical: 12),
         decoration: BoxDecoration(
-            color: Colors.white, borderRadius: BorderRadius.circular(16)),
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16),
+        ),
         child: Column(
           children: [
             Icon(icon, color: AppColors.primary, size: 20),
             const SizedBox(height: 4),
-            Text(label,
-                style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+            Text(
+              label,
+              style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
+            ),
           ],
         ),
       ),
@@ -451,8 +486,8 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
     final priceColor = bid.price <= _project.budget
         ? Colors.green.shade700
         : bid.price <= _project.budget * 1.1
-            ? Colors.black87
-            : Colors.orange.shade700;
+        ? Colors.black87
+        : Colors.orange.shade700;
 
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
@@ -465,9 +500,10 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
             : null,
         boxShadow: [
           BoxShadow(
-              color: Colors.black.withOpacity(0.03),
-              blurRadius: 8,
-              offset: const Offset(0, 4)),
+            color: Colors.black.withOpacity(0.03),
+            blurRadius: 8,
+            offset: const Offset(0, 4),
+          ),
         ],
       ),
       child: Column(
@@ -507,9 +543,10 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
                       ? bid.vendorName![0].toUpperCase()
                       : 'K',
                   style: const TextStyle(
-                      color: AppColors.primary,
-                      fontWeight: FontWeight.bold,
-                      fontSize: 15),
+                    color: AppColors.primary,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 15,
+                  ),
                 ),
               ),
               const SizedBox(width: 10),
@@ -520,7 +557,9 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
                     Text(
                       bid.vendorName ?? 'Kontraktor',
                       style: const TextStyle(
-                          fontWeight: FontWeight.bold, fontSize: 14),
+                        fontWeight: FontWeight.bold,
+                        fontSize: 14,
+                      ),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                     ),
@@ -528,9 +567,10 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
                     Text(
                       AppFormatters.formatRupiah(bid.price),
                       style: TextStyle(
-                          color: priceColor,
-                          fontWeight: FontWeight.bold,
-                          fontSize: 14),
+                        color: priceColor,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 14,
+                      ),
                     ),
                   ],
                 ),
@@ -541,11 +581,14 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
                   color: statusColor.withOpacity(0.12),
                   borderRadius: BorderRadius.circular(20),
                 ),
-                child: Text(statusLabel,
-                    style: TextStyle(
-                        color: statusColor,
-                        fontSize: 10,
-                        fontWeight: FontWeight.bold)),
+                child: Text(
+                  statusLabel,
+                  style: TextStyle(
+                    color: statusColor,
+                    fontSize: 10,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
               ),
             ],
           ),
@@ -557,11 +600,23 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
             runSpacing: 6,
             children: [
               if (bid.estimationMonths != null)
-                _miniInfoChip(Icons.schedule_rounded, '${bid.estimationMonths} bln', Colors.blue),
+                _miniInfoChip(
+                  Icons.schedule_rounded,
+                  '${bid.estimationMonths} bln',
+                  Colors.blue,
+                ),
               if (bid.vendorExperienceYears != null)
-                _miniInfoChip(Icons.workspace_premium_rounded, '${bid.vendorExperienceYears} thn kerja', Colors.purple),
+                _miniInfoChip(
+                  Icons.workspace_premium_rounded,
+                  '${bid.vendorExperienceYears} thn kerja',
+                  Colors.purple,
+                ),
               if (bid.vendorRating != null)
-                _miniInfoChip(Icons.star_rounded, bid.vendorRating!.toStringAsFixed(1), Colors.amber.shade700),
+                _miniInfoChip(
+                  Icons.star_rounded,
+                  bid.vendorRating!.toStringAsFixed(1),
+                  Colors.amber.shade700,
+                ),
               if (bid.rabUrl != null && bid.rabUrl!.isNotEmpty)
                 _miniInfoChip(Icons.description_rounded, 'RAB', Colors.green),
             ],
@@ -580,14 +635,19 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
               label: const Text(
                 'Lihat Detail',
                 style: TextStyle(
-                    fontWeight: FontWeight.bold, color: AppColors.primary),
+                  fontWeight: FontWeight.bold,
+                  color: AppColors.primary,
+                ),
               ),
               style: OutlinedButton.styleFrom(
                 padding: const EdgeInsets.symmetric(vertical: 11),
                 side: BorderSide(
-                    color: AppColors.primary.withOpacity(0.4), width: 1.5),
+                  color: AppColors.primary.withOpacity(0.4),
+                  width: 1.5,
+                ),
                 shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12)),
+                  borderRadius: BorderRadius.circular(12),
+                ),
                 backgroundColor: AppColors.primary.withOpacity(0.04),
               ),
             ),
@@ -608,6 +668,7 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
                         dealPrice: bid.price,
                         projectTitle: _project.title,
                         contractorName: bid.vendorName ?? 'Kontraktor',
+                        contractorId: bid.vendorId,
                       ),
                     ),
                   );
@@ -617,14 +678,20 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
                   elevation: 0,
                   padding: const EdgeInsets.symmetric(vertical: 11),
                   shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12)),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
                 ),
-                icon: const Icon(Icons.payments_rounded,
-                    size: 16, color: Colors.white),
+                icon: const Icon(
+                  Icons.payments_rounded,
+                  size: 16,
+                  color: Colors.white,
+                ),
                 label: const Text(
                   'Lihat Termin Pembayaran',
                   style: TextStyle(
-                      fontWeight: FontWeight.bold, color: Colors.white),
+                    fontWeight: FontWeight.bold,
+                    color: Colors.white,
+                  ),
                 ),
               ),
             ),
@@ -649,7 +716,10 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
           Text(
             label,
             style: TextStyle(
-                fontSize: 11, color: color, fontWeight: FontWeight.w600),
+              fontSize: 11,
+              color: color,
+              fontWeight: FontWeight.w600,
+            ),
           ),
         ],
       ),
@@ -699,11 +769,13 @@ class _FilterSheet extends StatelessWidget {
               style: TextStyle(fontSize: 12, color: Colors.black45),
             ),
             const SizedBox(height: 20),
-            ...BidSortOption.values.map((opt) => _FilterOption(
-                  option: opt,
-                  isSelected: opt == current,
-                  onTap: () => onSelected(opt),
-                )),
+            ...BidSortOption.values.map(
+              (opt) => _FilterOption(
+                option: opt,
+                isSelected: opt == current,
+                onTap: () => onSelected(opt),
+              ),
+            ),
           ],
         ),
       ),
@@ -735,7 +807,9 @@ class _FilterOption extends StatelessWidget {
               : Colors.grey.shade50,
           borderRadius: BorderRadius.circular(14),
           border: Border.all(
-            color: isSelected ? AppColors.primary.withOpacity(0.4) : Colors.transparent,
+            color: isSelected
+                ? AppColors.primary.withOpacity(0.4)
+                : Colors.transparent,
             width: 1.5,
           ),
         ),
@@ -744,7 +818,9 @@ class _FilterOption extends StatelessWidget {
             Container(
               padding: const EdgeInsets.all(8),
               decoration: BoxDecoration(
-                color: isSelected ? AppColors.primary.withOpacity(0.12) : Colors.white,
+                color: isSelected
+                    ? AppColors.primary.withOpacity(0.12)
+                    : Colors.white,
                 borderRadius: BorderRadius.circular(10),
               ),
               child: Icon(
@@ -765,7 +841,11 @@ class _FilterOption extends StatelessWidget {
               ),
             ),
             if (isSelected)
-              const Icon(Icons.check_circle_rounded, color: AppColors.primary, size: 20),
+              const Icon(
+                Icons.check_circle_rounded,
+                color: AppColors.primary,
+                size: 20,
+              ),
           ],
         ),
       ),

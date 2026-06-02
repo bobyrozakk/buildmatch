@@ -18,6 +18,7 @@ class ClientPaymentTermsScreen extends StatefulWidget {
   final double dealPrice;
   final String projectTitle;
   final String contractorName;
+  final String contractorId;
 
   const ClientPaymentTermsScreen({
     super.key,
@@ -25,6 +26,7 @@ class ClientPaymentTermsScreen extends StatefulWidget {
     required this.dealPrice,
     required this.projectTitle,
     required this.contractorName,
+    this.contractorId = '',
   });
 
   @override
@@ -45,10 +47,7 @@ class _ClientPaymentTermsScreenState extends State<ClientPaymentTermsScreen> {
   }
 
   void _load() async {
-    final prov = Provider.of<ProjectProvider>(
-      context,
-      listen: false,
-    );
+    final prov = Provider.of<ProjectProvider>(context, listen: false);
     _termsFuture = prov.fetchPaymentTerms(widget.projectId);
 
     try {
@@ -423,14 +422,20 @@ class _ClientPaymentTermsScreenState extends State<ClientPaymentTermsScreen> {
               child: const Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Icon(Icons.check_circle_outline_rounded,
-                      color: Colors.teal, size: 16),
+                  Icon(
+                    Icons.check_circle_outline_rounded,
+                    color: Colors.teal,
+                    size: 16,
+                  ),
                   SizedBox(width: 8),
                   Expanded(
                     child: Text(
                       'Setelah disetujui, termin ini berstatus Selesai dan tidak dapat diubah.',
                       style: TextStyle(
-                          fontSize: 12, color: Colors.teal, height: 1.4),
+                        fontSize: 12,
+                        color: Colors.teal,
+                        height: 1.4,
+                      ),
                     ),
                   ),
                 ],
@@ -448,10 +453,13 @@ class _ClientPaymentTermsScreenState extends State<ClientPaymentTermsScreen> {
             style: ElevatedButton.styleFrom(
               backgroundColor: Colors.teal,
               shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12)),
+                borderRadius: BorderRadius.circular(12),
+              ),
             ),
-            child: const Text('Ya, Setujui',
-                style: TextStyle(color: Colors.white)),
+            child: const Text(
+              'Ya, Setujui',
+              style: TextStyle(color: Colors.white),
+            ),
           ),
         ],
       ),
@@ -470,9 +478,11 @@ class _ClientPaymentTermsScreenState extends State<ClientPaymentTermsScreen> {
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(success
-              ? '✅ Laporan progres disetujui! Termin selesai.'
-              : '❌ Gagal: $errMsg'),
+          content: Text(
+            success
+                ? '✅ Laporan progres disetujui! Termin selesai.'
+                : '❌ Gagal: $errMsg',
+          ),
           backgroundColor: success ? Colors.teal : Colors.red,
         ),
       );
@@ -502,8 +512,7 @@ class _ClientPaymentTermsScreenState extends State<ClientPaymentTermsScreen> {
               child: Container(
                 decoration: const BoxDecoration(
                   color: Colors.white,
-                  borderRadius:
-                      BorderRadius.vertical(top: Radius.circular(28)),
+                  borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
                 ),
                 padding: const EdgeInsets.fromLTRB(24, 16, 24, 36),
                 child: Form(
@@ -554,7 +563,9 @@ class _ClientPaymentTermsScreenState extends State<ClientPaymentTermsScreen> {
                                 Text(
                                   term.name,
                                   style: const TextStyle(
-                                      fontSize: 12, color: Colors.black45),
+                                    fontSize: 12,
+                                    color: Colors.black45,
+                                  ),
                                 ),
                               ],
                             ),
@@ -573,16 +584,20 @@ class _ClientPaymentTermsScreenState extends State<ClientPaymentTermsScreen> {
                         child: const Row(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Icon(Icons.info_outline_rounded,
-                                color: Colors.orange, size: 16),
+                            Icon(
+                              Icons.info_outline_rounded,
+                              color: Colors.orange,
+                              size: 16,
+                            ),
                             SizedBox(width: 8),
                             Expanded(
                               child: Text(
                                 'Kontraktor akan menerima catatan Anda dan perlu mengupload ulang laporan yang diperbaiki.',
                                 style: TextStyle(
-                                    fontSize: 12,
-                                    color: Colors.orange,
-                                    height: 1.4),
+                                  fontSize: 12,
+                                  color: Colors.orange,
+                                  height: 1.4,
+                                ),
                               ),
                             ),
                           ],
@@ -593,7 +608,9 @@ class _ClientPaymentTermsScreenState extends State<ClientPaymentTermsScreen> {
                       const Text(
                         'Catatan untuk Kontraktor *',
                         style: TextStyle(
-                            fontSize: 13, fontWeight: FontWeight.w600),
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                        ),
                       ),
                       const SizedBox(height: 8),
                       TextFormField(
@@ -609,10 +626,9 @@ class _ClientPaymentTermsScreenState extends State<ClientPaymentTermsScreen> {
                           filled: true,
                           fillColor: Colors.grey.shade50,
                         ),
-                        validator: (v) =>
-                            v == null || v.trim().isEmpty
-                                ? 'Catatan wajib diisi'
-                                : null,
+                        validator: (v) => v == null || v.trim().isEmpty
+                            ? 'Catatan wajib diisi'
+                            : null,
                       ),
                       const SizedBox(height: 20),
                       // Tombol submit
@@ -625,15 +641,14 @@ class _ClientPaymentTermsScreenState extends State<ClientPaymentTermsScreen> {
                               : () async {
                                   if (!formKey.currentState!.validate()) return;
                                   setSheet(() => isSubmitting = true);
-                                  final provider =
-                                      Provider.of<ProjectProvider>(
-                                          context,
-                                          listen: false);
+                                  final provider = Provider.of<ProjectProvider>(
+                                    context,
+                                    listen: false,
+                                  );
                                   bool ok = false;
                                   String errMsg = '';
                                   try {
-                                    ok =
-                                        await provider.clientRequestRevision(
+                                    ok = await provider.clientRequestRevision(
                                       termId: term.id!,
                                       revisionNotes: notesCtrl.text.trim(),
                                     );
@@ -643,14 +658,16 @@ class _ClientPaymentTermsScreenState extends State<ClientPaymentTermsScreen> {
                                   setSheet(() => isSubmitting = false);
                                   if (ctx.mounted) Navigator.pop(ctx);
                                   if (mounted) {
-                                    ScaffoldMessenger.of(context)
-                                        .showSnackBar(
+                                    ScaffoldMessenger.of(context).showSnackBar(
                                       SnackBar(
-                                        content: Text(ok
-                                            ? '↩️ Perubahan diajukan. Kontraktor akan memperbaiki laporan.'
-                                            : '❌ Gagal: $errMsg'),
-                                        backgroundColor:
-                                            ok ? Colors.orange : Colors.red,
+                                        content: Text(
+                                          ok
+                                              ? '↩️ Perubahan diajukan. Kontraktor akan memperbaiki laporan.'
+                                              : '❌ Gagal: $errMsg',
+                                        ),
+                                        backgroundColor: ok
+                                            ? Colors.orange
+                                            : Colors.red,
                                       ),
                                     );
                                     if (ok) _refresh();
@@ -660,7 +677,8 @@ class _ClientPaymentTermsScreenState extends State<ClientPaymentTermsScreen> {
                             backgroundColor: Colors.orange.shade700,
                             disabledBackgroundColor: Colors.grey.shade300,
                             shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(14)),
+                              borderRadius: BorderRadius.circular(14),
+                            ),
                             elevation: 0,
                           ),
                           icon: isSubmitting
@@ -668,16 +686,24 @@ class _ClientPaymentTermsScreenState extends State<ClientPaymentTermsScreen> {
                                   width: 16,
                                   height: 16,
                                   child: CircularProgressIndicator(
-                                      strokeWidth: 2, color: Colors.white),
+                                    strokeWidth: 2,
+                                    color: Colors.white,
+                                  ),
                                 )
-                              : const Icon(Icons.send_rounded,
-                                  color: Colors.white, size: 18),
+                              : const Icon(
+                                  Icons.send_rounded,
+                                  color: Colors.white,
+                                  size: 18,
+                                ),
                           label: Text(
-                            isSubmitting ? 'Mengirim...' : 'Kirim Catatan Revisi',
+                            isSubmitting
+                                ? 'Mengirim...'
+                                : 'Kirim Catatan Revisi',
                             style: const TextStyle(
-                                color: Colors.white,
-                                fontWeight: FontWeight.bold,
-                                fontSize: 14),
+                              color: Colors.white,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 14,
+                            ),
                           ),
                         ),
                       ),
@@ -1483,20 +1509,28 @@ class _ClientPaymentTermsScreenState extends State<ClientPaymentTermsScreen> {
                         onPressed: () => _showRevisionSheet(term),
                         style: OutlinedButton.styleFrom(
                           side: BorderSide(
-                              color: Colors.orange.shade400, width: 1.5),
+                            color: Colors.orange.shade400,
+                            width: 1.5,
+                          ),
                           shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12)),
-                          backgroundColor:
-                              Colors.orange.withValues(alpha: 0.04),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          backgroundColor: Colors.orange.withValues(
+                            alpha: 0.04,
+                          ),
                         ),
-                        icon: Icon(Icons.edit_note_rounded,
-                            size: 16, color: Colors.orange.shade700),
+                        icon: Icon(
+                          Icons.edit_note_rounded,
+                          size: 16,
+                          color: Colors.orange.shade700,
+                        ),
                         label: Text(
                           'Ajukan Perubahan',
                           style: TextStyle(
-                              color: Colors.orange.shade700,
-                              fontWeight: FontWeight.bold,
-                              fontSize: 12),
+                            color: Colors.orange.shade700,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 12,
+                          ),
                         ),
                       ),
                     ),
@@ -1512,16 +1546,21 @@ class _ClientPaymentTermsScreenState extends State<ClientPaymentTermsScreen> {
                           backgroundColor: Colors.teal,
                           elevation: 0,
                           shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12)),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
                         ),
-                        icon: const Icon(Icons.task_alt_rounded,
-                            size: 16, color: Colors.white),
+                        icon: const Icon(
+                          Icons.task_alt_rounded,
+                          size: 16,
+                          color: Colors.white,
+                        ),
                         label: const Text(
                           'Setujui',
                           style: TextStyle(
-                              color: Colors.white,
-                              fontWeight: FontWeight.bold,
-                              fontSize: 14),
+                            color: Colors.white,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 14,
+                          ),
                         ),
                       ),
                     ),
@@ -1548,15 +1587,18 @@ class _ClientPaymentTermsScreenState extends State<ClientPaymentTermsScreen> {
                       width: 14,
                       height: 14,
                       child: CircularProgressIndicator(
-                          strokeWidth: 2, color: Colors.orange),
+                        strokeWidth: 2,
+                        color: Colors.orange,
+                      ),
                     ),
                     SizedBox(width: 10),
                     Text(
                       'Menunggu perbaikan dari kontraktor...',
                       style: TextStyle(
-                          color: Colors.orange,
-                          fontSize: 13,
-                          fontWeight: FontWeight.w600),
+                        color: Colors.orange,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                      ),
                     ),
                   ],
                 ),
@@ -1587,18 +1629,18 @@ class _ClientPaymentTermsScreenState extends State<ClientPaymentTermsScreen> {
     final bgColor = isCompleted
         ? Colors.teal.shade50
         : isRevision
-            ? Colors.orange.shade50
-            : Colors.purple.shade50;
+        ? Colors.orange.shade50
+        : Colors.purple.shade50;
     final borderColor = isCompleted
         ? Colors.teal.shade200
         : isRevision
-            ? Colors.orange.shade300
-            : Colors.purple.shade200;
+        ? Colors.orange.shade300
+        : Colors.purple.shade200;
     final accentColor = isCompleted
         ? Colors.teal
         : isRevision
-            ? Colors.orange.shade700
-            : Colors.purple;
+        ? Colors.orange.shade700
+        : Colors.purple;
 
     return Container(
       padding: const EdgeInsets.all(14),
@@ -1617,8 +1659,8 @@ class _ClientPaymentTermsScreenState extends State<ClientPaymentTermsScreen> {
                 isCompleted
                     ? Icons.task_alt_rounded
                     : isRevision
-                        ? Icons.edit_note_rounded
-                        : Icons.assignment_turned_in_outlined,
+                    ? Icons.edit_note_rounded
+                    : Icons.assignment_turned_in_outlined,
                 size: 16,
                 color: accentColor,
               ),
@@ -1628,8 +1670,8 @@ class _ClientPaymentTermsScreenState extends State<ClientPaymentTermsScreen> {
                   isCompleted
                       ? 'Laporan Progres — Disetujui'
                       : isRevision
-                          ? 'Perubahan Diminta — Menunggu Revisi'
-                          : 'Laporan Progres dari Kontraktor',
+                      ? 'Perubahan Diminta — Menunggu Revisi'
+                      : 'Laporan Progres dari Kontraktor',
                   style: TextStyle(
                     fontSize: 12,
                     fontWeight: FontWeight.bold,
@@ -1641,7 +1683,8 @@ class _ClientPaymentTermsScreenState extends State<ClientPaymentTermsScreen> {
           ),
 
           // Catatan revisi dari client (jika revision_requested)
-          if (isRevision && term.revisionNotes != null &&
+          if (isRevision &&
+              term.revisionNotes != null &&
               term.revisionNotes!.isNotEmpty) ...[
             const SizedBox(height: 10),
             Container(
@@ -1658,17 +1701,19 @@ class _ClientPaymentTermsScreenState extends State<ClientPaymentTermsScreen> {
                   const Text(
                     'Catatan Anda:',
                     style: TextStyle(
-                        fontSize: 11,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.black54),
+                      fontSize: 11,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.black54,
+                    ),
                   ),
                   const SizedBox(height: 4),
                   Text(
                     term.revisionNotes!,
                     style: const TextStyle(
-                        fontSize: 12,
-                        color: Colors.black87,
-                        height: 1.4),
+                      fontSize: 12,
+                      color: Colors.black87,
+                      height: 1.4,
+                    ),
                   ),
                 ],
               ),
@@ -1936,7 +1981,11 @@ class _ClientPaymentTermsScreenState extends State<ClientPaymentTermsScreen> {
   Widget _buildRatingSection(List<PaymentTermModel> terms) {
     if (_project?.status != 'completed') return const SizedBox.shrink();
 
-    final vendorId = terms.isNotEmpty ? terms.first.vendorId : '';
+    final vendorId = widget.contractorId.isNotEmpty
+        ? widget.contractorId
+        : terms.isNotEmpty
+        ? terms.first.vendorId
+        : '';
 
     return Container(
       margin: const EdgeInsets.only(bottom: 20),
@@ -1985,10 +2034,7 @@ class _ClientPaymentTermsScreenState extends State<ClientPaymentTermsScreen> {
                     ),
                     Text(
                       'Terima kasih telah menggunakan jasa kami.',
-                      style: TextStyle(
-                        color: Colors.black87,
-                        fontSize: 12,
-                      ),
+                      style: TextStyle(color: Colors.black87, fontSize: 12),
                     ),
                   ],
                 ),
@@ -2042,35 +2088,50 @@ class _ClientPaymentTermsScreenState extends State<ClientPaymentTermsScreen> {
               ),
             ),
             const SizedBox(height: 12),
-            _RatingInputWidget(
-              onSubmitted: (rating, comment) async {
-                if (vendorId.isEmpty) return;
-                final ok = await Provider.of<ProjectProvider>(
-                  context,
-                  listen: false,
-                ).addReview(
-                  projectId: widget.projectId,
-                  vendorId: vendorId,
-                  rating: rating,
-                  comment: comment,
-                );
-                if (mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text(
-                        ok
-                            ? '✅ Ulasan berhasil dikirim!'
-                            : '❌ Gagal mengirim ulasan',
+            if (vendorId.isEmpty)
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  color: Colors.orange.shade50,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: Colors.orange.shade200),
+                ),
+                child: const Text(
+                  'Data kontraktor belum ditemukan, ulasan belum bisa dikirim.',
+                  style: TextStyle(color: Colors.black87, fontSize: 13),
+                ),
+              )
+            else
+              _RatingInputWidget(
+                onSubmitted: (rating, comment) async {
+                  final ok =
+                      await Provider.of<ProjectProvider>(
+                        context,
+                        listen: false,
+                      ).addReview(
+                        projectId: widget.projectId,
+                        vendorId: vendorId,
+                        rating: rating,
+                        comment: comment,
+                      );
+                  if (mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text(
+                          ok
+                              ? '✅ Ulasan berhasil dikirim!'
+                              : '❌ Gagal mengirim ulasan',
+                        ),
+                        backgroundColor: ok ? Colors.green : Colors.red,
                       ),
-                      backgroundColor: ok ? Colors.green : Colors.red,
-                    ),
-                  );
-                  if (ok) {
-                    _load();
+                    );
+                    if (ok) {
+                      _load();
+                    }
                   }
-                }
-              },
-            ),
+                },
+              ),
           ],
         ],
       ),
