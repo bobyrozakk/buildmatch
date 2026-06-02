@@ -1,0 +1,445 @@
+import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import 'package:url_launcher/url_launcher.dart';
+import '../../../../data/providers/project_provider.dart';
+import '../../../../data/providers/architect_provider.dart';
+import '../../../../data/providers/chat_provider.dart';
+import '../../../../data/models/payment_term_model.dart';
+import '../../../../core/constants/colors.dart';
+
+class ClientDesignReviewScreen extends StatefulWidget {
+  final String bidId;
+  final String chatId;
+  final Map<String, dynamic> designData;
+  final VoidCallback onReviewed;
+
+  const ClientDesignReviewScreen({
+    super.key,
+    required this.bidId,
+    required this.chatId,
+    required this.designData,
+    required this.onReviewed,
+  });
+
+  @override
+  State<ClientDesignReviewScreen> createState() => _ClientDesignReviewScreenState();
+}
+
+class _ClientDesignReviewScreenState extends State<ClientDesignReviewScreen> {
+  bool _isLoading = false;
+  PaymentTermModel? _paymentTerm;
+  Map<String, dynamic>? _bidDetails;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadData();
+  }
+
+  Future<void> _loadData() async {
+    setState(() => _isLoading = true);
+    try {
+      final projectProv = Provider.of<ProjectProvider>(context, listen: false);
+      final architectProv = Provider.of<ArchitectProvider>(context, listen: false);
+
+      _paymentTerm = await projectProv.fetchPaymentTermByBidId(widget.bidId);
+      _bidDetails = await architectProv.fetchBidById(widget.bidId);
+    } catch (e) {
+      debugPrint('Error loading review screen data: $e');
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  Future<void> _launchURL(String urlString) async {
+    final Uri url = Uri.parse(urlString);
+    try {
+      if (await canLaunchUrl(url)) {
+        await launchUrl(url, mode: LaunchMode.externalApplication);
+      } else {
+        throw 'Could not launch $urlString';
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Tidak dapat membuka file: $e'), backgroundColor: Colors.redAccent),
+        );
+      }
+    }
+  }
+
+  Future<void> _approveDesign() async {
+    if (_paymentTerm == null) return;
+
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Text('Setujui Desain?', style: TextStyle(fontWeight: FontWeight.bold)),
+        content: const Text('Dengan menyetujui desain ini, Anda menyatakan bahwa pekerjaan arsitek telah selesai sesuai dengan kesepakatan dan proyek akan ditutup.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Batal')),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.teal,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            ),
+            child: const Text('Ya, Setujui', style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm != true || !mounted) return;
+
+    setState(() => _isLoading = true);
+    final projectProv = Provider.of<ProjectProvider>(context, listen: false);
+    final chatProv = Provider.of<ChatProvider>(context, listen: false);
+
+    try {
+      final success = await projectProv.clientReviewProgress(_paymentTerm!.id!);
+      if (success) {
+        // Send chat message
+        await chatProv.sendMessage(widget.chatId, '✅ Client menyetujui desain! Proyek konsultasi selesai ✓');
+        widget.onReviewed();
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('✅ Desain disetujui secara formal!'), backgroundColor: Colors.green),
+          );
+          Navigator.pop(context);
+        }
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Gagal menyetujui desain.'), backgroundColor: Colors.red),
+        );
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
+      );
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  void _showRevisionDialog() {
+    final noteCtrl = TextEditingController();
+    final formKey = GlobalKey<FormState>();
+
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Text('Ajukan Revisi Desain', style: TextStyle(fontWeight: FontWeight.bold)),
+        content: Form(
+          key: formKey,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'Jelaskan bagian desain mana saja yang perlu diperbaiki oleh arsitek. Harap deskripsikan dengan jelas.',
+                style: TextStyle(fontSize: 11, color: Colors.black54, height: 1.4),
+              ),
+              const SizedBox(height: 12),
+              TextFormField(
+                controller: noteCtrl,
+                maxLines: 4,
+                decoration: InputDecoration(
+                  hintText: 'Contoh: Posisi pintu utama digeser ke kiri 1 meter, dan tambahkan area taman kecil di belakang...',
+                  hintStyle: const TextStyle(fontSize: 12),
+                  filled: true,
+                  fillColor: Colors.grey.shade50,
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: Colors.grey.shade300)),
+                ),
+                validator: (v) => v == null || v.trim().isEmpty ? 'Catatan revisi wajib diisi' : null,
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Batal')),
+          ElevatedButton(
+            onPressed: () async {
+              if (!formKey.currentState!.validate()) return;
+              final notes = noteCtrl.text.trim();
+              Navigator.pop(ctx);
+              await _submitRevision(notes);
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.orange.shade700,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            ),
+            child: const Text('Kirim Catatan', style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _submitRevision(String notes) async {
+    if (_paymentTerm == null) return;
+
+    setState(() => _isLoading = true);
+    final projectProv = Provider.of<ProjectProvider>(context, listen: false);
+    final chatProv = Provider.of<ChatProvider>(context, listen: false);
+
+    try {
+      final success = await projectProv.clientRequestRevision(
+        termId: _paymentTerm!.id!,
+        revisionNotes: notes,
+      );
+      if (success) {
+        // Send chat message
+        await chatProv.sendMessage(widget.chatId, '↩️ Client meminta revisi: "$notes"');
+        widget.onReviewed();
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('↩️ Catatan revisi berhasil dikirim!'), backgroundColor: Colors.orange),
+          );
+          Navigator.pop(context);
+        }
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Gagal mengajukan revisi.'), backgroundColor: Colors.red),
+        );
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
+      );
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final notes = widget.designData['notes'] as String? ?? '';
+    final revisionNumber = widget.designData['revision_number'] as int? ?? 1;
+    final filesRaw = widget.designData['files'] as List<dynamic>? ?? [];
+    final files = filesRaw.map((f) => Map<String, String>.from(f as Map)).toList();
+
+    int maxRevisions = _bidDetails?['revisions'] ?? 0;
+    int remainingRevisions = maxRevisions - revisionNumber + 1;
+    if (remainingRevisions < 0) remainingRevisions = 0;
+
+    return Scaffold(
+      backgroundColor: const Color(0xFFFCF8F5),
+      appBar: AppBar(
+        backgroundColor: const Color(0xFFFCF8F5),
+        elevation: 0,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.black87, size: 20),
+          onPressed: () => Navigator.pop(context),
+        ),
+        title: const Text(
+          'Tinjau Hasil Desain',
+          style: TextStyle(color: Color(0xFF8F2A0C), fontWeight: FontWeight.bold, fontSize: 16),
+        ),
+      ),
+      body: _isLoading
+          ? const Center(child: CircularProgressIndicator(color: AppColors.primary))
+          : SingleChildScrollView(
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text('Draf Desain Masuk', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 20, color: Colors.black87)),
+                  const SizedBox(height: 4),
+                  Text('Revisi ke-$revisionNumber', style: const TextStyle(color: Colors.black54, fontSize: 13)),
+                  const SizedBox(height: 20),
+
+                  // Info Panel Revisions
+                  _buildRevisionsInfoPanel(maxRevisions, remainingRevisions),
+                  const SizedBox(height: 20),
+
+                  // Notes section
+                  if (notes.isNotEmpty) ...[
+                    const Text('Catatan dari Arsitek', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Colors.black87)),
+                    const SizedBox(height: 8),
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: const Color(0xFFE5DCD3)),
+                      ),
+                      child: Text(
+                        notes,
+                        style: const TextStyle(fontSize: 13, color: Colors.black87, height: 1.4),
+                      ),
+                    ),
+                    const SizedBox(height: 20),
+                  ],
+
+                  // Files section
+                  const Text('Berkas Desain', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Colors.black87)),
+                  const SizedBox(height: 8),
+                  _buildFilesList(files),
+                  const SizedBox(height: 36),
+
+                  // Action buttons
+                  _buildActionButtons(remainingRevisions),
+                ],
+              ),
+            ),
+    );
+  }
+
+  Widget _buildRevisionsInfoPanel(int max, int remaining) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: remaining > 0 ? Colors.teal.withOpacity(0.06) : Colors.red.withOpacity(0.06),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: remaining > 0 ? Colors.teal.withOpacity(0.15) : Colors.red.withOpacity(0.15)),
+      ),
+      child: Row(
+        children: [
+          Icon(
+            remaining > 0 ? Icons.info_outline_rounded : Icons.warning_amber_rounded,
+            color: remaining > 0 ? Colors.teal : Colors.red,
+            size: 20,
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  remaining > 0 ? 'Kuota Revisi Tersedia' : 'Batas Revisi Habis',
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 13,
+                    color: remaining > 0 ? Colors.teal : Colors.red,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  remaining > 0
+                      ? 'Kamu dapat mengajukan revisi sebanyak $remaining kali lagi dari total $max revisi.'
+                      : 'Batas revisi sebanyak $max kali telah digunakan semua. Silakan setujui draf final ini.',
+                  style: const TextStyle(fontSize: 11, color: Colors.black54, height: 1.3),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildFilesList(List<Map<String, String>> files) {
+    if (files.isEmpty) {
+      return Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: const Color(0xFFE5DCD3)),
+        ),
+        child: const Center(
+          child: Text('Tidak ada berkas yang disertakan.', style: TextStyle(color: Colors.black45, fontSize: 13)),
+        ),
+      );
+    }
+
+    return Column(
+      children: files.map((file) {
+        final name = file['name'] ?? 'File';
+        final type = file['type'] ?? 'file';
+        final url = file['url'] ?? '';
+        
+        IconData icon = Icons.insert_drive_file_outlined;
+        Color color = Colors.grey.shade700;
+
+        if (type == 'image') {
+          icon = Icons.image_outlined;
+          color = Colors.blue.shade700;
+        } else if (type == 'pdf') {
+          icon = Icons.picture_as_pdf_outlined;
+          color = Colors.red.shade700;
+        } else if (type == 'autocad') {
+          icon = Icons.architecture_rounded;
+          color = Colors.teal.shade700;
+        }
+
+        return Container(
+          margin: const EdgeInsets.only(bottom: 8),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: const Color(0xFFE5DCD3)),
+          ),
+          child: Row(
+            children: [
+              Icon(icon, color: color, size: 20),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  name,
+                  style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13, color: Colors.black87),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+              const SizedBox(width: 8),
+              TextButton.icon(
+                icon: const Icon(Icons.download_rounded, size: 14),
+                label: const Text('Buka', style: TextStyle(fontSize: 12)),
+                onPressed: url.isNotEmpty ? () => _launchURL(url) : null,
+                style: TextButton.styleFrom(
+                  foregroundColor: AppColors.primary,
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                ),
+              ),
+            ],
+          ),
+        );
+      }).toList(),
+    );
+  }
+
+  Widget _buildActionButtons(int remainingRevisions) {
+    final canRequestRevision = remainingRevisions > 0;
+
+    return Row(
+      children: [
+        if (canRequestRevision) ...[
+          Expanded(
+            child: OutlinedButton.icon(
+              icon: const Icon(Icons.edit_note_rounded, size: 18),
+              label: const Text('Minta Revisi', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+              onPressed: _showRevisionDialog,
+              style: OutlinedButton.styleFrom(
+                foregroundColor: Colors.orange.shade700,
+                side: BorderSide(color: Colors.orange.shade700),
+                padding: const EdgeInsets.symmetric(vertical: 16),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+              ),
+            ),
+          ),
+          const SizedBox(width: 12),
+        ],
+        Expanded(
+          flex: 2,
+          child: ElevatedButton.icon(
+            icon: const Icon(Icons.check_circle_outline_rounded, size: 18, color: Colors.white),
+            label: const Text('Setujui Desain', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Colors.white)),
+            onPressed: _approveDesign,
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.teal,
+              padding: const EdgeInsets.symmetric(vertical: 16),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}

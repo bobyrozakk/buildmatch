@@ -1015,6 +1015,122 @@ class ProjectProvider extends ChangeNotifier {
 
 
   // ─────────────────────────────────────────────
+  // ARSITEK: AMBIL PAYMENT TERM BERDASARKAN BID ID
+  // ─────────────────────────────────────────────
+  Future<PaymentTermModel?> fetchPaymentTermByBidId(String bidId) async {
+    try {
+      final response = await _supabase
+          .from('payment_terms')
+          .select('*')
+          .eq('bid_id', bidId)
+          .maybeSingle();
+      if (response == null) return null;
+      return PaymentTermModel.fromJson(response);
+    } catch (e) {
+      debugPrint('Error fetch payment term by bid: $e');
+      return null;
+    }
+  }
+
+  // ─────────────────────────────────────────────
+  // CLIENT: BUAT PAYMENT TERM UNTUK PENAWARAN ARSITEK
+  // (Satu termin 100% — untuk desain)
+  // ─────────────────────────────────────────────
+  Future<PaymentTermModel?> createArchitectPaymentTerm({
+    required String bidId,
+    required String projectId,
+    required String vendorId,
+    required double amount,
+    required String paymentMethod,
+    required String virtualAccountNumber,
+  }) async {
+    _isLoading = true;
+    notifyListeners();
+    try {
+      final response = await _supabase.from('payment_terms').insert({
+        'project_id': projectId,
+        'bid_id': bidId,
+        'vendor_id': vendorId,
+        'name': 'Pembayaran Desain',
+        'percentage': 100.0,
+        'amount': amount,
+        'status': 'waiting_confirmation',
+        'order_index': 1,
+        'payment_method': paymentMethod,
+        'virtual_account_number': virtualAccountNumber,
+        'paid_at': DateTime.now().toIso8601String(),
+        'notes': 'Pembayaran penuh untuk jasa desain arsitektur',
+      }).select('*').single();
+      _isLoading = false;
+      notifyListeners();
+      return PaymentTermModel.fromJson(response);
+    } catch (e) {
+      debugPrint('Error create architect payment term: $e');
+      _isLoading = false;
+      notifyListeners();
+      return null;
+    }
+  }
+
+  // ─────────────────────────────────────────────
+  // ARSITEK: KONFIRMASI TERIMA PEMBAYARAN DESAIN
+  // Update bid status menjadi 'accepted' dan project status ke 'in_progress'
+  // ─────────────────────────────────────────────
+  Future<bool> architectConfirmClientPayment({
+    required String termId,
+    required String bidId,
+    required String projectId,
+  }) async {
+    _isLoading = true;
+    notifyListeners();
+    try {
+      // 1. Konfirmasi payment term
+      await _supabase.from('payment_terms').update({
+        'status': 'confirmed',
+        'confirmed_at': DateTime.now().toIso8601String(),
+      }).eq('id', termId);
+
+      // 2. Update bid status ke accepted
+      await _supabase.from('bids').update({'status': 'accepted'}).eq('id', bidId);
+
+      // 3. Update project status ke in_progress
+      await _supabase.from('projects').update({'status': 'in_progress'}).eq('id', projectId);
+
+      _isLoading = false;
+      notifyListeners();
+      return true;
+    } catch (e) {
+      debugPrint('Error architect confirm payment: $e');
+      _isLoading = false;
+      notifyListeners();
+      return false;
+    }
+  }
+
+  // ─────────────────────────────────────────────
+  // ARSITEK: SUBMIT DESAIN KE CLIENT
+  // Update payment_term → 'progress_submitted'
+  // ─────────────────────────────────────────────
+  Future<bool> submitDesignFiles({
+    required String termId,
+    required String description,
+    required List<String> fileUrls,
+  }) async {
+    try {
+      await _supabase.from('payment_terms').update({
+        'status': 'progress_submitted',
+        'progress_description': description,
+        'progress_images': fileUrls,
+        'progress_submitted_at': DateTime.now().toIso8601String(),
+      }).eq('id', termId);
+      return true;
+    } catch (e) {
+      debugPrint('Error submit design files: $e');
+      return false;
+    }
+  }
+
+  // ─────────────────────────────────────────────
   // HELPER: GENERATE NOMOR VIRTUAL ACCOUNT ACAK
   // ─────────────────────────────────────────────
   static String generateVirtualAccount(String bankCode) {

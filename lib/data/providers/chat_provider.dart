@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/chat_model.dart';
@@ -246,5 +247,46 @@ class ChatProvider extends ChangeNotifier {
         .stream(primaryKey: ['id'])
         .eq('chat_id', chatId)
         .order('created_at', ascending: true);
+  }
+
+  /// Kirim pesan penawaran (offer card) dari arsitek ke client
+  Future<bool> sendOfferMessage({
+    required String chatId,
+    required String bidId,
+    required String title,
+    required double price,
+    required int revisions,
+    required String description,
+    required int durationDays,
+  }) async {
+    final content = jsonEncode({
+      'type': 'offer',
+      'bid_id': bidId,
+      'title': title,
+      'price': price,
+      'revisions': revisions,
+      'description': description,
+      'duration_days': durationDays,
+      'status': 'pending',
+    });
+    return sendMessage(chatId, content);
+  }
+
+  /// Kirim pesan pengiriman desain dari arsitek ke client
+  Future<bool> sendDesignMessage({
+    required String chatId,
+    required String bidId,
+    required List<Map<String, String>> files,
+    required String notes,
+    required int revisionNumber,
+  }) async {
+    final content = jsonEncode({
+      'type': 'design',
+      'bid_id': bidId,
+      'files': files,
+      'notes': notes,
+      'revision_number': revisionNumber,
+    });
+    return sendMessage(chatId, content);
   }
 }

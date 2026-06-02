@@ -643,4 +643,84 @@ class ArchitectProvider extends ChangeNotifier {
       return false;
     }
   }
+
+  /// Edit penawaran — hanya boleh jika belum ada payment_term yang dibuat (belum dibayar)
+  Future<bool> editArchitectOffer({
+    required String bidId,
+    required double price,
+    required String title,
+    required String description,
+    required int revisions,
+    required int durationDays,
+  }) async {
+    try {
+      final packedMessage = jsonEncode({
+        'title': title,
+        'description': description,
+        'revisions': revisions,
+        'duration_days': durationDays,
+      });
+      await _supabase.from('bids').update({
+        'price': price,
+        'message': packedMessage,
+      }).eq('id', bidId);
+      notifyListeners();
+      return true;
+    } catch (e) {
+      debugPrint('Error edit architect offer: $e');
+      return false;
+    }
+  }
+
+  /// Batalkan penawaran — update status ke 'cancelled'
+  Future<bool> cancelArchitectOffer(String bidId) async {
+    try {
+      await _supabase.from('bids').update({'status': 'cancelled'}).eq('id', bidId);
+      notifyListeners();
+      return true;
+    } catch (e) {
+      debugPrint('Error cancel architect offer: $e');
+      return false;
+    }
+  }
+
+  /// Ambil bid aktif berdasarkan bidId (untuk refresh status di chat)
+  Future<Map<String, dynamic>?> fetchBidById(String bidId) async {
+    try {
+      final response = await _supabase
+          .from('bids')
+          .select('*')
+          .eq('id', bidId)
+          .maybeSingle();
+      if (response == null) return null;
+      final rawMessage = response['message'] as String? ?? '';
+      String title = '';
+      String description = '';
+      int revisions = 2;
+      int durationDays = 14;
+      if (rawMessage.startsWith('{')) {
+        try {
+          final data = jsonDecode(rawMessage);
+          title = data['title'] ?? '';
+          description = data['description'] ?? '';
+          revisions = data['revisions'] ?? 2;
+          durationDays = data['duration_days'] ?? 14;
+        } catch (_) {}
+      }
+      return {
+        'id': response['id'],
+        'price': (response['price'] as num?)?.toDouble() ?? 0.0,
+        'status': response['status'] as String? ?? 'pending',
+        'project_id': response['project_id'],
+        'vendor_id': response['vendor_id'],
+        'title': title,
+        'description': description,
+        'revisions': revisions,
+        'duration_days': durationDays,
+      };
+    } catch (e) {
+      debugPrint('Error fetch bid by id: $e');
+      return null;
+    }
+  }
 }

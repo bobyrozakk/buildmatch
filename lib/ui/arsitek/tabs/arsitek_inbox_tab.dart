@@ -307,6 +307,7 @@ class _ArsitekInboxTabState extends State<ArsitekInboxTab>
               chatId: chat.id,
               receiverName: displayName,
               receiverAvatar: displayAvatar,
+              receiverId: chat.clientId,
             ),
           ),
         );
@@ -675,6 +676,7 @@ class _ArsitekInboxTabState extends State<ArsitekInboxTab>
                             chatId: chat.id,
                             receiverName: clientName,
                             receiverAvatar: clientAvatar,
+                            receiverId: chat.clientId,
                           ),
                         ),
                       );

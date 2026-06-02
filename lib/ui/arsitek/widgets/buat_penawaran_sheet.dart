@@ -2,14 +2,17 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../../core/constants/colors.dart';
 import '../../../data/providers/architect_provider.dart';
+import '../../../data/providers/chat_provider.dart';
 
 class BuatPenawaranSheet extends StatefulWidget {
   final String clientId;
+  final String chatId;
   final Function(String bidId) onOfferSent;
 
   const BuatPenawaranSheet({
     super.key,
     required this.clientId,
+    required this.chatId,
     required this.onOfferSent,
   });
 
@@ -63,20 +66,31 @@ class _BuatPenawaranSheetState extends State<BuatPenawaranSheet> {
     final double price = double.tryParse(_priceCtrl.text.replaceAll('.', '').replaceAll(',', '')) ?? 0.0;
     final int duration = int.tryParse(_durationCtrl.text) ?? 14;
     final int durationDays = _durationUnit == "Minggu" ? duration * 7 : duration;
+    final title = _titleCtrl.text.trim();
+    final description = _descCtrl.text.trim();
+    final revisions = _revisions;
 
     final architect = Provider.of<ArchitectProvider>(context, listen: false);
     final bidId = await architect.submitArchitectOffer(
       clientId: widget.clientId,
       price: price,
-      title: _titleCtrl.text.trim(),
-      description: _descCtrl.text.trim(),
-      revisions: _revisions,
+      title: title,
+      description: description,
+      revisions: revisions,
       durationDays: durationDays,
     );
 
-    setState(() => _isLoading = false);
-
     if (bidId != null && mounted) {
+      // Kirim offer card message ke chat
+      await Provider.of<ChatProvider>(context, listen: false).sendOfferMessage(
+        chatId: widget.chatId,
+        bidId: bidId,
+        title: title,
+        price: price,
+        revisions: revisions,
+        description: description,
+        durationDays: durationDays,
+      );
       widget.onOfferSent(bidId);
       Navigator.pop(context);
     } else if (mounted) {
@@ -84,6 +98,8 @@ class _BuatPenawaranSheetState extends State<BuatPenawaranSheet> {
         const SnackBar(content: Text('Gagal mengirim penawaran.'), backgroundColor: Colors.red),
       );
     }
+
+    if (mounted) setState(() => _isLoading = false);
   }
 
   @override
