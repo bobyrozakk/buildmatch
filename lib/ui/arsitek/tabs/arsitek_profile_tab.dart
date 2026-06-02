@@ -1,8 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../data/providers/auth_provider.dart';
+import '../../../data/providers/architect_provider.dart';
+import '../../../data/models/profile_model.dart';
+import '../../../core/constants/colors.dart';
 import '../screens/edit_profil_screen.dart';
 import '../screens/upload_desain_screen.dart';
+import '../../auth/login_screen.dart';
+
 
 class ArsitekProfileTab extends StatefulWidget {
   const ArsitekProfileTab({super.key});
@@ -11,34 +17,32 @@ class ArsitekProfileTab extends StatefulWidget {
   State<ArsitekProfileTab> createState() => _ArsitekProfileTabState();
 }
 
-class _ArsitekProfileTabState extends State<ArsitekProfileTab> with SingleTickerProviderStateMixin {
-  late TabController _tabController;
-  int _selectedTab = 0; // 0 for Portofolio Publik, 1 for Proyek Privasi/Klien
-
-  // Profile data state
-  String name = "Ar. Hendra Wijaya, IAI";
-  String studio = "Wijaya Architect Lab";
-  String bio = "Principal Architect di Wijaya & Associates. Fokus pada arsitektur vernakular modern dan hunian berkelanjutan.";
-  String rating = "4.9";
-  String reviewsCount = "114";
-  String location = "Bandung, Jawa Barat";
-  
-  // Stats
-  String finishedProjects = "42";
-  String experienceYears = "12";
-  String effectiveness = "98%";
-  String certificationCount = "15";
+class _ArsitekProfileTabState extends State<ArsitekProfileTab> {
+  late Future<List<dynamic>> _dataFuture;
 
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 2, vsync: this);
+    _loadData();
   }
 
-  @override
-  void dispose() {
-    _tabController.dispose();
-    super.dispose();
+  void _loadData() {
+    final architect = Provider.of<ArchitectProvider>(context, listen: false);
+    final userId = Supabase.instance.client.auth.currentUser?.id ?? "";
+    
+    _dataFuture = Future.wait([
+      architect.fetchArchitectDetails(userId), // 0: profile
+      architect.fetchPortfolios(userId),       // 1: portfolios
+      architect.fetchArchitectStats(userId),   // 2: stats
+      architect.fetchReviews(userId),          // 3: reviews
+    ]);
+  }
+
+  Future<void> _refresh() async {
+    setState(() {
+      _loadData();
+    });
+    await _dataFuture;
   }
 
   void _navigateToEditProfile() async {
@@ -97,7 +101,12 @@ class _ArsitekProfileTabState extends State<ArsitekProfileTab> with SingleTicker
     if (confirm == true && mounted) {
       final authProvider = context.read<AuthProvider>(); // simpan ref sebelum await
       await authProvider.logout();
-      // Stream di main.dart akan otomatis mendeteksi logout dan redirect ke SplashScreen
+      if (!mounted) return;
+      Navigator.pushAndRemoveUntil(
+        context,
+        MaterialPageRoute(builder: (_) => const LoginScreen()),
+        (route) => false,
+      );
     }
   }
 
@@ -109,21 +118,37 @@ class _ArsitekProfileTabState extends State<ArsitekProfileTab> with SingleTicker
         backgroundColor: const Color(0xFFFCF8F5),
         elevation: 0,
         automaticallyImplyLeading: false,
-        leading: IconButton(
-          icon: const Icon(Icons.menu_rounded, color: Colors.black87, size: 24),
-          onPressed: () {},
+        titleSpacing: 20,
+        title: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                  color: AppColors.primary,
+                  borderRadius: BorderRadius.circular(10)),
+              child: const Icon(Icons.hardware_rounded,
+                  color: Colors.white, size: 20),
+            ),
+            const SizedBox(width: 10),
+            RichText(
+              text: const TextSpan(children: [
+                TextSpan(
+                    text: 'Build',
+                    style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 18,
+                        color: AppColors.primary)),
+                TextSpan(
+                    text: 'Match',
+                    style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 18,
+                        color: Colors.black87)),
+              ]),
+            ),
+          ],
         ),
-        title: const Text(
-          'BuildMatch',
-          style: TextStyle(color: Color(0xFF8F2A0C), fontWeight: FontWeight.bold, fontSize: 18),
-        ),
-        centerTitle: true,
         actions: [
-          IconButton(
-            icon: const Icon(Icons.notifications_none_rounded, color: Colors.black87, size: 24),
-            onPressed: () {},
-          ),
-          // Tombol logout di app bar
           IconButton(
             icon: const Icon(Icons.logout_rounded, color: Color(0xFF8F2A0C), size: 22),
             tooltip: 'Keluar',
@@ -132,291 +157,248 @@ class _ArsitekProfileTabState extends State<ArsitekProfileTab> with SingleTicker
           const SizedBox(width: 4),
         ],
       ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Avatar & Name Card
-            Center(
+      body: RefreshIndicator(
+        onRefresh: _refresh,
+        color: const Color(0xFF8F2A0C),
+        child: FutureBuilder<List<dynamic>>(
+          future: _dataFuture,
+          builder: (context, snapshot) {
+            if (snapshot.connectionState == ConnectionState.waiting) {
+              return const Center(child: CircularProgressIndicator(color: Color(0xFF8F2A0C)));
+            }
+
+            final profileData = snapshot.data?[0] as Map<String, dynamic>?;
+            final portfolios = snapshot.data?[1] as List<Map<String, dynamic>>? ?? [];
+            final stats = snapshot.data?[2] as Map<String, dynamic>? ?? {};
+            final reviews = snapshot.data?[3] as List<Map<String, dynamic>>? ?? [];
+
+            final profile = profileData?['profile'] as ProfileModel?;
+            final bio = profileData?['bio'] as String? ?? "Belum ada bio.";
+            
+            final name = profile?.name.isNotEmpty == true ? profile!.name : "Arsitek";
+            final location = "Indonesia"; 
+
+            double totalRating = 0;
+            for (final r in reviews) {
+              totalRating += (r['rating'] as num?)?.toDouble() ?? 0.0;
+            }
+            final avgRating = reviews.isNotEmpty ? totalRating / reviews.length : 0.0;
+            final rating = avgRating.toStringAsFixed(1);
+            final reviewsCount = reviews.length.toString();
+
+            final finishedProjects = stats['portfolio_count']?.toString() ?? '0';
+            final experienceYears = stats['experience_years']?.toString() ?? '0';
+            final activeCollabs = stats['active_collabs']?.toString() ?? '0';
+            final certificationCount = stats['cert_count']?.toString() ?? '0';
+
+            return SingleChildScrollView(
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+              physics: const AlwaysScrollableScrollPhysics(),
               child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Stack(
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.all(4),
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          border: Border.all(color: const Color(0xFFE5DCD3), width: 1.5),
+                  // Avatar & Name Card
+                  Center(
+                    child: Column(
+                      children: [
+                        Stack(
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.all(4),
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                border: Border.all(color: const Color(0xFFE5DCD3), width: 1.5),
+                              ),
+                              child: CircleAvatar(
+                                radius: 46,
+                                backgroundColor: const Color(0xFFF3EBE3),
+                                backgroundImage: profile?.avatarUrl != null 
+                                    ? NetworkImage(profile!.avatarUrl!) 
+                                    : null,
+                                child: profile?.avatarUrl == null
+                                    ? Text(
+                                        name.isNotEmpty ? name[0].toUpperCase() : 'A',
+                                        style: const TextStyle(color: Color(0xFF8F2A0C), fontWeight: FontWeight.bold, fontSize: 36),
+                                      )
+                                    : null,
+                              ),
+                            ),
+                            Positioned(
+                              bottom: 0,
+                              right: 0,
+                              child: GestureDetector(
+                                onTap: _navigateToEditProfile,
+                                child: const CircleAvatar(
+                                  backgroundColor: Color(0xFF8F2A0C),
+                                  radius: 14,
+                                  child: Icon(Icons.camera_alt_outlined, color: Colors.white, size: 14),
+                                ),
+                              ),
+                            ),
+                          ],
                         ),
-                        child: const CircleAvatar(
-                          radius: 46,
-                          backgroundImage: NetworkImage('https://eboseqlzrfabtiurwjpl.supabase.co/storage/v1/object/public/project-renders/avatar1.jpg'),
+                        const SizedBox(height: 12),
+                        Text(
+                          name,
+                          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: Colors.black87),
                         ),
-                      ),
-                      Positioned(
-                        bottom: 0,
-                        right: 0,
-                        child: GestureDetector(
-                          onTap: _navigateToEditProfile,
-                          child: const CircleAvatar(
-                            backgroundColor: Color(0xFF8F2A0C),
-                            radius: 14,
-                            child: Icon(Icons.camera_alt_outlined, color: Colors.white, size: 14),
+                        const SizedBox(height: 12),
+                        
+                        // Edit Profil Button
+                        SizedBox(
+                          width: double.infinity,
+                          height: 44,
+                          child: ElevatedButton(
+                            onPressed: _navigateToEditProfile,
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: const Color(0xFF5C1C08),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+                              elevation: 0,
+                            ),
+                            child: const Text(
+                              'Edit Profil', 
+                              style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13)
+                            ),
                           ),
                         ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 12),
-                  Text(
-                    name,
-                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: Colors.black87),
-                  ),
-                  const SizedBox(height: 12),
-                  
-                  // Edit Profil Button
-                  SizedBox(
-                    width: double.infinity,
-                    height: 44,
-                    child: ElevatedButton(
-                      onPressed: _navigateToEditProfile,
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF5C1C08), // Dark brown
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-                        elevation: 0,
-                      ),
-                      child: const Text(
-                        'Edit Profil', 
-                        style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13)
-                      ),
+                        
+                        const SizedBox(height: 16),
+                        
+                        // Bio
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 10),
+                          child: Text(
+                            bio,
+                            textAlign: TextAlign.center,
+                            style: const TextStyle(color: Colors.black54, fontSize: 12, height: 1.5),
+                          ),
+                        ),
+                        
+                        const SizedBox(height: 14),
+                        
+                        // Rating & Location Row
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            const Icon(Icons.star, color: Colors.orange, size: 16),
+                            const SizedBox(width: 4),
+                            Text(
+                              '$rating ($reviewsCount Ulasan)',
+                              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Colors.black87),
+                            ),
+                            const SizedBox(width: 16),
+                            Container(width: 1, height: 12, color: Colors.black26),
+                            const SizedBox(width: 16),
+                            const Icon(Icons.location_on, color: Colors.grey, size: 16),
+                            const SizedBox(width: 4),
+                            Text(
+                              location,
+                              style: const TextStyle(fontSize: 12, color: Colors.black54),
+                            ),
+                          ],
+                        ),
+                      ],
                     ),
                   ),
                   
+                  const SizedBox(height: 24),
+                  
+                  // Stats Row (4 Pink/Brown Cards)
+                  Row(
+                    children: [
+                      Expanded(child: _buildStatItem('TOTAL DESAIN', finishedProjects)),
+                      const SizedBox(width: 8),
+                      Expanded(child: _buildStatItem('TAHUN PENGALAMAN', experienceYears)),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      Expanded(child: _buildStatItem('KOLABORASI', activeCollabs)),
+                      const SizedBox(width: 8),
+                      Expanded(child: _buildStatItem('SERTIFIKASI', certificationCount)),
+                    ],
+                  ),
+                  
+                  const SizedBox(height: 28),
+                  
+                  // Spesialisasi Section
+                  const Text('Spesialisasi', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Colors.black87)),
+                  const SizedBox(height: 12),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: [
+                      _buildTagChip('Rumah Tropis'),
+                      _buildTagChip('Restorasi Bangunan'),
+                      _buildTagChip('Desain Eksterior'),
+                      _buildTagChip('Eco-Friendly Design'),
+                      _buildTagChip('Urban Planning'),
+                    ],
+                  ),
+                  
+                  const SizedBox(height: 28),
+            
+                  const Text('Portofolio Publik', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Colors.black87)),
                   const SizedBox(height: 16),
                   
-                  // Bio
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 10),
-                    child: Text(
-                      bio,
-                      textAlign: TextAlign.center,
-                      style: const TextStyle(color: Colors.black54, fontSize: 12, height: 1.5),
-                    ),
-                  ),
-                  
-                  const SizedBox(height: 14),
-                  
-                  // Rating & Location Row
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      const Icon(Icons.star, color: Colors.orange, size: 16),
-                      const SizedBox(width: 4),
-                      Text(
-                        '$rating ($reviewsCount Ulasan)',
-                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Colors.black87),
-                      ),
-                      const SizedBox(width: 16),
-                      Container(width: 1, height: 12, color: Colors.black26),
-                      const SizedBox(width: 16),
-                      const Icon(Icons.location_on, color: Colors.grey, size: 16),
-                      const SizedBox(width: 4),
-                      Text(
-                        location,
-                        style: const TextStyle(fontSize: 12, color: Colors.black54),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-            
-            const SizedBox(height: 24),
-            
-            // Stats Row (4 Pink/Brown Cards)
-            Row(
-              children: [
-                Expanded(child: _buildStatItem('PROYEK SELESAI', finishedProjects)),
-                const SizedBox(width: 8),
-                Expanded(child: _buildStatItem('TAHUN PENGALAMAN', experienceYears)),
-              ],
-            ),
-            const SizedBox(height: 8),
-            Row(
-              children: [
-                Expanded(child: _buildStatItem('KEEFEKTIFAN', effectiveness)),
-                const SizedBox(width: 8),
-                Expanded(child: _buildStatItem('SERTIFIKASI', certificationCount)),
-              ],
-            ),
-            
-            const SizedBox(height: 28),
-            
-            // Spesialisasi Section
-            const Text('Spesialisasi', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Colors.black87)),
-            const SizedBox(height: 12),
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: [
-                _buildTagChip('Rumah Tropis'),
-                _buildTagChip('Restorasi Bangunan'),
-                _buildTagChip('Desain Eksterior'),
-                _buildTagChip('Eco-Friendly Design'),
-                _buildTagChip('Urban Planning'),
-              ],
-            ),
-            
-            const SizedBox(height: 28),
-            
-            // Tabs System
-            Row(
-              children: [
-                Expanded(
-                  child: GestureDetector(
-                    onTap: () => setState(() => _selectedTab = 0),
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(vertical: 12),
+                  if (portfolios.isEmpty)
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.symmetric(vertical: 40),
                       decoration: BoxDecoration(
-                        border: Border(
-                          bottom: BorderSide(
-                            color: _selectedTab == 0 ? const Color(0xFF8F2A0C) : Colors.transparent, 
-                            width: 2
-                          )
-                        ),
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(color: Colors.grey.shade200),
                       ),
-                      child: Text(
-                        'Portofolio Publik',
-                        textAlign: TextAlign.center,
-                        style: TextStyle(
-                          fontWeight: _selectedTab == 0 ? FontWeight.bold : FontWeight.normal,
-                          color: _selectedTab == 0 ? const Color(0xFF8F2A0C) : Colors.black54,
-                          fontSize: 13
-                        ),
+                      child: Column(
+                        children: const [
+                          Icon(Icons.design_services_outlined, size: 36, color: Colors.black38),
+                          SizedBox(height: 12),
+                          Text(
+                            'Belum ada portofolio yang diunggah.', 
+                            style: TextStyle(color: Colors.black54, fontSize: 13, fontStyle: FontStyle.italic)
+                          ),
+                        ],
+                      ),
+                    )
+                  else
+                    ...portfolios.map((p) => Padding(
+                          padding: const EdgeInsets.only(bottom: 16.0),
+                          child: _buildPortfolioCard(
+                            imageUrl: p['image_url'] as String? ?? 'https://via.placeholder.com/500',
+                            title: p['title'] as String? ?? 'Desain Tanpa Judul',
+                            category: p['style'] as String? ?? 'Desain',
+                            badgeText: 'Portofolio',
+                            badgeColor: const Color(0xFF8F2A0C),
+                          ),
+                        )).toList(),
+                  
+                  const SizedBox(height: 24),
+                  
+                  // Bottom Action Buttons
+                  SizedBox(
+                    width: double.infinity,
+                    height: 48,
+                    child: ElevatedButton.icon(
+                      onPressed: () async {
+                        final newProject = await Navigator.push(
+                          context,
+                          MaterialPageRoute(builder: (_) => const UploadDesainScreen()),
+                        );
+                        if (newProject != null && newProject is Map<String, dynamic> && mounted) {
+                          _refresh();
+                        }
+                      },
+                      icon: const Icon(Icons.add, color: Colors.white, size: 18),
+                      label: const Text('Tambah Portofolio', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF5C1C08),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        elevation: 0,
                       ),
                     ),
                   ),
-                ),
-                Expanded(
-                  child: GestureDetector(
-                    onTap: () => setState(() => _selectedTab = 1),
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(vertical: 12),
-                      decoration: BoxDecoration(
-                        border: Border(
-                          bottom: BorderSide(
-                            color: _selectedTab == 1 ? const Color(0xFF8F2A0C) : Colors.transparent, 
-                            width: 2
-                          )
-                        ),
-                      ),
-                      child: Text(
-                        'Proyek Privasi/Klien',
-                        textAlign: TextAlign.center,
-                        style: TextStyle(
-                          fontWeight: _selectedTab == 1 ? FontWeight.bold : FontWeight.normal,
-                          color: _selectedTab == 1 ? const Color(0xFF8F2A0C) : Colors.black54,
-                          fontSize: 13
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-            
-            const SizedBox(height: 16),
-            
-            // Tab View Content
-            if (_selectedTab == 0) ...[
-              // Portofolio Publik Cards
-              _buildPortfolioCard(
-                imageUrl: 'https://images.unsplash.com/photo-1600585154340-be6161a56a0c?w=500&q=80',
-                title: 'The Bamboo Oasis',
-                category: 'Residensial • Ubud, Bali',
-                badgeText: 'Selesai',
-                badgeColor: const Color(0xFF8F2A0C),
-              ),
-              const SizedBox(height: 16),
-              _buildPortfolioCard(
-                imageUrl: 'https://images.unsplash.com/photo-1486406146926-c627a92ad1ab?w=500&q=80',
-                title: 'SCBD Tower Extension',
-                category: 'Komersial • Jakarta Selatan',
-                badgeText: 'Selesai',
-                badgeColor: const Color(0xFF8F2A0C),
-              ),
-              const SizedBox(height: 16),
-              _buildPortfolioCard(
-                imageUrl: 'https://images.unsplash.com/photo-1600596542815-ffad4c1539a9?w=500&q=80',
-                title: 'Griya Terracotta',
-                category: 'Residensial • Bandung',
-                badgeText: 'Proses',
-                badgeColor: const Color(0xFF00E676),
-              ),
-              const SizedBox(height: 24),
-              
-              // Bottom Action Buttons
-              SizedBox(
-                width: double.infinity,
-                height: 48,
-                child: ElevatedButton.icon(
-                  onPressed: () async {
-                    final newProject = await Navigator.push(
-                      context,
-                      MaterialPageRoute(builder: (_) => const UploadDesainScreen()),
-                    );
-                    if (newProject != null && newProject is Map<String, dynamic> && mounted) {
-                      setState(() {
-                        // Simulating dynamic addition of the newly uploaded portfolio
-                      });
-                    }
-                  },
-                  icon: const Icon(Icons.add, color: Colors.white, size: 18),
-                  label: const Text('Tambah Portofolio', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF5C1C08),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                    elevation: 0,
-                  ),
-                ),
-              ),
-              const SizedBox(height: 10),
-              SizedBox(
-                width: double.infinity,
-                height: 48,
-                child: OutlinedButton.icon(
-                  onPressed: () {},
-                  icon: const Icon(Icons.rocket_launch_outlined, color: Color(0xFF5C1C08), size: 18),
-                  label: const Text('Mulai Proyek Baru', style: TextStyle(color: Color(0xFF5C1C08), fontWeight: FontWeight.bold)),
-                  style: OutlinedButton.styleFrom(
-                    side: const BorderSide(color: Color(0xFF5C1C08)),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                  ),
-                ),
-              ),
-            ] else ...[
-              // Proyek Privasi/Klien Tab placeholder
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.symmetric(vertical: 40),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(color: Colors.grey.shade200),
-                ),
-                child: Column(
-                  children: const [
-                    Icon(Icons.lock_outline, size: 36, color: Colors.black38),
-                    SizedBox(height: 12),
-                    Text(
-                      'Belum ada proyek privat yang dibagikan.', 
-                      style: TextStyle(color: Colors.black54, fontSize: 13, fontStyle: FontStyle.italic)
-                    ),
-                  ],
-                ),
-              ),
-            ],
             
             const SizedBox(height: 32),
             
@@ -443,10 +425,10 @@ class _ArsitekProfileTabState extends State<ArsitekProfileTab> with SingleTicker
               children: [
                 const Text('Ulasan Klien', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Colors.black87)),
                 Row(
-                  children: const [
-                    Text('4.9/5.0', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Colors.black87)),
-                    SizedBox(width: 4),
-                    Icon(Icons.star, color: Colors.orange, size: 14),
+                  children: [
+                    Text('$rating/5.0', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Colors.black87)),
+                    const SizedBox(width: 4),
+                    const Icon(Icons.star, color: Colors.orange, size: 14),
                   ],
                 ),
               ],
@@ -457,24 +439,51 @@ class _ArsitekProfileTabState extends State<ArsitekProfileTab> with SingleTicker
             ),
             const SizedBox(height: 16),
             
-            // Client Review 1
-            _buildClientReviewCard(
-              initials: 'RH',
-              name: 'Rian Hidayat',
-              project: 'Pemilik Proyek: The Bamboo Oasis',
-              time: '2 minggu lalu',
-              comment: '"Sangat puas dengan hasil desain Pak Hendra. Beliau benar-benar mendengarkan keinginan kami dan mampu mewujudkannya dalam bentuk bangunan yang estetis namun tetap fungsional."',
-            ),
-            const SizedBox(height: 12),
-            
-            // Client Review 2
-            _buildClientReviewCard(
-              initials: 'AS',
-              name: 'Anita Sari',
-              project: 'Manajer SCBD Extension',
-              time: '1 bulan lalu',
-              comment: '"Profesionalisme yang luar biasa. Ketepatan waktu dan detail teknis sangat diperhatikan. Sangat direkomendasikan untuk proyek komersial skala besar."',
-            ),
+            if (reviews.isEmpty)
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(vertical: 30),
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: Colors.grey.shade200),
+                ),
+                child: Column(
+                  children: const [
+                    Icon(Icons.rate_review_outlined, size: 36, color: Colors.black38),
+                    SizedBox(height: 8),
+                    Text(
+                      'Belum ada ulasan dari klien.',
+                      style: TextStyle(color: Colors.black54, fontSize: 13, fontStyle: FontStyle.italic),
+                    ),
+                  ],
+                ),
+              )
+            else
+              ...reviews.map((r) {
+                final clientProfile = r['profiles'] as Map<String, dynamic>?;
+                final project = r['projects'] as Map<String, dynamic>?;
+                final clientName = clientProfile?['name'] as String? ?? 'Klien';
+                final projectName = project?['title'] as String? ?? 'Proyek';
+                final ratingVal = r['rating'] as int? ?? 5;
+                final commentText = r['comment'] as String? ?? '';
+                final createdAtStr = r['created_at'] != null 
+                    ? _formatReviewDate(DateTime.tryParse(r['created_at'] as String))
+                    : 'Baru saja';
+                
+                return Padding(
+                  padding: const EdgeInsets.only(bottom: 12.0),
+                  child: _buildClientReviewCard(
+                    initials: clientName.isNotEmpty ? clientName[0].toUpperCase() : 'K',
+                    name: clientName,
+                    project: 'Proyek: $projectName',
+                    time: createdAtStr,
+                    comment: '"$commentText"',
+                    rating: ratingVal,
+                  ),
+                );
+              }).toList(),
             
             const SizedBox(height: 16),
             
@@ -523,9 +532,12 @@ class _ArsitekProfileTabState extends State<ArsitekProfileTab> with SingleTicker
             const SizedBox(height: 32),
           ],
         ),
-      ),
-    );
-  }
+      );
+    },
+   ),
+  ),
+ );
+}
 
   Widget _buildStatItem(String label, String value) {
     return Container(
@@ -714,6 +726,7 @@ class _ArsitekProfileTabState extends State<ArsitekProfileTab> with SingleTicker
     required String project,
     required String time,
     required String comment,
+    int rating = 5,
   }) {
     return Container(
       padding: const EdgeInsets.all(16),
@@ -740,7 +753,29 @@ class _ArsitekProfileTabState extends State<ArsitekProfileTab> with SingleTicker
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(name, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.black87)),
+                    Row(
+                      children: [
+                        Flexible(
+                          child: Text(
+                            name, 
+                            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.black87),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                        const SizedBox(width: 6),
+                        Row(
+                          children: List.generate(
+                            5,
+                            (index) => Icon(
+                              index < rating ? Icons.star_rounded : Icons.star_border_rounded,
+                              color: Colors.orange,
+                              size: 12,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
                     const SizedBox(height: 2),
                     Text(project, style: const TextStyle(color: Colors.black45, fontSize: 10)),
                   ],
@@ -757,5 +792,20 @@ class _ArsitekProfileTabState extends State<ArsitekProfileTab> with SingleTicker
         ],
       ),
     );
+  }
+
+  String _formatReviewDate(DateTime? date) {
+    if (date == null) return "Baru saja";
+    final now = DateTime.now();
+    final diff = now.difference(date);
+    if (diff.inDays > 30) {
+      return "${date.day}/${date.month}/${date.year}";
+    } else if (diff.inDays > 0) {
+      return "${diff.inDays} hari lalu";
+    } else if (diff.inHours > 0) {
+      return "${diff.inHours} jam lalu";
+    } else {
+      return "Baru saja";
+    }
   }
 }

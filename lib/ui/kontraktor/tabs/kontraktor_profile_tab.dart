@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../data/providers/vendor_provider.dart';
 import '../../../data/providers/auth_provider.dart';
 import '../../../data/models/profile_model.dart';
@@ -35,11 +36,13 @@ class _KontraktorProfileTabState
       context,
       listen: false,
     );
+    final userId = Supabase.instance.client.auth.currentUser?.id ?? "";
 
     _future = Future.wait([
       provider.fetchVendorProfile(),
       provider.fetchPortfolios(),
       provider.fetchCertifications(),
+      provider.fetchReviews(userId), // 3: reviews
     ]);
   }
 

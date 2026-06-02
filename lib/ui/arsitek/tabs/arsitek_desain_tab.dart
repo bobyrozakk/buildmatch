@@ -3,6 +3,8 @@ import 'package:provider/provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../core/constants/colors.dart';
 import '../../../data/providers/architect_provider.dart';
+import '../../../data/providers/notification_provider.dart';
+import '../../shared/screens/notification_screen.dart';
 import '../screens/upload_design_screen.dart';
 import '../screens/detail_desain_screen.dart';
 
@@ -44,13 +46,35 @@ class _ArsitekDesainTabState extends State<ArsitekDesainTab> {
         backgroundColor: const Color(0xFFFCF8F5),
         elevation: 0,
         automaticallyImplyLeading: false,
-        leading: IconButton(
-          icon: const Icon(Icons.menu, color: AppColors.primary),
-          onPressed: () {},
-        ),
-        title: const Text(
-          'Galeri Desain',
-          style: TextStyle(color: AppColors.primary, fontWeight: FontWeight.w900, fontSize: 18),
+        titleSpacing: 20,
+        title: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                  color: AppColors.primary,
+                  borderRadius: BorderRadius.circular(10)),
+              child: const Icon(Icons.hardware_rounded,
+                  color: Colors.white, size: 20),
+            ),
+            const SizedBox(width: 10),
+            RichText(
+              text: const TextSpan(children: [
+                TextSpan(
+                    text: 'Build',
+                    style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 18,
+                        color: AppColors.primary)),
+                TextSpan(
+                    text: 'Match',
+                    style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 18,
+                        color: Colors.black87)),
+              ]),
+            ),
+          ],
         ),
         actions: [
           GestureDetector(
@@ -74,11 +98,43 @@ class _ArsitekDesainTabState extends State<ArsitekDesainTab> {
             ),
           ),
           const SizedBox(width: 12),
-          IconButton(
-            icon: const Icon(Icons.notifications_none_rounded, color: Colors.black87, size: 24),
-            onPressed: () {},
+          Consumer<NotificationProvider>(
+            builder: (context, notif, child) => GestureDetector(
+              onTap: () {
+                Navigator.push(context, MaterialPageRoute(builder: (_) => const NotificationScreen()));
+              },
+              child: Stack(
+                clipBehavior: Clip.none,
+                alignment: Alignment.center,
+                children: [
+                  Container(
+                    margin: const EdgeInsets.symmetric(vertical: 10),
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                        color: AppColors.cardCream,
+                        borderRadius: BorderRadius.circular(12)),
+                    child: const Icon(Icons.notifications_none_rounded, size: 20, color: AppColors.primary),
+                  ),
+                  if (notif.unreadCount > 0)
+                    Positioned(
+                      top: 4,
+                      right: -2,
+                      child: Container(
+                        padding: const EdgeInsets.all(4),
+                        decoration: const BoxDecoration(color: Colors.red, shape: BoxShape.circle),
+                        constraints: const BoxConstraints(minWidth: 16, minHeight: 16),
+                        child: Text(
+                          '${notif.unreadCount}',
+                          style: const TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.bold),
+                          textAlign: TextAlign.center,
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+            ),
           ),
-          const SizedBox(width: 8),
+          const SizedBox(width: 20),
         ],
       ),
       body: RefreshIndicator(
@@ -91,40 +147,7 @@ class _ArsitekDesainTabState extends State<ArsitekDesainTab> {
               return const Center(child: CircularProgressIndicator(color: AppColors.primary));
             }
 
-            final rawPortos = snapshot.data ?? [];
-            
-            final List<Map<String, dynamic>> displayList = rawPortos.isNotEmpty 
-              ? rawPortos
-              : [
-                  {
-                    'title': 'Rumah Atap Miring',
-                    'style': 'Minimalis',
-                    'likes': '1.2k',
-                    'views': '4.5k',
-                    'image_url': 'https://images.unsplash.com/photo-1600585154340-be6161a56a0c?w=500&q=80',
-                  },
-                  {
-                    'title': 'Villa Bali Modern',
-                    'style': 'Tropis',
-                    'likes': '840',
-                    'views': '2.1k',
-                    'image_url': 'https://images.unsplash.com/photo-1580587771525-78b9dba3b914?w=500&q=80',
-                  },
-                  {
-                    'title': 'Studio Bata Ekspos',
-                    'style': 'Industrial',
-                    'likes': '2.3k',
-                    'views': '10k',
-                    'image_url': 'https://images.unsplash.com/photo-1600607687939-ce8a6c25118c?w=500&q=80',
-                  },
-                  {
-                    'title': 'Rumah Lahan Sempit',
-                    'style': 'Modern',
-                    'likes': '520',
-                    'views': '1.2k',
-                    'image_url': 'https://images.unsplash.com/photo-1512917774080-9991f1c4c750?w=500&q=80',
-                  },
-                ];
+            final List<Map<String, dynamic>> displayList = snapshot.data ?? [];
 
             final filteredList = displayList.where((item) {
               if (_selectedCategory == "Semua") return true;

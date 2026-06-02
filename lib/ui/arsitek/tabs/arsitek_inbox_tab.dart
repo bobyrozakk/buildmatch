@@ -5,6 +5,8 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../core/constants/colors.dart';
 import '../../../data/providers/chat_provider.dart';
 import '../../../data/models/chat_model.dart';
+import '../../../data/providers/notification_provider.dart';
+import '../../shared/screens/notification_screen.dart';
 import '../../shared/screens/chat_detail_screen.dart';
 
 class ArsitekInboxTab extends StatefulWidget {
@@ -55,45 +57,74 @@ class _ArsitekInboxTabState extends State<ArsitekInboxTab>
         backgroundColor: const Color(0xFFFCF8F5),
         elevation: 0,
         automaticallyImplyLeading: false,
-        leading: IconButton(
-          icon: const Icon(Icons.menu_rounded, color: Colors.black87, size: 24),
-          onPressed: () {},
-        ),
-        title: const Text(
-          'BuildMatch',
-          style: TextStyle(
-              color: AppColors.primary,
-              fontWeight: FontWeight.bold,
-              fontSize: 18),
+        titleSpacing: 20,
+        title: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                  color: AppColors.primary,
+                  borderRadius: BorderRadius.circular(10)),
+              child: const Icon(Icons.hardware_rounded,
+                  color: Colors.white, size: 20),
+            ),
+            const SizedBox(width: 10),
+            RichText(
+              text: const TextSpan(children: [
+                TextSpan(
+                    text: 'Build',
+                    style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 18,
+                        color: AppColors.primary)),
+                TextSpan(
+                    text: 'Match',
+                    style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 18,
+                        color: Colors.black87)),
+              ]),
+            ),
+          ],
         ),
         actions: [
-          Consumer<ChatProvider>(
-            builder: (_, chatProv, __) => Stack(
-              alignment: Alignment.center,
-              children: [
-                IconButton(
-                  icon: const Icon(Icons.notifications_none_rounded,
-                      color: Colors.black87, size: 24),
-                  onPressed: () {},
-                ),
-                if (chatProv.totalUnreadCount > 0)
-                  Positioned(
-                    top: 12,
-                    right: 12,
-                    child: Container(
-                      width: 8,
-                      height: 8,
-                      decoration: BoxDecoration(
-                        color: Colors.red,
-                        shape: BoxShape.circle,
-                        border: Border.all(color: Colors.white, width: 1.5),
+          Consumer<NotificationProvider>(
+            builder: (context, notif, child) => GestureDetector(
+              onTap: () {
+                Navigator.push(context, MaterialPageRoute(builder: (_) => const NotificationScreen()));
+              },
+              child: Stack(
+                clipBehavior: Clip.none,
+                alignment: Alignment.center,
+                children: [
+                  Container(
+                    margin: const EdgeInsets.symmetric(vertical: 10),
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                        color: AppColors.cardCream,
+                        borderRadius: BorderRadius.circular(12)),
+                    child: const Icon(Icons.notifications_none_rounded, size: 20, color: AppColors.primary),
+                  ),
+                  if (notif.unreadCount > 0)
+                    Positioned(
+                      top: 4,
+                      right: -2,
+                      child: Container(
+                        padding: const EdgeInsets.all(4),
+                        decoration: const BoxDecoration(color: Colors.red, shape: BoxShape.circle),
+                        constraints: const BoxConstraints(minWidth: 16, minHeight: 16),
+                        child: Text(
+                          '${notif.unreadCount}',
+                          style: const TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.bold),
+                          textAlign: TextAlign.center,
+                        ),
                       ),
                     ),
-                  ),
-              ],
+                ],
+              ),
             ),
           ),
-          const SizedBox(width: 8),
+          const SizedBox(width: 20),
         ],
         bottom: PreferredSize(
           preferredSize: const Size.fromHeight(48),

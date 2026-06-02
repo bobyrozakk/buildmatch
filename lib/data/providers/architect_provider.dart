@@ -347,6 +347,182 @@ class ArchitectProvider extends ChangeNotifier {
   }
 
   // =========================================================
+  // POPULAR PORTFOLIOS (FROM OTHER ARCHITECTS)
+  // =========================================================
+
+  Future<List<Map<String, dynamic>>> fetchPopularPortfolios() async {
+    try {
+      final userId = _supabase.auth.currentUser?.id;
+
+      // Fetch portfolios from ALL architects, exclude current user
+      var query = _supabase
+          .from('portfolios')
+          .select('*, profiles:vendor_id(name, avatar_url, company_name)');
+
+      if (userId != null) {
+        query = query.neq('vendor_id', userId);
+      }
+
+      final response = await query
+          .order('created_at', ascending: false)
+          .limit(10);
+
+      final result = <Map<String, dynamic>>[];
+      for (final row in response) {
+        final rawTitle = row['title'] as String? ?? "";
+        String title = rawTitle;
+        String style = "Modern";
+
+        if (rawTitle.startsWith('{')) {
+          try {
+            final data = jsonDecode(rawTitle);
+            title = data['title'] ?? "Desain Tanpa Judul";
+            style = data['style'] ?? "Modern";
+          } catch (_) {}
+        }
+
+        final imageUrl = row['image_url'] as String?;
+        final profileData = row['profiles'] as Map<String, dynamic>?;
+        final architectName = profileData?['name'] as String? ?? 'Arsitek';
+
+        result.add({
+          'id': row['id'] as String,
+          'title': title,
+          'style': style,
+          'image_url': imageUrl ?? '',
+          'architect_name': architectName,
+          'vendor_id': row['vendor_id'] as String,
+        });
+      }
+      return result;
+    } catch (e) {
+      debugPrint('Error fetch popular portfolios: $e');
+      return [];
+    }
+  }
+
+  // =========================================================
+  // COLLABORATION REQUESTS (OPEN CLIENT PROJECTS)
+  // =========================================================
+
+  Future<List<Map<String, dynamic>>> fetchCollaborationRequests() async {
+    try {
+      final userId = _supabase.auth.currentUser?.id;
+      if (userId == null) return [];
+
+      // Fetch open projects from clients
+      final projects = await _supabase
+          .from('projects')
+          .select('*, profiles:client_id(name, avatar_url)')
+          .eq('status', 'open')
+          .order('created_at', ascending: false)
+          .limit(5);
+
+      // Filter out projects where this architect already bid
+      final bids = await _supabase
+          .from('bids')
+          .select('project_id')
+          .eq('vendor_id', userId);
+
+      final biddedProjectIds = (bids as List)
+          .map((b) => b['project_id'] as String)
+          .toSet();
+
+      final result = <Map<String, dynamic>>[];
+      for (final p in projects) {
+        final projectId = p['id'] as String;
+        if (biddedProjectIds.contains(projectId)) continue;
+
+        final clientProfile = p['profiles'] as Map<String, dynamic>?;
+        result.add({
+          'project_id': projectId,
+          'title': p['title'] as String? ?? 'Proyek Tanpa Judul',
+          'description': p['description'] as String? ?? '',
+          'budget': (p['budget'] as num?)?.toDouble() ?? 0.0,
+          'location': p['location'] as String? ?? '',
+          'client_name': clientProfile?['name'] as String? ?? 'Client',
+          'client_avatar': clientProfile?['avatar_url'] as String?,
+        });
+      }
+      return result;
+    } catch (e) {
+      debugPrint('Error fetch collaboration requests: $e');
+      return [];
+    }
+  }
+
+  // =========================================================
+  // FETCH ARCHITECT REVIEWS
+  // =========================================================
+
+  Future<List<Map<String, dynamic>>> fetchReviews(String userId) async {
+    try {
+      final response = await _supabase
+          .from('reviews')
+          .select('*, profiles:user_id(name, avatar_url), projects:project_id(title)')
+          .eq('vendor_id', userId)
+          .order('created_at', ascending: false);
+      return List<Map<String, dynamic>>.from(response);
+    } catch (e) {
+      debugPrint('Error fetch architect reviews: $e');
+      return [];
+    }
+  }
+
+  // =========================================================
+  // ARCHITECT STATS (REAL DATA)
+  // =========================================================
+
+  Future<Map<String, dynamic>> fetchArchitectStats(String userId) async {
+    try {
+      // Count portfolios
+      final portfolios = await _supabase
+          .from('portfolios')
+          .select('id')
+          .eq('vendor_id', userId);
+      final portfolioCount = (portfolios as List).length;
+
+      // Count active bids (accepted)
+      final activeBids = await _supabase
+          .from('bids')
+          .select('id')
+          .eq('vendor_id', userId)
+          .eq('status', 'accepted');
+      final activeCollabs = (activeBids as List).length;
+
+      // Count certifications
+      final certs = await _supabase
+          .from('certifications')
+          .select('id')
+          .eq('vendor_id', userId);
+      final certCount = (certs as List).length;
+
+      // Fetch profile for experience years
+      final profile = await _supabase
+          .from('profiles')
+          .select('experience_years')
+          .eq('id', userId)
+          .maybeSingle();
+      final experience = profile?['experience_years'] as String? ?? '0';
+
+      return {
+        'portfolio_count': portfolioCount,
+        'active_collabs': activeCollabs,
+        'cert_count': certCount,
+        'experience_years': experience,
+      };
+    } catch (e) {
+      debugPrint('Error fetch architect stats: $e');
+      return {
+        'portfolio_count': 0,
+        'active_collabs': 0,
+        'cert_count': 0,
+        'experience_years': '0',
+      };
+    }
+  }
+
+  // =========================================================
   // BIDS & DEALS (DYNAMIC REAL-TIME CYCLES)
   // =========================================================
 

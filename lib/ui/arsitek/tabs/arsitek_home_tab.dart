@@ -19,8 +19,7 @@ class ArsitekHomeTab extends StatefulWidget {
 }
 
 class _ArsitekHomeTabState extends State<ArsitekHomeTab> {
-  late Future<Map<String, dynamic>?> _profileFuture;
-  late Future<List<Map<String, dynamic>>> _portfolioFuture;
+  late Future<List<dynamic>> _dataFuture;
 
   @override
   void initState() {
@@ -31,8 +30,14 @@ class _ArsitekHomeTabState extends State<ArsitekHomeTab> {
   void _loadData() {
     final architect = Provider.of<ArchitectProvider>(context, listen: false);
     final userId = Supabase.instance.client.auth.currentUser?.id ?? "";
-    _profileFuture = architect.fetchArchitectDetails(userId);
-    _portfolioFuture = architect.fetchPortfolios(userId);
+    
+    _dataFuture = Future.wait([
+      architect.fetchArchitectDetails(userId), // 0: profile
+      architect.fetchPortfolios(userId),       // 1: own portfolios
+      architect.fetchArchitectStats(userId),   // 2: stats
+      architect.fetchCollaborationRequests(),  // 3: collab requests
+      architect.fetchPopularPortfolios(),      // 4: popular designs
+    ]);
     
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
@@ -46,7 +51,7 @@ class _ArsitekHomeTabState extends State<ArsitekHomeTab> {
     setState(() {
       _loadData();
     });
-    await Future.wait([_profileFuture, _portfolioFuture]);
+    await _dataFuture;
   }
 
   @override
@@ -57,47 +62,41 @@ class _ArsitekHomeTabState extends State<ArsitekHomeTab> {
         child: RefreshIndicator(
           color: const Color(0xFF8F2A0C),
           onRefresh: _refresh,
-          child: FutureBuilder<Map<String, dynamic>?>(
-            future: _profileFuture,
-            builder: (context, profileSnapshot) {
-              if (profileSnapshot.connectionState == ConnectionState.waiting) {
+          child: FutureBuilder<List<dynamic>>(
+            future: _dataFuture,
+            builder: (context, snapshot) {
+              if (snapshot.connectionState == ConnectionState.waiting) {
                 return const Center(child: CircularProgressIndicator(color: Color(0xFF8F2A0C)));
               }
 
-              final profileData = profileSnapshot.data;
-              final profile = profileData?['profile'] as ProfileModel?;
-              final rawBio = profileData?['bio'] as String? ?? "";
-              final specs = profileData?['specializations'] as Map<String, dynamic>? ?? {};
-              
-              final name = profile?.name.isNotEmpty == true ? profile!.name : "Arsitek";
-              
-              double completionVal = 0.85; // Using 85% as in Figma
+              final profileData = snapshot.data?[0] as Map<String, dynamic>?;
+              final listPorto = snapshot.data?[1] as List<Map<String, dynamic>>? ?? [];
+              final stats = snapshot.data?[2] as Map<String, dynamic>? ?? {};
+              final collabs = snapshot.data?[3] as List<Map<String, dynamic>>? ?? [];
+              final popularDesigns = snapshot.data?[4] as List<Map<String, dynamic>>? ?? [];
 
-              return FutureBuilder<List<Map<String, dynamic>>>(
-                future: _portfolioFuture,
-                builder: (context, portoSnapshot) {
-                  final listPorto = portoSnapshot.data ?? [];
-                  
-                  return SingleChildScrollView(
-                    physics: const AlwaysScrollableScrollPhysics(parent: BouncingScrollPhysics()),
-                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        _buildAppBar(profile),
-                        const SizedBox(height: 20),
-                        _buildWelcomeCard(name, completionVal),
-                        const SizedBox(height: 24),
-                        _buildStatsRow(),
-                        const SizedBox(height: 28),
-                        _buildPermintaanKolaborasi(),
-                        const SizedBox(height: 28),
-                        _buildDesainPopuler(listPorto),
-                        const SizedBox(height: 100), // Spacing for bottom nav
-                      ],
-                    ),
-                  );
-                },
+              final profile = profileData?['profile'] as ProfileModel?;
+              final name = profile?.name.isNotEmpty == true ? profile!.name : "Arsitek";
+              double completionVal = 0.85; // Default for now
+              
+              return SingleChildScrollView(
+                physics: const AlwaysScrollableScrollPhysics(parent: BouncingScrollPhysics()),
+                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _buildAppBar(profile),
+                    const SizedBox(height: 20),
+                    _buildWelcomeCard(name, completionVal),
+                    const SizedBox(height: 24),
+                    _buildStatsRow(stats),
+                    const SizedBox(height: 28),
+                    _buildPermintaanKolaborasi(collabs),
+                    const SizedBox(height: 28),
+                    _buildDesainPopuler(popularDesigns),
+                    const SizedBox(height: 100), // Spacing for bottom nav
+                  ],
+                ),
               );
             },
           ),
@@ -107,20 +106,70 @@ class _ArsitekHomeTabState extends State<ArsitekHomeTab> {
   }
 
   Widget _buildAppBar(ProfileModel? profile) {
+    final name = profile?.name ?? "Arsitek";
     return Row(
       children: [
-        IconButton(
-          icon: const Icon(Icons.menu, color: Colors.black87, size: 24),
-          padding: EdgeInsets.zero,
-          constraints: const BoxConstraints(),
-          onPressed: () {},
+        Container(
+          padding: const EdgeInsets.all(8),
+          decoration: BoxDecoration(
+              color: AppColors.primary,
+              borderRadius: BorderRadius.circular(10)),
+          child: const Icon(Icons.hardware_rounded,
+              color: Colors.white, size: 20),
         ),
-        const SizedBox(width: 12),
-        const Text(
-          'BuildMatch',
-          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: Color(0xFF8F2A0C)),
+        const SizedBox(width: 10),
+        RichText(
+          text: const TextSpan(children: [
+            TextSpan(
+                text: 'Build',
+                style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 18,
+                    color: AppColors.primary)),
+            TextSpan(
+                text: 'Match',
+                style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 18,
+                    color: Colors.black87)),
+          ]),
         ),
         const Spacer(),
+        Consumer<ChatProvider>(
+          builder: (context, chat, child) => GestureDetector(
+            onTap: () {
+              widget.onSwitchTab?.call(2);
+            },
+            child: Stack(
+              clipBehavior: Clip.none,
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                      color: AppColors.cardCream,
+                      borderRadius: BorderRadius.circular(12)),
+                  child: const Icon(Icons.chat_bubble_outline_rounded, size: 20, color: AppColors.primary),
+                ),
+                if (chat.totalUnreadCount > 0)
+                  Positioned(
+                    top: -2,
+                    right: -2,
+                    child: Container(
+                      padding: const EdgeInsets.all(4),
+                      decoration: const BoxDecoration(color: Colors.red, shape: BoxShape.circle),
+                      constraints: const BoxConstraints(minWidth: 16, minHeight: 16),
+                      child: Text(
+                        '${chat.totalUnreadCount}',
+                        style: const TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.bold),
+                        textAlign: TextAlign.center,
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        ),
+        const SizedBox(width: 8),
         Consumer<NotificationProvider>(
           builder: (context, notif, child) => GestureDetector(
             onTap: () {
@@ -129,31 +178,48 @@ class _ArsitekHomeTabState extends State<ArsitekHomeTab> {
             child: Stack(
               clipBehavior: Clip.none,
               children: [
-                const Icon(Icons.notifications_none_rounded, color: Color(0xFF8F2A0C), size: 24),
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                      color: AppColors.cardCream,
+                      borderRadius: BorderRadius.circular(12)),
+                  child: const Icon(Icons.notifications_none_rounded, size: 20, color: AppColors.primary),
+                ),
                 if (notif.unreadCount > 0)
                   Positioned(
-                    top: 0,
-                    right: 0,
+                    top: -2,
+                    right: -2,
                     child: Container(
-                      width: 8,
-                      height: 8,
+                      padding: const EdgeInsets.all(4),
                       decoration: const BoxDecoration(color: Colors.red, shape: BoxShape.circle),
+                      constraints: const BoxConstraints(minWidth: 16, minHeight: 16),
+                      child: Text(
+                        '${notif.unreadCount}',
+                        style: const TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.bold),
+                        textAlign: TextAlign.center,
+                      ),
                     ),
                   ),
               ],
             ),
           ),
         ),
-        const SizedBox(width: 16),
+        const SizedBox(width: 8),
         GestureDetector(
           onTap: () async {
             await Navigator.push(context, MaterialPageRoute(builder: (_) => const EditProfileScreen()));
             _refresh();
           },
           child: CircleAvatar(
-            radius: 16,
-            backgroundColor: const Color(0xFFF3EBE3),
-            backgroundImage: profile?.avatarUrl != null ? NetworkImage(profile!.avatarUrl!) : const NetworkImage('https://eboseqlzrfabtiurwjpl.supabase.co/storage/v1/object/public/project-renders/avatar1.jpg'),
+            radius: 18,
+            backgroundColor: AppColors.cardCream,
+            backgroundImage: profile?.avatarUrl != null ? NetworkImage(profile!.avatarUrl!) : null,
+            child: profile?.avatarUrl == null
+                ? Text(
+                    name.isNotEmpty ? name[0].toUpperCase() : 'A',
+                    style: const TextStyle(color: AppColors.primary, fontWeight: FontWeight.bold, fontSize: 14),
+                  )
+                : null,
           ),
         ),
       ],
@@ -209,7 +275,12 @@ class _ArsitekHomeTabState extends State<ArsitekHomeTab> {
     );
   }
 
-  Widget _buildStatsRow() {
+  Widget _buildStatsRow(Map<String, dynamic> stats) {
+    final activeCollabs = stats['active_collabs']?.toString() ?? '0';
+    final totalDesigns = stats['portfolio_count']?.toString() ?? '0';
+    final experience = stats['experience_years']?.toString() ?? '0';
+    final certs = stats['cert_count']?.toString() ?? '0';
+
     return GridView.count(
       crossAxisCount: 2,
       shrinkWrap: true,
@@ -218,10 +289,10 @@ class _ArsitekHomeTabState extends State<ArsitekHomeTab> {
       crossAxisSpacing: 12,
       childAspectRatio: 1.5,
       children: [
-        _buildStatCard('Kolaborasi Aktif', '12', Icons.people_alt_outlined),
-        _buildStatCard('Total Desain', '48', Icons.design_services_outlined),
-        _buildStatCard('Rating Klien', '4.9/5.0', Icons.star, isStar: true),
-        _buildStatCard('Desain Disimpan', '156', Icons.bookmark_outline),
+        _buildStatCard('Kolaborasi Aktif', activeCollabs, Icons.people_alt_outlined),
+        _buildStatCard('Total Desain', totalDesigns, Icons.design_services_outlined),
+        _buildStatCard('Tahun Pengalaman', experience, Icons.access_time),
+        _buildStatCard('Sertifikasi', certs, Icons.workspace_premium_outlined),
       ],
     );
   }
@@ -252,7 +323,7 @@ class _ArsitekHomeTabState extends State<ArsitekHomeTab> {
     );
   }
 
-  Widget _buildPermintaanKolaborasi() {
+  Widget _buildPermintaanKolaborasi(List<Map<String, dynamic>> collabs) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -261,35 +332,80 @@ class _ArsitekHomeTabState extends State<ArsitekHomeTab> {
           children: [
             const Text('Permintaan Kolaborasi', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.black87)),
             GestureDetector(
-              onTap: () => widget.onSwitchTab?.call(2),
+              onTap: () => widget.onSwitchTab?.call(2), // Assume tab 2 is inbox/requests
               child: const Text('Lihat Semua', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF8F2A0C))),
             ),
           ],
         ),
         const SizedBox(height: 16),
-        SizedBox(
-          height: 165, // Adjust height for the buttons inside the card
-          child: ListView(
-            scrollDirection: Axis.horizontal,
-            physics: const BouncingScrollPhysics(),
-            clipBehavior: Clip.none,
-            children: [
-              _buildCollabCard(
-                'Budi Santoso',
-                'Kontraktor Utama',
-                '"Tertarik untuk kolaborasi pada proyek perumahan minimalis di..."',
-                'https://eboseqlzrfabtiurwjpl.supabase.co/storage/v1/object/public/project-renders/avatar1.jpg',
-              ),
-              _buildCollabCard(
-                'Siti Aminah',
-                'Client',
-                '"Butuh desain untuk proyek villa tropis modern di area pantai..."',
-                'https://eboseqlzrfabtiurwjpl.supabase.co/storage/v1/object/public/project-renders/avatar2.jpg',
-              ),
-            ],
+        if (collabs.isEmpty)
+          _buildEmptyCollabState()
+        else
+          SizedBox(
+            height: 165,
+            child: ListView(
+              scrollDirection: Axis.horizontal,
+              physics: const BouncingScrollPhysics(),
+              clipBehavior: Clip.none,
+              children: collabs.map((item) {
+                return _buildCollabCard(
+                  item['client_name'] ?? 'Client',
+                  'Client',
+                  item['title'] ?? '',
+                  item['client_avatar'] ?? 'https://ui-avatars.com/api/?name=${Uri.encodeComponent(item['client_name'] ?? 'Client')}&background=B53D1B&color=fff',
+                );
+              }).toList(),
+            ),
           ),
-        ),
       ],
+    );
+  }
+
+  Widget _buildEmptyCollabState() {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(vertical: 32, horizontal: 16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: const Color(0xFFF3EBE3)),
+      ),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: const BoxDecoration(
+              color: Color(0xFFFCF8F5),
+              shape: BoxShape.circle,
+            ),
+            child: const Icon(Icons.handshake_outlined, size: 40, color: Color(0xFF8F2A0C)),
+          ),
+          const SizedBox(height: 16),
+          const Text(
+            'Belum ada permintaan',
+            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Colors.black87),
+          ),
+          const SizedBox(height: 8),
+          const Text(
+            'Klien yang tertarik dengan portofolio Anda\nakan muncul di sini.',
+            textAlign: TextAlign.center,
+            style: TextStyle(fontSize: 12, color: Colors.black54),
+          ),
+          const SizedBox(height: 16),
+          ElevatedButton(
+            onPressed: () {
+              widget.onSwitchTab?.call(1); // Go to portfolio tab
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF8F2A0C),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+              elevation: 0,
+            ),
+            child: const Text('Perbarui Portofolio', style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
     );
   }
 
@@ -371,30 +487,10 @@ class _ArsitekHomeTabState extends State<ArsitekHomeTab> {
     );
   }
 
-  Widget _buildDesainPopuler(List<Map<String, dynamic>> portoList) {
-    // Mock data based on Figma screenshot
-    final List<Map<String, dynamic>> displayList = [
-      {
-        'title': 'Villa Tepi Pantai',
-        'likes': '2.4k',
-        'image_url': 'https://eboseqlzrfabtiurwjpl.supabase.co/storage/v1/object/public/project-renders/modern_villa.jpg',
-      },
-      {
-        'title': 'Kantor Industrial',
-        'likes': '1.8k',
-        'image_url': 'https://images.unsplash.com/photo-1497366216548-37526070297c?w=500&q=80',
-      },
-      {
-        'title': 'Teras Terracotta',
-        'likes': '3.1k',
-        'image_url': 'https://images.unsplash.com/photo-1600585154340-be6161a56a0c?w=500&q=80',
-      },
-      {
-        'title': 'Eco-Smart Home',
-        'likes': '1.2k',
-        'image_url': 'https://images.unsplash.com/photo-1512917774080-9991f1c4c750?w=500&q=80',
-      },
-    ];
+  Widget _buildDesainPopuler(List<Map<String, dynamic>> popularDesigns) {
+    if (popularDesigns.isEmpty) {
+      return const SizedBox.shrink();
+    }
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -405,7 +501,7 @@ class _ArsitekHomeTabState extends State<ArsitekHomeTab> {
             const Text('Desain Populer', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.black87)),
             GestureDetector(
               onTap: () => widget.onSwitchTab?.call(1),
-              child: const Text('Filter', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF8F2A0C))),
+              child: const Text('Lihat Galeri', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF8F2A0C))),
             ),
           ],
         ),
@@ -413,7 +509,7 @@ class _ArsitekHomeTabState extends State<ArsitekHomeTab> {
         GridView.builder(
           shrinkWrap: true,
           physics: const NeverScrollableScrollPhysics(),
-          itemCount: displayList.length,
+          itemCount: popularDesigns.length,
           gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
             crossAxisCount: 2,
             crossAxisSpacing: 12,
@@ -421,10 +517,10 @@ class _ArsitekHomeTabState extends State<ArsitekHomeTab> {
             childAspectRatio: 0.85,
           ),
           itemBuilder: (context, i) {
-            final item = displayList[i];
+            final item = popularDesigns[i];
             final title = item['title'] ?? "";
-            final likes = item['likes'] ?? "0";
             final imgUrl = item['image_url'] ?? "";
+            final architectName = item['architect_name'] ?? "";
 
             return Container(
               decoration: BoxDecoration(
@@ -439,7 +535,9 @@ class _ArsitekHomeTabState extends State<ArsitekHomeTab> {
                   Expanded(
                     child: SizedBox(
                       width: double.infinity,
-                      child: Image.network(imgUrl, fit: BoxFit.cover),
+                      child: imgUrl.isNotEmpty 
+                        ? Image.network(imgUrl, fit: BoxFit.cover)
+                        : Container(color: AppColors.cardCream),
                     ),
                   ),
                   Padding(
@@ -451,9 +549,16 @@ class _ArsitekHomeTabState extends State<ArsitekHomeTab> {
                         const SizedBox(height: 4),
                         Row(
                           children: [
-                            const Icon(Icons.thumb_up_alt_rounded, size: 10, color: Color(0xFFD97706)), // Orange thumb
+                            const Icon(Icons.person, size: 10, color: Color(0xFFD97706)),
                             const SizedBox(width: 4),
-                            Text(likes, style: const TextStyle(fontSize: 10, color: Colors.black54, fontWeight: FontWeight.bold)),
+                            Expanded(
+                              child: Text(
+                                architectName, 
+                                style: const TextStyle(fontSize: 10, color: Colors.black54, fontWeight: FontWeight.bold),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
                           ],
                         ),
                       ],

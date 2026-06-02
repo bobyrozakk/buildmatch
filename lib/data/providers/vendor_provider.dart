@@ -496,8 +496,25 @@ class VendorProvider extends ChangeNotifier {
       debugPrint(
         'Error delete certification: $e',
       );
-
       return false;
+    }
+  }
+
+  // =========================================================
+  // FETCH VENDOR REVIEWS
+  // =========================================================
+
+  Future<List<Map<String, dynamic>>> fetchReviews(String vendorId) async {
+    try {
+      final response = await _supabase
+          .from('reviews')
+          .select('*, profiles:user_id(name, avatar_url), projects:project_id(title)')
+          .eq('vendor_id', vendorId)
+          .order('created_at', ascending: false);
+      return List<Map<String, dynamic>>.from(response);
+    } catch (e) {
+      debugPrint('Error fetch vendor reviews: $e');
+      return [];
     }
   }
 }
