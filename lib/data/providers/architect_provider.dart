@@ -32,6 +32,45 @@ class ArchitectProvider extends ChangeNotifier {
     }
   }
 
+  /// Fetch all architects with their portfolios for client discovery
+  Future<List<Map<String, dynamic>>> fetchAllArchitects() async {
+    try {
+      final response = await _supabase
+          .from('profiles')
+          .select()
+          .eq('role', 'architect')
+          .order('created_at', ascending: false);
+
+      final List<Map<String, dynamic>> result = [];
+      for (final row in List<Map<String, dynamic>>.from(response)) {
+        final profile = ProfileModel.fromJson(row);
+        Map<String, dynamic> specializations = {};
+        String bio = '';
+        String location = '';
+
+        if (profile.nib != null && profile.nib!.startsWith('{')) {
+          try {
+            final data = jsonDecode(profile.nib!);
+            bio = data['bio'] ?? '';
+            location = data['location'] ?? '';
+            specializations = Map<String, dynamic>.from(data['specializations'] ?? {});
+          } catch (_) {}
+        }
+
+        result.add({
+          'profile': profile,
+          'bio': bio,
+          'location': location,
+          'specializations': specializations,
+        });
+      }
+      return result;
+    } catch (e) {
+      debugPrint('Error fetch all architects: $e');
+      return [];
+    }
+  }
+
   Future<Map<String, dynamic>?> fetchArchitectDetails(String architectId) async {
     try {
       final response = await _supabase

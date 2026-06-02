@@ -6,6 +6,9 @@ class ChatModel {
   final DateTime createdAt;
   final DateTime updatedAt;
   
+  /// 'pending' = menunggu diterima arsitek, 'accepted' = sudah diterima
+  final String status;
+
   // Joined fields for display
   final String? clientName;
   final String? vendorName;
@@ -21,6 +24,7 @@ class ChatModel {
     this.projectId,
     required this.createdAt,
     required this.updatedAt,
+    this.status = 'pending',
     this.clientName,
     this.vendorName,
     this.clientAvatar,
@@ -37,6 +41,7 @@ class ChatModel {
       projectId: json['project_id'] as String?,
       createdAt: DateTime.parse(json['created_at'] as String),
       updatedAt: DateTime.parse(json['updated_at'] as String),
+      status: json['status'] as String? ?? 'pending',
       clientName: json['client_name'] as String?,
       vendorName: json['vendor_name'] as String?,
       clientAvatar: json['client_avatar'] as String?,
@@ -45,6 +50,9 @@ class ChatModel {
       unreadCount: json['unread_count'] as int? ?? 0,
     );
   }
+
+  bool get isPending => status == 'pending';
+  bool get isAccepted => status == 'accepted';
 }
 
 class MessageModel {

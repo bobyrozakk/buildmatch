@@ -1,5 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import 'package:intl/intl.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../core/constants/colors.dart';
+import '../../../data/providers/chat_provider.dart';
+import '../../../data/models/chat_model.dart';
 import '../../shared/screens/chat_detail_screen.dart';
 
 class ArsitekInboxTab extends StatefulWidget {
@@ -9,53 +14,43 @@ class ArsitekInboxTab extends StatefulWidget {
   State<ArsitekInboxTab> createState() => _ArsitekInboxTabState();
 }
 
-class _ArsitekInboxTabState extends State<ArsitekInboxTab> with SingleTickerProviderStateMixin {
+class _ArsitekInboxTabState extends State<ArsitekInboxTab>
+    with SingleTickerProviderStateMixin {
   late TabController _tabController;
-  
-  // Dummy data for Permintaan Tab to allow state manipulation
-  List<Map<String, dynamic>> permintaanList = [
-    {
-      'id': '1',
-      'name': 'Rizky Pratama',
-      'role': 'Client',
-      'time': '11:00',
-      'quote': 'Halo kak, saya mau konsultasi soal desain rumah 2 lantai minimalis...',
-      'avatarUrl': 'https://eboseqlzrfabtiurwjpl.supabase.co/storage/v1/object/public/project-renders/avatar1.jpg',
-    },
-    {
-      'id': '2',
-      'name': 'Dewi Anggraini',
-      'role': 'Client',
-      'time': '10:45',
-      'quote': 'Pak saya tertarik dengan portofolio Bapak, bisa diskusi dulu?',
-      'avatarUrl': 'https://eboseqlzrfabtiurwjpl.supabase.co/storage/v1/object/public/project-renders/avatar2.jpg',
-    },
-    {
-      'id': '3',
-      'name': 'Farhan Hidayat',
-      'role': 'Client',
-      'time': 'Kemarin',
-      'quote': 'Butuh arsitek buat proyek ruko 3 lantai, apakah Bapak available?',
-      'avatarUrl': 'https://eboseqlzrfabtiurwjpl.supabase.co/storage/v1/object/public/project-renders/avatar3.jpg',
-    },
-  ];
+  late Future<void> _fetchFuture;
+  final _searchController = TextEditingController();
+  String _searchQuery = '';
 
   @override
   void initState() {
     super.initState();
     _tabController = TabController(length: 2, vsync: this);
+    _fetchFuture =
+        Provider.of<ChatProvider>(context, listen: false).fetchChats();
   }
 
   @override
   void dispose() {
     _tabController.dispose();
+    _searchController.dispose();
     super.dispose();
+  }
+
+  String _formatTime(DateTime? dt) {
+    if (dt == null) return '';
+    final now = DateTime.now();
+    final diff = now.difference(dt.toLocal());
+    if (diff.inMinutes < 1) return 'Baru saja';
+    if (diff.inHours < 1) return '${diff.inMinutes} mnt';
+    if (diff.inDays < 1) return DateFormat('HH:mm').format(dt.toLocal());
+    if (diff.inDays == 1) return 'Kemarin';
+    return DateFormat('d MMM', 'id').format(dt.toLocal());
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFFCF8F5), // Light cream background
+      backgroundColor: const Color(0xFFFCF8F5),
       appBar: AppBar(
         backgroundColor: const Color(0xFFFCF8F5),
         elevation: 0,
@@ -66,183 +61,443 @@ class _ArsitekInboxTabState extends State<ArsitekInboxTab> with SingleTickerProv
         ),
         title: const Text(
           'BuildMatch',
-          style: TextStyle(color: AppColors.primary, fontWeight: FontWeight.bold, fontSize: 18),
+          style: TextStyle(
+              color: AppColors.primary,
+              fontWeight: FontWeight.bold,
+              fontSize: 18),
         ),
         actions: [
-          Stack(
-            alignment: Alignment.center,
+          Consumer<ChatProvider>(
+            builder: (_, chatProv, __) => Stack(
+              alignment: Alignment.center,
+              children: [
+                IconButton(
+                  icon: const Icon(Icons.notifications_none_rounded,
+                      color: Colors.black87, size: 24),
+                  onPressed: () {},
+                ),
+                if (chatProv.totalUnreadCount > 0)
+                  Positioned(
+                    top: 12,
+                    right: 12,
+                    child: Container(
+                      width: 8,
+                      height: 8,
+                      decoration: BoxDecoration(
+                        color: Colors.red,
+                        shape: BoxShape.circle,
+                        border: Border.all(color: Colors.white, width: 1.5),
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 8),
+        ],
+        bottom: PreferredSize(
+          preferredSize: const Size.fromHeight(48),
+          child: Consumer<ChatProvider>(
+            builder: (_, chatProv, __) {
+              final pendingCount = chatProv.pendingChats.length;
+              return TabBar(
+                controller: _tabController,
+                labelColor: AppColors.primary,
+                unselectedLabelColor: Colors.black54,
+                indicatorColor: AppColors.primary,
+                labelStyle: const TextStyle(
+                    fontWeight: FontWeight.bold, fontSize: 14),
+                unselectedLabelStyle: const TextStyle(
+                    fontWeight: FontWeight.normal, fontSize: 14),
+                tabs: [
+                  const Tab(text: 'Pesan'),
+                  Tab(
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Text('Permintaan'),
+                        if (pendingCount > 0) ...[
+                          const SizedBox(width: 6),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 6, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: AppColors.primary,
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                            child: Text(
+                              '$pendingCount',
+                              style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.bold),
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                ],
+              );
+            },
+          ),
+        ),
+      ),
+      body: FutureBuilder<void>(
+        future: _fetchFuture,
+        builder: (context, snapshot) {
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return const Center(
+                child: CircularProgressIndicator(color: AppColors.primary));
+          }
+          return TabBarView(
+            controller: _tabController,
             children: [
-              IconButton(
-                icon: const Icon(Icons.notifications_none_rounded, color: Colors.black87, size: 24),
-                onPressed: () {},
+              _buildPesanTab(),
+              _buildPermintaanTab(),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  // ==================== TAB PESAN (accepted chats) ====================
+
+  Widget _buildPesanTab() {
+    final currentUserId = Supabase.instance.client.auth.currentUser?.id;
+
+    return Column(
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(20, 14, 20, 6),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: Colors.grey.shade200),
+            ),
+            child: TextField(
+              controller: _searchController,
+              onChanged: (v) => setState(() => _searchQuery = v),
+              decoration: const InputDecoration(
+                hintText: 'Cari percakapan...',
+                hintStyle: TextStyle(color: Colors.black45, fontSize: 13),
+                prefixIcon:
+                    Icon(Icons.search, color: Colors.black45, size: 20),
+                border: InputBorder.none,
+                contentPadding: EdgeInsets.symmetric(vertical: 12),
               ),
-              Positioned(
-                top: 12,
-                right: 12,
-                child: Container(
-                  width: 8,
-                  height: 8,
-                  decoration: BoxDecoration(
-                    color: Colors.red,
-                    shape: BoxShape.circle,
-                    border: Border.all(color: Colors.white, width: 1.5),
+            ),
+          ),
+        ),
+        Expanded(
+          child: Consumer<ChatProvider>(
+            builder: (_, chatProv, __) {
+              var chats = chatProv.chats; // accepted only
+
+              if (_searchQuery.isNotEmpty) {
+                final q = _searchQuery.toLowerCase();
+                chats = chats.where((c) {
+                  // Arsitek = vendor side → tampilkan nama client
+                  final name = c.clientName ?? '';
+                  return name.toLowerCase().contains(q);
+                }).toList();
+              }
+
+              if (chats.isEmpty) {
+                return Center(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(Icons.chat_bubble_outline_rounded,
+                          size: 60, color: Colors.grey.shade300),
+                      const SizedBox(height: 16),
+                      const Text('Belum ada pesan aktif',
+                          style: TextStyle(
+                              color: Colors.black45, fontSize: 16)),
+                      const SizedBox(height: 8),
+                      const Text(
+                        'Terima permintaan klien\nuntuk memulai percakapan',
+                        textAlign: TextAlign.center,
+                        style:
+                            TextStyle(color: Colors.black38, fontSize: 12),
+                      ),
+                    ],
+                  ),
+                );
+              }
+
+              return RefreshIndicator(
+                color: AppColors.primary,
+                onRefresh: () => chatProv.fetchChats(),
+                child: ListView.builder(
+                  physics: const BouncingScrollPhysics(),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+                  itemCount: chats.length,
+                  itemBuilder: (_, i) {
+                    final chat = chats[i];
+                    // Arsitek adalah vendor side → tampilkan nama client
+                    final displayName = chat.clientName ?? 'Klien';
+                    final displayAvatar = chat.clientAvatar;
+
+                    return _buildChatItem(
+                      chat: chat,
+                      displayName: displayName,
+                      displayAvatar: displayAvatar,
+                      chatProv: chatProv,
+                    );
+                  },
+                ),
+              );
+            },
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildChatItem({
+    required ChatModel chat,
+    required String displayName,
+    String? displayAvatar,
+    required ChatProvider chatProv,
+  }) {
+    final isActive = chat.unreadCount > 0;
+
+    return GestureDetector(
+      onTap: () async {
+        await Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => ChatDetailScreen(
+              chatId: chat.id,
+              receiverName: displayName,
+              receiverAvatar: displayAvatar,
+            ),
+          ),
+        );
+        chatProv.fetchChats();
+      },
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 10),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(14),
+          boxShadow: isActive
+              ? [
+                  BoxShadow(
+                      color: Colors.black.withOpacity(0.05),
+                      blurRadius: 8,
+                      offset: const Offset(0, 3))
+                ]
+              : null,
+        ),
+        child: IntrinsicHeight(
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              if (isActive)
+                Container(
+                  width: 4,
+                  decoration: const BoxDecoration(
+                    color: AppColors.primary,
+                    borderRadius: BorderRadius.only(
+                      topLeft: Radius.circular(14),
+                      bottomLeft: Radius.circular(14),
+                    ),
+                  ),
+                ),
+              Expanded(
+                child: Padding(
+                  padding: const EdgeInsets.all(14),
+                  child: Row(
+                    children: [
+                      CircleAvatar(
+                        radius: 24,
+                        backgroundColor: AppColors.cardCream,
+                        backgroundImage: displayAvatar != null
+                            ? NetworkImage(displayAvatar)
+                            : NetworkImage(
+                                'https://ui-avatars.com/api/?name=${Uri.encodeComponent(displayName)}&background=8B2B0F&color=fff&size=96'),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              mainAxisAlignment:
+                                  MainAxisAlignment.spaceBetween,
+                              children: [
+                                Flexible(
+                                  child: Text(
+                                    displayName,
+                                    style: const TextStyle(
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 14,
+                                        color: Colors.black87),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                                Text(
+                                  _formatTime(chat.updatedAt),
+                                  style: TextStyle(
+                                    color: isActive
+                                        ? AppColors.primary
+                                        : Colors.black38,
+                                    fontSize: 10,
+                                    fontWeight: isActive
+                                        ? FontWeight.bold
+                                        : FontWeight.normal,
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 4),
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: Text(
+                                    chat.lastMessage ?? 'Belum ada pesan',
+                                    style: TextStyle(
+                                      color: isActive
+                                          ? Colors.black87
+                                          : Colors.black45,
+                                      fontSize: 12,
+                                      fontWeight: isActive
+                                          ? FontWeight.w500
+                                          : FontWeight.normal,
+                                    ),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                                if (isActive) ...[
+                                  const SizedBox(width: 8),
+                                  Container(
+                                    padding: const EdgeInsets.all(5),
+                                    decoration: const BoxDecoration(
+                                        color: AppColors.primary,
+                                        shape: BoxShape.circle),
+                                    child: Text(
+                                      '${chat.unreadCount}',
+                                      style: const TextStyle(
+                                          color: Colors.white,
+                                          fontSize: 9,
+                                          fontWeight: FontWeight.bold),
+                                    ),
+                                  ),
+                                ],
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               ),
             ],
           ),
-          const SizedBox(width: 8),
-        ],
-        bottom: TabBar(
-          controller: _tabController,
-          labelColor: AppColors.primary,
-          unselectedLabelColor: Colors.black54,
-          indicatorColor: AppColors.primary,
-          labelStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
-          unselectedLabelStyle: const TextStyle(fontWeight: FontWeight.normal, fontSize: 14),
-          tabs: const [
-            Tab(text: 'Pesan'),
-            Tab(text: 'Permintaan'),
-          ],
         ),
       ),
-      body: TabBarView(
-        controller: _tabController,
-        children: [
-          _buildPesanTab(),
-          _buildPermintaanTab(),
-        ],
-      ),
     );
   }
 
-  Widget _buildPesanTab() {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 20),
-      child: Column(
-        children: [
-          const SizedBox(height: 16),
-          // Search bar
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: Colors.grey.shade300),
-            ),
-            child: Row(
-              children: [
-                const Icon(Icons.search, color: Colors.black45, size: 20),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: TextField(
-                    decoration: const InputDecoration(
-                      hintText: 'Cari percakapan...',
-                      hintStyle: TextStyle(color: Colors.black45, fontSize: 13),
-                      border: InputBorder.none,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 20),
-          Expanded(
-            child: ListView(
-              children: [
-                _buildChatItem(
-                  name: 'Budi Santoso',
-                  message: 'Pak, revisi desain struktur lantai 2 sudah saya kirim...',
-                  time: '10:45',
-                  avatarUrl: 'https://eboseqlzrfabtiurwjpl.supabase.co/storage/v1/object/public/project-renders/avatar1.jpg',
-                  unreadCount: 2,
-                  isActive: true,
-                ),
-                _buildChatItem(
-                  name: 'Siti Aminah',
-                  message: 'Terima kasih atas masukannya, segera saya tindak lanjuti.',
-                  time: '09:12',
-                  avatarUrl: 'https://eboseqlzrfabtiurwjpl.supabase.co/storage/v1/object/public/project-renders/avatar2.jpg',
-                  unreadCount: 0,
-                  isActive: false,
-                ),
-                _buildChatItem(
-                  name: 'Arsitek Hendra',
-                  message: 'Kapan kita bisa meeting untuk proyek Villa Ubud?',
-                  time: 'Yesterday',
-                  avatarUrl: 'https://eboseqlzrfabtiurwjpl.supabase.co/storage/v1/object/public/project-renders/avatar3.jpg',
-                  unreadCount: 0,
-                  isActive: false,
-                ),
-                _buildChatItem(
-                  name: 'Grup Proyek Mall Jkt',
-                  message: 'Irfan: Material baja sudah sampai di site.',
-                  time: 'Mon',
-                  avatarUrl: 'https://eboseqlzrfabtiurwjpl.supabase.co/storage/v1/object/public/project-renders/avatar1.jpg',
-                  unreadCount: 0,
-                  isActive: false,
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
+  // ==================== TAB PERMINTAAN (pending chats) ====================
 
   Widget _buildPermintaanTab() {
-    return SingleChildScrollView(
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text('PERMINTAAN BARU', style: TextStyle(color: Colors.blueGrey, fontSize: 10, fontWeight: FontWeight.bold, letterSpacing: 1)),
-          const SizedBox(height: 12),
-          if (permintaanList.isEmpty)
-            const Center(
-              child: Padding(
-                padding: EdgeInsets.symmetric(vertical: 40),
-                child: Text('Tidak ada permintaan saat ini.', style: TextStyle(color: Colors.black45)),
-              ),
-            ),
-          ...permintaanList.map((item) => _buildPermintaanCard(item)).toList(),
-          if (permintaanList.isNotEmpty) ...[
-            const SizedBox(height: 16),
-            Row(
+    return Consumer<ChatProvider>(
+      builder: (_, chatProv, __) {
+        final pendingChats = chatProv.pendingChats;
+
+        if (pendingChats.isEmpty) {
+          return Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Expanded(child: Container(height: 1, color: Colors.grey.shade300)),
-                const Padding(
-                  padding: EdgeInsets.symmetric(horizontal: 8),
-                  child: Text('Semua permintaan ditampilkan', style: TextStyle(color: Colors.black45, fontSize: 10)),
+                Container(
+                  width: 72,
+                  height: 72,
+                  decoration: BoxDecoration(
+                    color: AppColors.cardCream,
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(Icons.inbox_rounded,
+                      size: 36, color: AppColors.primary),
                 ),
-                Expanded(child: Container(height: 1, color: Colors.grey.shade300)),
+                const SizedBox(height: 16),
+                const Text(
+                  'Tidak ada permintaan baru',
+                  style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.black54),
+                ),
+                const SizedBox(height: 8),
+                const Text(
+                  'Permintaan konsultasi dari klien\nakan muncul di sini',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                      color: Colors.black38, fontSize: 13, height: 1.5),
+                ),
               ],
             ),
-            const SizedBox(height: 24), // Extra space
-          ],
-        ],
-      ),
+          );
+        }
+
+        return RefreshIndicator(
+          color: AppColors.primary,
+          onRefresh: () => chatProv.fetchChats(),
+          child: ListView.builder(
+            physics: const BouncingScrollPhysics(),
+            padding: const EdgeInsets.fromLTRB(20, 16, 20, 100),
+            itemCount: pendingChats.length,
+            itemBuilder: (_, i) =>
+                _buildPermintaanCard(pendingChats[i], chatProv),
+          ),
+        );
+      },
     );
   }
 
-  Widget _buildPermintaanCard(Map<String, dynamic> item) {
+  Widget _buildPermintaanCard(ChatModel chat, ChatProvider chatProv) {
+    final clientName = chat.clientName ?? 'Klien';
+    final clientAvatar = chat.clientAvatar;
+    final lastMsg = chat.lastMessage ?? 'Ingin berkonsultasi dengan Anda';
+
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+              color: Colors.black.withOpacity(0.04),
+              blurRadius: 8,
+              offset: const Offset(0, 2))
+        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          // Header
           Row(
             children: [
               Stack(
                 children: [
                   CircleAvatar(
-                    radius: 20,
-                    backgroundImage: NetworkImage(item['avatarUrl']),
+                    radius: 22,
+                    backgroundColor: AppColors.cardCream,
+                    backgroundImage: clientAvatar != null
+                        ? NetworkImage(clientAvatar)
+                        : NetworkImage(
+                            'https://ui-avatars.com/api/?name=${Uri.encodeComponent(clientName)}&background=8B2B0F&color=fff&size=96'),
                   ),
                   Positioned(
                     bottom: 0,
@@ -250,7 +505,12 @@ class _ArsitekInboxTabState extends State<ArsitekInboxTab> with SingleTickerProv
                     child: Container(
                       width: 10,
                       height: 10,
-                      decoration: BoxDecoration(color: Colors.green, shape: BoxShape.circle, border: Border.all(color: Colors.white, width: 2)),
+                      decoration: BoxDecoration(
+                        color: Colors.green,
+                        shape: BoxShape.circle,
+                        border:
+                            Border.all(color: Colors.white, width: 1.5),
+                      ),
                     ),
                   ),
                 ],
@@ -260,203 +520,153 @@ class _ArsitekInboxTabState extends State<ArsitekInboxTab> with SingleTickerProv
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(item['name'], style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.black87)),
-                    Container(
-                      margin: const EdgeInsets.only(top: 4),
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFF2C3E50), // Dark blue
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: Text(item['role'], style: const TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.bold)),
+                    Text(
+                      clientName,
+                      style: const TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 14,
+                          color: Colors.black87),
+                    ),
+                    Row(
+                      children: [
+                        Container(
+                          margin: const EdgeInsets.only(top: 3),
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 8, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF2C3E50),
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: const Text('Client',
+                              style: TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 9,
+                                  fontWeight: FontWeight.bold)),
+                        ),
+                      ],
                     ),
                   ],
                 ),
               ),
-              Text(item['time'], style: const TextStyle(color: Color(0xFF8F2A0C), fontSize: 10, fontWeight: FontWeight.bold)), // Time color like design
+              Text(
+                _formatTime(chat.updatedAt),
+                style: const TextStyle(
+                    color: AppColors.primary,
+                    fontSize: 11,
+                    fontWeight: FontWeight.bold),
+              ),
             ],
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 14),
+
+          // Pesan pertama
           Container(
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
-              color: const Color(0xFFF3EBE3), // Light beige
+              color: const Color(0xFFF3EBE3),
               borderRadius: BorderRadius.circular(12),
             ),
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text('"', style: TextStyle(color: Color(0xFF8F2A0C), fontSize: 16, fontWeight: FontWeight.bold)),
+                const Text('"',
+                    style: TextStyle(
+                        color: AppColors.primary,
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold)),
                 const SizedBox(width: 4),
                 Expanded(
                   child: Text(
-                    item['quote'],
-                    style: const TextStyle(color: Colors.black87, fontSize: 12, height: 1.4),
+                    lastMsg,
+                    style: const TextStyle(
+                        color: Colors.black87, fontSize: 12, height: 1.4),
+                    maxLines: 3,
+                    overflow: TextOverflow.ellipsis,
                   ),
                 ),
               ],
             ),
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 14),
+
+          // Tombol Tolak & Terima
           Row(
             children: [
               Expanded(
                 child: OutlinedButton.icon(
-                  onPressed: () {
-                    setState(() {
-                      permintaanList.removeWhere((el) => el['id'] == item['id']);
-                    });
+                  onPressed: () async {
+                    final ok = await showDialog<bool>(
+                      context: context,
+                      builder: (_) => AlertDialog(
+                        title: const Text('Tolak Permintaan'),
+                        content: Text(
+                            'Tolak permintaan dari $clientName?'),
+                        actions: [
+                          TextButton(
+                              onPressed: () =>
+                                  Navigator.pop(context, false),
+                              child: const Text('Batal')),
+                          TextButton(
+                              onPressed: () =>
+                                  Navigator.pop(context, true),
+                              child: const Text('Tolak',
+                                  style: TextStyle(color: Colors.red))),
+                        ],
+                      ),
+                    );
+                    if (ok == true) {
+                      await chatProv.rejectChat(chat.id);
+                    }
                   },
                   icon: const Icon(Icons.close, size: 16),
-                  label: const Text('Tolak', style: TextStyle(fontWeight: FontWeight.bold)),
+                  label: const Text('Tolak',
+                      style: TextStyle(fontWeight: FontWeight.bold)),
                   style: OutlinedButton.styleFrom(
                     foregroundColor: const Color(0xFF8F2A0C),
                     side: const BorderSide(color: Color(0xFF8F2A0C)),
                     padding: const EdgeInsets.symmetric(vertical: 12),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12)),
                   ),
                 ),
               ),
               const SizedBox(width: 12),
               Expanded(
                 child: ElevatedButton.icon(
-                  onPressed: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) => ChatDetailScreen(
-                          chatId: item['id'],
-                          receiverName: item['name'],
+                  onPressed: () async {
+                    final ok = await chatProv.acceptChat(chat.id);
+                    if (ok && mounted) {
+                      // Langsung buka chat room setelah terima
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => ChatDetailScreen(
+                            chatId: chat.id,
+                            receiverName: clientName,
+                            receiverAvatar: clientAvatar,
+                          ),
                         ),
-                      ),
-                    );
+                      );
+                      // Pindah ke tab Pesan
+                      _tabController.animateTo(0);
+                    }
                   },
-                  icon: const Icon(Icons.reply, size: 16, color: Colors.white),
-                  label: const Text('Balas', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white)),
+                  icon: const Icon(Icons.check_rounded,
+                      size: 16, color: Colors.white),
+                  label: const Text('Terima',
+                      style: TextStyle(
+                          fontWeight: FontWeight.bold, color: Colors.white)),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: const Color(0xFF8F2A0C),
                     padding: const EdgeInsets.symmetric(vertical: 12),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12)),
                   ),
                 ),
               ),
             ],
           ),
         ],
-      ),
-    );
-  }
-
-  Widget _buildChatItem({
-    required String name,
-    required String message,
-    required String time,
-    required String avatarUrl,
-    required int unreadCount,
-    required bool isActive,
-  }) {
-    return GestureDetector(
-      onTap: () {
-        Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (_) => ChatDetailScreen(chatId: name, receiverName: name),
-          ),
-        );
-      },
-      child: Container(
-        margin: const EdgeInsets.only(bottom: 12),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(12),
-          border: isActive ? Border.all(color: Colors.transparent) : Border.all(color: Colors.transparent),
-          boxShadow: isActive 
-              ? [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10, offset: const Offset(0, 4))] 
-              : null,
-        ),
-      child: IntrinsicHeight(
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            if (isActive)
-              Container(
-                width: 4,
-                decoration: const BoxDecoration(
-                  color: AppColors.primary,
-                  borderRadius: BorderRadius.only(topLeft: Radius.circular(12), bottomLeft: Radius.circular(12)),
-                ),
-              ),
-            Expanded(
-              child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    CircleAvatar(
-                      radius: 24,
-                      backgroundImage: NetworkImage(avatarUrl),
-                      backgroundColor: AppColors.cardCream,
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: [
-                              Text(
-                                name,
-                                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Colors.black87),
-                              ),
-                              Text(
-                                time,
-                                style: TextStyle(
-                                  color: isActive ? AppColors.primary : Colors.black45,
-                                  fontSize: 10,
-                                  fontWeight: isActive ? FontWeight.bold : FontWeight.normal,
-                                ),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 4),
-                          Row(
-                            children: [
-                              Expanded(
-                                child: Text(
-                                  message,
-                                  style: TextStyle(
-                                    color: isActive ? Colors.black87 : Colors.black54,
-                                    fontSize: 12,
-                                    fontWeight: isActive ? FontWeight.w600 : FontWeight.normal,
-                                  ),
-                                  maxLines: 2,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                              ),
-                              if (unreadCount > 0) ...[
-                                const SizedBox(width: 8),
-                                Container(
-                                  padding: const EdgeInsets.all(6),
-                                  decoration: const BoxDecoration(color: AppColors.primary, shape: BoxShape.circle),
-                                  child: Text(
-                                    unreadCount.toString(),
-                                    style: const TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.bold),
-                                  ),
-                                ),
-                              ],
-                            ],
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
       ),
     );
   }

@@ -4,9 +4,14 @@ import '../models/chat_model.dart';
 
 class ChatProvider extends ChangeNotifier {
   final _supabase = Supabase.instance.client;
-  
+
+  // Accepted chats (status = 'accepted') — untuk tab Inbox/Pesan
   List<ChatModel> _chats = [];
   List<ChatModel> get chats => _chats;
+
+  // Pending chats (status = 'pending') — untuk tab Permintaan (arsitek)
+  List<ChatModel> _pendingChats = [];
+  List<ChatModel> get pendingChats => _pendingChats;
 
   int _totalUnreadCount = 0;
   int get totalUnreadCount => _totalUnreadCount;
@@ -14,76 +19,88 @@ class ChatProvider extends ChangeNotifier {
   bool _isLoading = false;
   bool get isLoading => _isLoading;
 
-  /// Fetch all active chats for the current user
-  Future<List<ChatModel>> fetchChats() async {
+  /// Fetch semua chat untuk user saat ini, pisah accepted vs pending
+  Future<void> fetchChats() async {
     try {
       final userId = _supabase.auth.currentUser?.id;
-      if (userId == null) return [];
+      if (userId == null) return;
 
-      // Fetch chats where user is either client or vendor
       final response = await _supabase
           .from('chats')
-          .select('*, client:client_id(name, avatar_url), vendor:vendor_id(name, avatar_url), messages(content, is_read, sender_id, created_at)')
+          .select(
+              '*, client:client_id(name, avatar_url), vendor:vendor_id(name, avatar_url), messages(content, is_read, sender_id, created_at)')
           .or('client_id.eq.$userId,vendor_id.eq.$userId')
           .order('updated_at', ascending: false);
 
-      List<ChatModel> chats = [];
+      List<ChatModel> accepted = [];
+      List<ChatModel> pending = [];
       int totalUnread = 0;
 
       for (var row in response) {
         final messages = row['messages'] as List<dynamic>? ?? [];
-        
-        // Sort messages manually if not sorted by supabase
-        messages.sort((a, b) => DateTime.parse(b['created_at']).compareTo(DateTime.parse(a['created_at'])));
-        
-        final lastMessage = messages.isNotEmpty ? messages.first['content'] : null;
-        
-        // Count unread messages for this user (where user is not the sender and is_read is false)
-        int unreadCount = messages.where((m) => m['is_read'] == false && m['sender_id'] != userId).length;
+        messages.sort((a, b) => DateTime.parse(b['created_at'])
+            .compareTo(DateTime.parse(a['created_at'])));
+
+        final lastMessage =
+            messages.isNotEmpty ? messages.first['content'] as String? : null;
+
+        int unreadCount = messages
+            .where((m) =>
+                m['is_read'] == false && m['sender_id'] != userId)
+            .length;
         totalUnread += unreadCount;
 
         final client = row['client'] as Map<String, dynamic>? ?? {};
         final vendor = row['vendor'] as Map<String, dynamic>? ?? {};
+        final status = row['status'] as String? ?? 'pending';
 
-        chats.add(ChatModel(
+        final chat = ChatModel(
           id: row['id'],
           clientId: row['client_id'],
           vendorId: row['vendor_id'],
           projectId: row['project_id'],
           createdAt: DateTime.parse(row['created_at']),
           updatedAt: DateTime.parse(row['updated_at']),
+          status: status,
           clientName: client['name'],
           clientAvatar: client['avatar_url'],
           vendorName: vendor['name'],
           vendorAvatar: vendor['avatar_url'],
           lastMessage: lastMessage,
           unreadCount: unreadCount,
-        ));
+        );
+
+        if (status == 'accepted') {
+          accepted.add(chat);
+        } else {
+          pending.add(chat);
+        }
       }
 
-      _chats = chats;
+      _chats = accepted;
+      _pendingChats = pending;
       _totalUnreadCount = totalUnread;
       notifyListeners();
-      return chats;
     } catch (e) {
-      debugPrint("Error fetch chats: $e");
-      return [];
+      debugPrint('Error fetch chats: $e');
     }
   }
 
-  /// Create or get existing chat room
-  Future<String?> getOrCreateChat(String otherUserId, {String? projectId}) async {
+  /// Buat atau dapatkan chat yang sudah ada
+  /// Client → status 'pending', arsitek/vendor harus terima dulu
+  Future<String?> getOrCreateChat(String otherUserId,
+      {String? projectId}) async {
     _isLoading = true;
     notifyListeners();
 
     try {
       final userId = _supabase.auth.currentUser?.id;
-      if (userId == null) throw Exception("Not logged in");
+      if (userId == null) throw Exception('Not logged in');
 
-      // Check if chat exists
+      // Cek apakah chat sudah ada
       final existing = await _supabase
           .from('chats')
-          .select('id')
+          .select('id, status')
           .or('and(client_id.eq.$userId,vendor_id.eq.$otherUserId),and(client_id.eq.$otherUserId,vendor_id.eq.$userId)')
           .limit(1);
 
@@ -93,49 +110,71 @@ class ChatProvider extends ChangeNotifier {
         return existing[0]['id'] as String;
       }
 
-      // Determine who is client and who is vendor based on role (simplification: current user is client)
-      final userRole = _supabase.auth.currentUser?.userMetadata?['role'];
-      final isVendor = userRole == 'vendor' || userRole == 'kontraktor';
+      // Tentukan siapa client dan vendor
+      final userRole =
+          _supabase.auth.currentUser?.userMetadata?['role'] as String?;
+      final isVendorSide = userRole == 'vendor' ||
+          userRole == 'kontraktor' ||
+          userRole == 'architect' ||
+          userRole == 'arsitek';
+
+      // Client memulai chat → status 'pending'
+      // Arsitek/vendor yang memulai → langsung 'accepted'
+      final chatStatus = isVendorSide ? 'accepted' : 'pending';
 
       final insertData = {
-        'client_id': isVendor ? otherUserId : userId,
-        'vendor_id': isVendor ? userId : otherUserId,
+        'client_id': isVendorSide ? otherUserId : userId,
+        'vendor_id': isVendorSide ? userId : otherUserId,
+        'status': chatStatus,
         if (projectId != null) 'project_id': projectId,
       };
 
-      final response = await _supabase.from('chats').insert(insertData).select('id');
-      
+      final response =
+          await _supabase.from('chats').insert(insertData).select('id');
+
       _isLoading = false;
       notifyListeners();
-      
+
       return response[0]['id'] as String;
     } catch (e) {
-      debugPrint("Error create chat: $e");
+      debugPrint('Error create chat: $e');
       _isLoading = false;
       notifyListeners();
       return null;
     }
   }
 
-  /// Fetch messages for a chat
-  Future<List<MessageModel>> fetchMessages(String chatId) async {
+  /// Arsitek menerima permintaan chat dari client
+  Future<bool> acceptChat(String chatId) async {
     try {
-      final response = await _supabase
-          .from('messages')
-          .select('*')
-          .eq('chat_id', chatId)
-          .order('created_at', ascending: true);
+      await _supabase
+          .from('chats')
+          .update({'status': 'accepted'}).eq('id', chatId);
 
-      return List<Map<String, dynamic>>.from(response)
-          .map((json) => MessageModel.fromJson(json))
-          .toList();
+      await fetchChats();
+      return true;
     } catch (e) {
-      debugPrint("Error fetch messages: $e");
-      return [];
+      debugPrint('Error accept chat: $e');
+      return false;
     }
   }
 
-  /// Send message
+  /// Arsitek menolak permintaan chat (hapus chat + messages)
+  Future<bool> rejectChat(String chatId) async {
+    try {
+      await _supabase.from('messages').delete().eq('chat_id', chatId);
+      await _supabase.from('chats').delete().eq('id', chatId);
+
+      _pendingChats.removeWhere((c) => c.id == chatId);
+      notifyListeners();
+      return true;
+    } catch (e) {
+      debugPrint('Error reject chat: $e');
+      return false;
+    }
+  }
+
+  /// Kirim pesan
   Future<bool> sendMessage(String chatId, String content) async {
     try {
       final userId = _supabase.auth.currentUser?.id;
@@ -147,28 +186,41 @@ class ChatProvider extends ChangeNotifier {
         'content': content,
       });
 
-      // Also trigger a notification to the other user
-      // Determine receiver id
-      final chatData = await _supabase.from('chats').select('client_id, vendor_id').eq('id', chatId).single();
-      final receiverId = chatData['client_id'] == userId ? chatData['vendor_id'] : chatData['client_id'];
-      
-      final senderName = _supabase.auth.currentUser?.userMetadata?['name'] ?? 'User';
-      
-      await _supabase.from('notifications').insert({
-        'user_id': receiverId,
-        'title': 'Pesan Baru',
-        'message': '$senderName mengirim pesan: $content',
-        'type': 'chat'
-      });
+      // Update updated_at agar naik ke atas
+      await _supabase
+          .from('chats')
+          .update({'updated_at': DateTime.now().toUtc().toIso8601String()}).eq(
+              'id', chatId);
+
+      // Kirim notifikasi ke penerima (ignore error jika tabel tidak ada)
+      try {
+        final chatData = await _supabase
+            .from('chats')
+            .select('client_id, vendor_id')
+            .eq('id', chatId)
+            .single();
+        final receiverId = chatData['client_id'] == userId
+            ? chatData['vendor_id']
+            : chatData['client_id'];
+        final senderName =
+            _supabase.auth.currentUser?.userMetadata?['name'] ?? 'User';
+
+        await _supabase.from('notifications').insert({
+          'user_id': receiverId,
+          'title': 'Pesan Baru',
+          'message': '$senderName: $content',
+          'type': 'chat',
+        });
+      } catch (_) {}
 
       return true;
     } catch (e) {
-      debugPrint("Error send message: $e");
+      debugPrint('Error send message: $e');
       return false;
     }
   }
 
-  /// Mark messages as read
+  /// Tandai pesan sebagai sudah dibaca
   Future<void> markMessagesAsRead(String chatId) async {
     try {
       final userId = _supabase.auth.currentUser?.id;
@@ -180,14 +232,14 @@ class ChatProvider extends ChangeNotifier {
           .eq('chat_id', chatId)
           .neq('sender_id', userId)
           .eq('is_read', false);
-          
-      fetchChats(); // Refresh unread count
+
+      fetchChats();
     } catch (e) {
-      debugPrint("Error mark messages as read: $e");
+      debugPrint('Error mark messages as read: $e');
     }
   }
 
-  /// Listen to new messages
+  /// Stream pesan real-time
   SupabaseStreamBuilder streamMessages(String chatId) {
     return _supabase
         .from('messages')

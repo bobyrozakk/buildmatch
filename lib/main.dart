@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:provider/provider.dart';
+import 'package:intl/date_symbol_data_local.dart';
 
 // --- IMPORT PROVIDERS ---
 import 'data/providers/project_provider.dart';
@@ -19,6 +20,7 @@ import 'core/constants/colors.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  await initializeDateFormatting('id', null);
 
   // Credentials dimuat dari --dart-define saat build/run.
   // Contoh: flutter run --dart-define=SUPABASE_URL=https://xxx.supabase.co --dart-define=SUPABASE_ANON_KEY=xxx

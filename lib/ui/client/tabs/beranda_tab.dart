@@ -10,7 +10,7 @@ import '../../../data/models/profile_model.dart';
 import '../../../data/models/bid_model.dart';
 import '../../../core/constants/colors.dart';
 import '../../../core/utils/formatters.dart';
-import '../../shared/screens/chat_list_screen.dart';
+
 import '../../shared/screens/notification_screen.dart';
 import '../../../data/providers/chat_provider.dart';
 import '../../../data/providers/notification_provider.dart';
@@ -498,9 +498,9 @@ class _BerandaTabState extends State<BerandaTab> {
     final menuItems = [
       _MenuItem(Icons.add_circle_outline_rounded, 'Buat Proyek', _onMulaiProyek),
       _MenuItem(Icons.engineering_rounded, 'Cari Kontraktor', _goToContractorTab),
+      _MenuItem(Icons.architecture_outlined, 'Cari Arsitek',
+          () => widget.onSwitchTab?.call(2)),
       _MenuItem(Icons.timeline_rounded, 'Lihat Progress', _goToProgressTab),
-      _MenuItem(Icons.person_outline_rounded, 'Profil Saya',
-          () => widget.onSwitchTab?.call(4)),
     ];
 
     return GridView.count(

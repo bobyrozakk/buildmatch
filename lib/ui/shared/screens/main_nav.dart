@@ -5,6 +5,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../client/tabs/beranda_tab.dart';
 import '../../client/tabs/progress_tab.dart'; 
 import '../../client/tabs/contractor_tab.dart';
+import '../../client/tabs/consultasi_tab.dart';
 import '../../client/tabs/profile_tab.dart'; 
 
 // --- IMPORT TAB KONTRAKTOR ---
@@ -12,7 +13,7 @@ import '../../kontraktor/tabs/kontraktor_home_tab.dart';
 import '../../kontraktor/tabs/kontraktor_proyek_tab.dart';
 import '../../kontraktor/tabs/kontraktor_progress_tab.dart';
 import '../../kontraktor/tabs/kontraktor_profile_tab.dart'; 
-import 'chat_list_screen.dart';
+
 
 // --- IMPORT TAB ARSITEK ---
 import '../../arsitek/tabs/arsitek_home_tab.dart';
@@ -32,18 +33,14 @@ class _MainNavScreenState extends State<MainNavScreen> {
 
   @override
   Widget build(BuildContext context) {
-    // 1. CEK ROLE USER YANG LAGI LOGIN
     final user = Supabase.instance.client.auth.currentUser;
-    // Ambil role dari metadata, default ke 'client' kalau kosong
     final role = user?.userMetadata?['role'] ?? 'client';
-    // DEBUG: lihat nilai role yang dibaca
     debugPrint('=== DEBUG MainNav ===');
     debugPrint('User ID: ${user?.id}');
     debugPrint('userMetadata: ${user?.userMetadata}');
     debugPrint('Role terbaca: $role');
     debugPrint('====================');
 
-    // Cek apakah user ini vendor/kontraktor/arsitek
     final isVendor = role == 'vendor' || role == 'kontraktor';
     final isArchitect = role == 'architect' || role == 'arsitek';
 
@@ -53,9 +50,8 @@ class _MainNavScreenState extends State<MainNavScreen> {
         onSwitchTab: (i) => setState(() => _currentIndex = i),
       ),
       const ContractorTab(),
-      const ChatListScreen(), 
+      const ConsultasiTab(), // Konsultasi: Inbox + Arsitek dalam 1 tab
       const ProgressTab(), 
-      const ProfileTab(), 
       const ProfileTab(), 
     ];
 
