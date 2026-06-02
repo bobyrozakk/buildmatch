@@ -73,32 +73,65 @@ class _ArchitectOfferDetailScreenState extends State<ArchitectOfferDetailScreen>
 
   Future<void> _processPayment() async {
     if (_selectedBank == null || _vaNumber == null) return;
-    if (_paymentTerm == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Gagal mendapatkan informasi termin pembayaran.'), backgroundColor: Colors.red),
-      );
-      return;
-    }
 
     setState(() => _isLoading = true);
     final projectProv = Provider.of<ProjectProvider>(context, listen: false);
 
     try {
-      final success = await projectProv.clientMarkAsPaid(
-        termId: _paymentTerm!.id!,
-        paymentMethod: _selectedBank!,
-        virtualAccountNumber: _vaNumber!,
-      );
+      if (_paymentTerm == null) {
+        if (_bidDetails == null) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Gagal mendapatkan informasi penawaran.'), backgroundColor: Colors.red),
+          );
+          return;
+        }
 
-      if (success) {
-        await _loadData();
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('✅ Konfirmasi pembayaran terkirim! Menunggu persetujuan arsitek.'), backgroundColor: Colors.green),
+        final projectId = _bidDetails!['project_id'] as String;
+        final vendorId = _bidDetails!['vendor_id'] as String;
+
+        // Fallback: Client attempts to insert the payment term dynamically (e.g. for older bids)
+        final term = await projectProv.createArchitectPaymentTerm(
+          bidId: widget.bidId,
+          projectId: projectId,
+          vendorId: vendorId,
+          amount: widget.price,
+          paymentMethod: _selectedBank!,
+          virtualAccountNumber: _vaNumber!,
         );
+
+        if (term != null) {
+          setState(() {
+            _paymentTerm = term;
+          });
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('✅ Konfirmasi pembayaran terkirim! Menunggu persetujuan arsitek.'), backgroundColor: Colors.green),
+          );
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Gagal membuat termin pembayaran. Silakan minta arsitek untuk mengirim penawaran baru.'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
       } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Gagal melakukan konfirmasi pembayaran.'), backgroundColor: Colors.red),
+        // Standard flow: update the existing payment term
+        final success = await projectProv.clientMarkAsPaid(
+          termId: _paymentTerm!.id!,
+          paymentMethod: _selectedBank!,
+          virtualAccountNumber: _vaNumber!,
         );
+
+        if (success) {
+          await _loadData();
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('✅ Konfirmasi pembayaran terkirim! Menunggu persetujuan arsitek.'), backgroundColor: Colors.green),
+          );
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Gagal melakukan konfirmasi pembayaran.'), backgroundColor: Colors.red),
+          );
+        }
       }
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
