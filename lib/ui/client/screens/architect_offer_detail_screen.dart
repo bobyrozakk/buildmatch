@@ -73,9 +73,9 @@ class _ArchitectOfferDetailScreenState extends State<ArchitectOfferDetailScreen>
 
   Future<void> _processPayment() async {
     if (_selectedBank == null || _vaNumber == null) return;
-    if (_bidDetails == null) {
+    if (_paymentTerm == null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Gagal mendapatkan informasi penawaran.'), backgroundColor: Colors.red),
+        const SnackBar(content: Text('Gagal mendapatkan informasi termin pembayaran.'), backgroundColor: Colors.red),
       );
       return;
     }
@@ -83,29 +83,21 @@ class _ArchitectOfferDetailScreenState extends State<ArchitectOfferDetailScreen>
     setState(() => _isLoading = true);
     final projectProv = Provider.of<ProjectProvider>(context, listen: false);
 
-    final projectId = _bidDetails!['project_id'] as String;
-    final vendorId = _bidDetails!['vendor_id'] as String;
-
     try {
-      final term = await projectProv.createArchitectPaymentTerm(
-        bidId: widget.bidId,
-        projectId: projectId,
-        vendorId: vendorId,
-        amount: widget.price,
+      final success = await projectProv.clientMarkAsPaid(
+        termId: _paymentTerm!.id!,
         paymentMethod: _selectedBank!,
         virtualAccountNumber: _vaNumber!,
       );
 
-      if (term != null) {
-        setState(() {
-          _paymentTerm = term;
-        });
+      if (success) {
+        await _loadData();
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('✅ Konfirmasi pembayaran terkirim! Menunggu persetujuan arsitek.'), backgroundColor: Colors.green),
         );
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Gagal membuat termin pembayaran.'), backgroundColor: Colors.red),
+          const SnackBar(content: Text('Gagal melakukan konfirmasi pembayaran.'), backgroundColor: Colors.red),
         );
       }
     } catch (e) {
@@ -147,7 +139,7 @@ class _ArchitectOfferDetailScreenState extends State<ArchitectOfferDetailScreen>
                   const SizedBox(height: 24),
 
                   // Payment Status / Action Section
-                  if (_paymentTerm == null) ...[
+                  if (_paymentTerm == null || _paymentTerm!.isPending) ...[
                     const Text(
                       'Pilih Metode Pembayaran',
                       style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Colors.black87),

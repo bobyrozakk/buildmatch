@@ -583,7 +583,23 @@ class ArchitectProvider extends ChangeNotifier {
         'estimation_months': (durationDays / 30).ceil(), // fallback mapping
       }).select('id').single();
 
-      return bidResponse['id'] as String;
+      final bidId = bidResponse['id'] as String;
+
+      // 4. Automatically create the 100% payment term from the arsitek side!
+      // This bypasses client-side RLS insert constraints.
+      await _supabase.from('payment_terms').insert({
+        'project_id': projectId,
+        'bid_id': bidId,
+        'vendor_id': userId,
+        'name': 'Pembayaran Desain',
+        'percentage': 100.0,
+        'amount': price,
+        'status': 'pending',
+        'order_index': 1,
+        'notes': 'Pembayaran penuh untuk jasa desain arsitektur',
+      });
+
+      return bidId;
     } catch (e) {
       debugPrint('Error submit architect offer: $e');
       return null;
@@ -664,6 +680,12 @@ class ArchitectProvider extends ChangeNotifier {
         'price': price,
         'message': packedMessage,
       }).eq('id', bidId);
+
+      // Sync the price with payment term amount
+      await _supabase.from('payment_terms').update({
+        'amount': price,
+      }).eq('bid_id', bidId);
+
       notifyListeners();
       return true;
     } catch (e) {
@@ -676,6 +698,8 @@ class ArchitectProvider extends ChangeNotifier {
   Future<bool> cancelArchitectOffer(String bidId) async {
     try {
       await _supabase.from('bids').update({'status': 'cancelled'}).eq('id', bidId);
+      // Clean up the associated payment term if cancelled
+      await _supabase.from('payment_terms').delete().eq('bid_id', bidId);
       notifyListeners();
       return true;
     } catch (e) {
