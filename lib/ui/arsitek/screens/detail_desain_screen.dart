@@ -1,17 +1,239 @@
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
+import 'package:provider/provider.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../core/constants/colors.dart';
+import '../../../data/providers/architect_provider.dart';
 
-class DetailDesainScreen extends StatelessWidget {
+class DetailDesainScreen extends StatefulWidget {
   final Map<String, dynamic>? designData;
   const DetailDesainScreen({super.key, this.designData});
 
   @override
+  State<DetailDesainScreen> createState() => _DetailDesainScreenState();
+}
+
+class _DetailDesainScreenState extends State<DetailDesainScreen> {
+  bool _isLoadingReviews = false;
+  List<Map<String, dynamic>> _reviews = [];
+
+  @override
+  void initState() {
+    super.initState();
+    _loadReviews();
+  }
+
+  Future<void> _loadReviews() async {
+    final portfolioId = widget.designData?['id'];
+    if (portfolioId == null) return;
+
+    setState(() => _isLoadingReviews = true);
+    final provider = Provider.of<ArchitectProvider>(context, listen: false);
+    final reviews = await provider.fetchPortfolioReviews(portfolioId);
+    if (mounted) {
+      setState(() {
+        _reviews = reviews;
+        _isLoadingReviews = false;
+      });
+    }
+  }
+
+  void _showAddReviewDialog() {
+    final portfolioId = widget.designData?['id'];
+    if (portfolioId == null) return;
+
+    final currentUserId = Supabase.instance.client.auth.currentUser?.id;
+    if (currentUserId == null) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Anda harus login untuk memberi ulasan.')));
+      return;
+    }
+    
+    if (currentUserId == widget.designData?['vendor_id']) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Anda tidak dapat memberi ulasan pada portofolio Anda sendiri.')));
+      return;
+    }
+    
+    // Check if user already reviewed
+    final hasReviewed = _reviews.any((r) => r['reviewer_id'] == currentUserId);
+    if (hasReviewed) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Anda sudah memberikan ulasan pada desain ini.')));
+      return;
+    }
+
+    int selectedRating = 5;
+    final TextEditingController commentCtrl = TextEditingController();
+    bool isSubmitting = false;
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (ctx, setModalState) {
+            return Padding(
+              padding: EdgeInsets.only(bottom: MediaQuery.of(ctx).viewInsets.bottom),
+              child: Container(
+                decoration: const BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+                ),
+                padding: const EdgeInsets.all(24),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        const Text('Beri Ulasan', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: Colors.black87)),
+                        IconButton(
+                          icon: const Icon(Icons.close),
+                          onPressed: () => Navigator.pop(ctx),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 16),
+                    const Text('Rating:', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                    const SizedBox(height: 8),
+                    Row(
+                      children: List.generate(5, (index) {
+                        return IconButton(
+                          icon: Icon(
+                            index < selectedRating ? Icons.star : Icons.star_border,
+                            color: const Color(0xFFD97706),
+                            size: 32,
+                          ),
+                          onPressed: () {
+                            setModalState(() {
+                              selectedRating = index + 1;
+                            });
+                          },
+                        );
+                      }),
+                    ),
+                    const SizedBox(height: 16),
+                    const Text('Komentar:', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                    const SizedBox(height: 8),
+                    TextField(
+                      controller: commentCtrl,
+                      maxLines: 4,
+                      decoration: InputDecoration(
+                        hintText: 'Tulis komentar Anda (opsional)...',
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                      ),
+                    ),
+                    const SizedBox(height: 24),
+                    SizedBox(
+                      width: double.infinity,
+                      child: ElevatedButton(
+                        onPressed: isSubmitting
+                            ? null
+                            : () async {
+                                // Confirmation Dialog
+                                final confirm = await showDialog<bool>(
+                                  context: ctx,
+                                  builder: (dialogCtx) => AlertDialog(
+                                    title: const Text('Konfirmasi Ulasan'),
+                                    content: const Text('Apakah anda yakin ingin memberikan rating ini? Anda hanya bisa memberikan ulasan satu kali pada proyek ini.'),
+                                    actions: [
+                                      TextButton(
+                                        onPressed: () => Navigator.pop(dialogCtx, false),
+                                        child: const Text('Batal', style: TextStyle(color: Colors.grey)),
+                                      ),
+                                      ElevatedButton(
+                                        onPressed: () => Navigator.pop(dialogCtx, true),
+                                        style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF8F2A0C)),
+                                        child: const Text('Yakin', style: TextStyle(color: Colors.white)),
+                                      ),
+                                    ],
+                                  ),
+                                );
+                                
+                                if (confirm != true) return;
+
+                                setModalState(() => isSubmitting = true);
+                                final provider = Provider.of<ArchitectProvider>(context, listen: false);
+                                final success = await provider.addPortfolioReview(
+                                  portfolioId: portfolioId,
+                                  reviewerId: currentUserId,
+                                  rating: selectedRating,
+                                  comment: commentCtrl.text.trim(),
+                                );
+                                
+                                if (mounted) {
+                                  Navigator.pop(ctx);
+                                  if (success) {
+                                    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Ulasan berhasil ditambahkan!'), backgroundColor: Colors.green));
+                                    _loadReviews();
+                                  } else {
+                                    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Gagal menambahkan ulasan.'), backgroundColor: Colors.red));
+                                  }
+                                }
+                              },
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFF8F2A0C),
+                          padding: const EdgeInsets.symmetric(vertical: 16),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        ),
+                        child: isSubmitting
+                            ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                            : const Text('Kirim Ulasan', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white)),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  String _formatDate(String? isoString) {
+    if (isoString == null) return '';
+    try {
+      final date = DateTime.parse(isoString);
+      return DateFormat('dd MMM yyyy').format(date);
+    } catch (_) {
+      return '';
+    }
+  }
+
+  String _formatCost(double cost) {
+    if (cost <= 0) return 'Rp -';
+    if (cost >= 1000000000) {
+      return 'Rp ${(cost / 1000000000).toStringAsFixed(1).replaceAll('.0', '')} M';
+    } else if (cost >= 1000000) {
+      return 'Rp ${(cost / 1000000).toStringAsFixed(1).replaceAll('.0', '')} Jt';
+    } else {
+      return NumberFormat.currency(locale: 'id_ID', symbol: 'Rp ', decimalDigits: 0).format(cost);
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final title = designData?['title'] ?? 'The Terracotta Pavilion';
-    final imageUrl = designData?['image_url'] ?? 'https://eboseqlzrfabtiurwjpl.supabase.co/storage/v1/object/public/project-renders/modern_villa.jpg';
-    final likesStr = designData?['likes'] ?? '4.8';
-    // Remove the 'k' if present and convert to a rating format for now, or just use 4.8
-    final rating = likesStr.contains('k') ? '4.8' : '4.5';
+    final title = widget.designData?['title'] ?? 'Desain Tanpa Judul';
+    final imageUrl = widget.designData?['image_url'] ?? 'https://via.placeholder.com/500';
+    
+    final style = widget.designData?['style'] ?? 'Modern';
+    final projectType = widget.designData?['project_type'] ?? 'Rumah Tinggal';
+    final areaVal = (widget.designData?['area'] as num?)?.toDouble() ?? 0.0;
+    final costVal = (widget.designData?['cost'] as num?)?.toDouble() ?? 0.0;
+    final description = widget.designData?['description'] ?? 'Belum ada deskripsi.';
+    
+    final architectName = widget.designData?['architect_name'] ?? 'Arsitek';
+    final architectAvatar = widget.designData?['architect_avatar'];
+    
+    // Calculate avg rating directly from fetched reviews
+    double currentAvgRating = 0.0;
+    if (_reviews.isNotEmpty) {
+      currentAvgRating = _reviews.fold(0.0, (sum, rev) => sum + (rev['rating'] as int? ?? 0)) / _reviews.length;
+    } else {
+      // Fallback to data if available, else 0
+      currentAvgRating = (widget.designData?['avg_rating'] as num?)?.toDouble() ?? 0.0;
+    }
     
     return Scaffold(
       backgroundColor: const Color(0xFFFCF8F5), // Light cream
@@ -23,17 +245,6 @@ class DetailDesainScreen extends StatelessWidget {
           onPressed: () => Navigator.pop(context),
         ),
         title: const Text('Detail Desain', style: TextStyle(color: Color(0xFF5C1C08), fontWeight: FontWeight.bold, fontSize: 16)),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.share_outlined, color: Color(0xFF5C1C08), size: 20),
-            onPressed: () {},
-          ),
-          IconButton(
-            icon: const Icon(Icons.edit_outlined, color: Color(0xFF5C1C08), size: 20),
-            onPressed: () {},
-          ),
-          const SizedBox(width: 8),
-        ],
       ),
       body: Stack(
         children: [
@@ -48,10 +259,9 @@ class DetailDesainScreen extends StatelessWidget {
                     SizedBox(
                       width: double.infinity,
                       height: 250,
-                      child: Image.network(
-                        imageUrl,
-                        fit: BoxFit.cover,
-                      ),
+                      child: imageUrl.toString().startsWith('http') 
+                        ? Image.network(imageUrl, fit: BoxFit.cover)
+                        : Container(color: AppColors.cardCream),
                     ),
                     Positioned(
                       top: 16,
@@ -77,34 +287,65 @@ class DetailDesainScreen extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       // Title
+                      Text(
+                        title,
+                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 20, color: Colors.black87),
+                      ),
+                      const SizedBox(height: 16),
+                      
+                      // Architect Info
                       Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
+                          CircleAvatar(
+                            radius: 16,
+                            backgroundColor: const Color(0xFFF3EBE3),
+                            backgroundImage: architectAvatar != null ? NetworkImage(architectAvatar) : null,
+                            child: architectAvatar == null 
+                                ? Text(architectName.isNotEmpty ? architectName[0].toUpperCase() : 'A', style: const TextStyle(color: Color(0xFF8F2A0C), fontWeight: FontWeight.bold, fontSize: 12))
+                                : null,
+                          ),
+                          const SizedBox(width: 10),
                           Expanded(
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                Text(
-                                  title,
-                                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 20, color: Colors.black87),
-                                ),
-                                const SizedBox(height: 4),
-                                const Text('Kode: ARCH-2023-089', style: TextStyle(color: Colors.black54, fontSize: 13)),
+                                const Text('Oleh', style: TextStyle(color: Colors.black54, fontSize: 10)),
+                                Text(architectName, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.black87)),
                               ],
                             ),
                           ),
-                          Column(
-                            crossAxisAlignment: CrossAxisAlignment.end,
-                            children: [
-                              Row(
+                          // Rating Badge
+                          if (currentAvgRating > 0)
+                            Container(
+                              margin: const EdgeInsets.only(right: 8),
+                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFFEF3C7), // Light amber
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: Row(
                                 children: [
-                                  const Icon(Icons.star, color: Color(0xFFD97706), size: 16), // Orange star
+                                  const Icon(Icons.star, color: Color(0xFFD97706), size: 12),
                                   const SizedBox(width: 4),
-                                  Text(rating, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Colors.black87)),
+                                  Text(
+                                    currentAvgRating.toStringAsFixed(1),
+                                    style: const TextStyle(color: Color(0xFF92400E), fontWeight: FontWeight.bold, fontSize: 11),
+                                  ),
                                 ],
                               ),
-                              const Text('12 Ulasan', style: TextStyle(color: Colors.black45, fontSize: 11)),
-                            ],
+                            ),
+                          // Cost Info
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                            decoration: BoxDecoration(color: const Color(0xFFFDECE4), borderRadius: BorderRadius.circular(12)),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.end,
+                              children: [
+                                const Text('Estimasi Biaya', style: TextStyle(color: Colors.black54, fontSize: 9)),
+                                const SizedBox(height: 2),
+                                Text(_formatCost(costVal), style: const TextStyle(color: Colors.deepOrange, fontWeight: FontWeight.bold, fontSize: 12)),
+                              ],
+                            ),
                           ),
                         ],
                       ),
@@ -113,11 +354,11 @@ class DetailDesainScreen extends StatelessWidget {
                       // Features Grid
                       Row(
                         children: [
-                          _buildFeatureCard(Icons.layers_outlined, 'Lantai', '2 Tingkat'),
+                          _buildFeatureCard(Icons.architecture, 'Gaya', style),
                           const SizedBox(width: 12),
-                          _buildFeatureCard(Icons.bed_outlined, 'Kamar', '3 Ruang'),
+                          _buildFeatureCard(Icons.business, 'Tipe', projectType),
                           const SizedBox(width: 12),
-                          _buildFeatureCard(Icons.square_foot_outlined, 'Luas', '180 m²'),
+                          _buildFeatureCard(Icons.square_foot_outlined, 'Luas', '${areaVal.toStringAsFixed(0)} m²'),
                         ],
                       ),
                       
@@ -126,81 +367,35 @@ class DetailDesainScreen extends StatelessWidget {
                       // Deskripsi
                       const Text('Deskripsi Desain', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Colors.black87)),
                       const SizedBox(height: 12),
-                      const Text(
-                        'Desain ini memadukan material bata ekspos lokal dengan struktur baja modern. Fokus utama adalah sirkulasi udara alami dan pencahayaan maksimal melalui atrium tengah yang memberikan kesan luas dan sejuk di iklim tropis Indonesia.',
-                        style: TextStyle(color: Colors.black54, fontSize: 13, height: 1.5),
+                      Text(
+                        description,
+                        style: const TextStyle(color: Colors.black54, fontSize: 13, height: 1.5),
                       ),
                       
                       const SizedBox(height: 32),
                       
-                      // Riwayat Pengiriman
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          const Text('Riwayat Pengiriman', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Colors.black87)),
-                          Row(
-                            children: const [
-                              Text('Kirim Baru', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF8F2A0C))),
-                              Icon(Icons.play_arrow, color: Color(0xFF8F2A0C), size: 14),
-                            ],
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 16),
-                      SizedBox(
-                        height: 90,
-                        child: ListView(
-                          scrollDirection: Axis.horizontal,
-                          clipBehavior: Clip.none,
-                          children: [
-                            _buildHistoryCard(
-                              'Budi Santoso',
-                              'Diterima 12 Jun',
-                              'Terkonfirmasi',
-                              const Color(0xFFD1FAE5), // Light green
-                              const Color(0xFF065F46), // Dark green text
-                              'https://eboseqlzrfabtiurwjpl.supabase.co/storage/v1/object/public/project-renders/avatar1.jpg',
-                            ),
-                            const SizedBox(width: 16),
-                            _buildHistoryCard(
-                              'Siti Aminah',
-                              'Diterima 10 Jun',
-                              'Menunggu',
-                              const Color(0xFFFDE68A), // Light yellow
-                              const Color(0xFF92400E), // Dark yellow text
-                              'https://eboseqlzrfabtiurwjpl.supabase.co/storage/v1/object/public/project-renders/avatar2.jpg',
-                            ),
-                          ],
-                        ),
-                      ),
-                      
-                      const SizedBox(height: 32),
-                      
-                      // Rating & Ulasan
-                      const Text('Rating & Ulasan', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Colors.black87)),
+                      // Rating & Ulasan (Sesama Arsitek)
+                      const Text('Rating & Ulasan (Sesama Arsitek)', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Colors.black87)),
                       const SizedBox(height: 16),
                       
-                      // Review 1
-                      _buildReviewCard(
-                        'Budi Santoso',
-                        'BS',
-                        '2 hari yang lalu',
-                        5,
-                        'Desainnya sangat detail dan arsiteknya sangat komunikatif. Material yang disarankan juga sangat masuk akal dengan budget saya. Sangat puas!',
-                      ),
-                      const SizedBox(height: 16),
-                      
-                      // Review 2
-                      _buildReviewCardWithReply(
-                        'Anton Wijaya',
-                        'AW',
-                        '1 minggu yang lalu',
-                        4,
-                        'Konsep fasadnya sangat menarik. Sedikit catatan untuk area servis mungkin bisa dioptimalkan lagi, tapi secara keseluruhan sangat bagus.',
-                        'Anda (Arsitek)',
-                        '5 hari yang lalu',
-                        'Terima kasih Pak Anton, kami akan revisi bagian area servis sesuai masukan Bapak.',
-                      ),
+                      if (_isLoadingReviews)
+                        const Center(child: CircularProgressIndicator(color: AppColors.primary))
+                      else if (_reviews.isEmpty)
+                        const Text('Belum ada ulasan untuk desain ini.', style: TextStyle(color: Colors.black54, fontStyle: FontStyle.italic))
+                      else
+                        ..._reviews.map((rev) {
+                          final reviewerName = rev['reviewer']?['name'] ?? 'Arsitek';
+                          final reviewerAvatar = rev['reviewer']?['avatar_url'];
+                          final initials = reviewerName.isNotEmpty ? reviewerName[0].toUpperCase() : 'A';
+                          final rating = rev['rating'] as int? ?? 5;
+                          final comment = rev['comment'] ?? '';
+                          final date = _formatDate(rev['created_at']);
+                          
+                          return Padding(
+                            padding: const EdgeInsets.only(bottom: 16),
+                            child: _buildReviewCard(reviewerName, initials, reviewerAvatar, date, rating, comment),
+                          );
+                        }).toList(),
                     ],
                   ),
                 ),
@@ -222,36 +417,18 @@ class DetailDesainScreen extends StatelessWidget {
                 ],
               ),
               child: SafeArea(
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: OutlinedButton.icon(
-                        onPressed: () {},
-                        icon: const Icon(Icons.bar_chart, size: 18),
-                        label: const Text('Lihat\nStatistik', textAlign: TextAlign.center, style: TextStyle(height: 1.2)),
-                        style: OutlinedButton.styleFrom(
-                          padding: const EdgeInsets.symmetric(vertical: 12),
-                          side: const BorderSide(color: Color(0xFF8F2A0C)),
-                          foregroundColor: const Color(0xFF8F2A0C),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                        ),
-                      ),
+                child: SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton.icon(
+                    onPressed: _showAddReviewDialog,
+                    icon: const Icon(Icons.star_outline, size: 18, color: Colors.white),
+                    label: const Text('Beri Ulasan', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Colors.white)),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF8F2A0C),
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                     ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      flex: 2,
-                      child: ElevatedButton.icon(
-                        onPressed: () {},
-                        icon: const Icon(Icons.edit_square, size: 18, color: Colors.white),
-                        label: const Text('Edit Desain', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Colors.white)),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFF8F2A0C),
-                          padding: const EdgeInsets.symmetric(vertical: 16),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                        ),
-                      ),
-                    ),
-                  ],
+                  ),
                 ),
               ),
             ),
@@ -276,58 +453,14 @@ class DetailDesainScreen extends StatelessWidget {
             const SizedBox(height: 8),
             Text(label, style: const TextStyle(fontSize: 10, color: Colors.black54)),
             const SizedBox(height: 4),
-            Text(value, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Colors.black87)),
+            Text(value, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Colors.black87), maxLines: 1, overflow: TextOverflow.ellipsis),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildHistoryCard(String name, String date, String status, Color statusBg, Color statusText, String avatarUrl) {
-    return Container(
-      width: 180,
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: const Color(0xFFF3EBE3),
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          CircleAvatar(
-            radius: 16,
-            backgroundImage: NetworkImage(avatarUrl),
-            backgroundColor: Colors.white,
-          ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Text(name, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.black87)),
-                Text(date, style: const TextStyle(fontSize: 10, color: Colors.black45)),
-                const SizedBox(height: 6),
-                Row(
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                      decoration: BoxDecoration(color: statusBg, borderRadius: BorderRadius.circular(20)),
-                      child: Text(status, style: TextStyle(color: statusText, fontSize: 9, fontWeight: FontWeight.bold)),
-                    ),
-                    const Spacer(),
-                    const Icon(Icons.more_vert, size: 14, color: Colors.black45),
-                  ],
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildReviewCard(String name, String initials, String date, int rating, String text) {
+  Widget _buildReviewCard(String name, String initials, String? avatarUrl, String date, int rating, String text) {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -343,7 +476,8 @@ class DetailDesainScreen extends StatelessWidget {
               CircleAvatar(
                 radius: 16,
                 backgroundColor: const Color(0xFFF3EBE3),
-                child: Text(initials, style: const TextStyle(color: Color(0xFF8F2A0C), fontWeight: FontWeight.bold, fontSize: 12)),
+                backgroundImage: avatarUrl != null ? NetworkImage(avatarUrl) : null,
+                child: avatarUrl == null ? Text(initials, style: const TextStyle(color: Color(0xFF8F2A0C), fontWeight: FontWeight.bold, fontSize: 12)) : null,
               ),
               const SizedBox(width: 12),
               Expanded(
@@ -360,98 +494,10 @@ class DetailDesainScreen extends StatelessWidget {
               Text(date, style: const TextStyle(fontSize: 10, color: Colors.black45)),
             ],
           ),
-          const SizedBox(height: 12),
-          Text(text, style: const TextStyle(color: Colors.black87, fontSize: 13, height: 1.4)),
-          const SizedBox(height: 12),
-          Align(
-            alignment: Alignment.centerRight,
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: const [
-                Icon(Icons.reply, size: 16, color: Color(0xFF8F2A0C)),
-                SizedBox(width: 4),
-                Text('Balas', style: TextStyle(color: Color(0xFF8F2A0C), fontWeight: FontWeight.bold, fontSize: 13)),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildReviewCardWithReply(String name, String initials, String date, int rating, String text, String replyName, String replyDate, String replyText) {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0xFFE5DCD3)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              CircleAvatar(
-                radius: 16,
-                backgroundColor: const Color(0xFFF3EBE3),
-                child: Text(initials, style: const TextStyle(color: Color(0xFF8F2A0C), fontWeight: FontWeight.bold, fontSize: 12)),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(name, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.black87)),
-                    Row(
-                      children: List.generate(5, (index) => Icon(Icons.star, size: 12, color: index < rating ? const Color(0xFFD97706) : Colors.grey.shade300)),
-                    ),
-                  ],
-                ),
-              ),
-              Text(date, style: const TextStyle(fontSize: 10, color: Colors.black45)),
-            ],
-          ),
-          const SizedBox(height: 12),
-          Text(text, style: const TextStyle(color: Colors.black87, fontSize: 13, height: 1.4)),
-          const SizedBox(height: 16),
-          
-          // Reply Box
-          Container(
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: const Color(0xFFF3EBE3),
-              borderRadius: BorderRadius.circular(12),
-              border: const Border(left: BorderSide(color: Color(0xFF8F2A0C), width: 4)),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Text(replyName, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 11, color: Color(0xFF8F2A0C))),
-                    Text(replyDate, style: const TextStyle(fontSize: 10, color: Colors.black45)),
-                  ],
-                ),
-                const SizedBox(height: 4),
-                Text(replyText, style: const TextStyle(color: Colors.black54, fontSize: 12, height: 1.4)),
-              ],
-            ),
-          ),
-          
-          const SizedBox(height: 12),
-          Align(
-            alignment: Alignment.centerRight,
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: const [
-                Icon(Icons.reply, size: 16, color: Colors.black38),
-                SizedBox(width: 4),
-                Text('Sudah Dibalas', style: TextStyle(color: Colors.black38, fontWeight: FontWeight.bold, fontSize: 13)),
-              ],
-            ),
-          ),
+          if (text.isNotEmpty) ...[
+            const SizedBox(height: 12),
+            Text(text, style: const TextStyle(color: Colors.black87, fontSize: 13, height: 1.4)),
+          ],
         ],
       ),
     );

@@ -29,7 +29,8 @@ class ChatProvider extends ChangeNotifier {
       final response = await _supabase
           .from('chats')
           .select(
-              '*, client:client_id(name, avatar_url), vendor:vendor_id(name, avatar_url), messages(content, is_read, sender_id, created_at)')
+            '*, client:client_id(name, avatar_url), vendor:vendor_id(name, avatar_url), messages(content, is_read, sender_id, created_at)',
+          )
           .or('client_id.eq.$userId,vendor_id.eq.$userId')
           .order('updated_at', ascending: false);
 
@@ -39,15 +40,18 @@ class ChatProvider extends ChangeNotifier {
 
       for (var row in response) {
         final messages = row['messages'] as List<dynamic>? ?? [];
-        messages.sort((a, b) => DateTime.parse(b['created_at'])
-            .compareTo(DateTime.parse(a['created_at'])));
+        messages.sort(
+          (a, b) => DateTime.parse(
+            b['created_at'],
+          ).compareTo(DateTime.parse(a['created_at'])),
+        );
 
-        final lastMessage =
-            messages.isNotEmpty ? messages.first['content'] as String? : null;
+        final lastMessage = messages.isNotEmpty
+            ? messages.first['content'] as String?
+            : null;
 
         int unreadCount = messages
-            .where((m) =>
-                m['is_read'] == false && m['sender_id'] != userId)
+            .where((m) => m['is_read'] == false && m['sender_id'] != userId)
             .length;
         totalUnread += unreadCount;
 
@@ -89,8 +93,10 @@ class ChatProvider extends ChangeNotifier {
 
   /// Buat atau dapatkan chat yang sudah ada
   /// Client → status 'pending', arsitek/vendor harus terima dulu
-  Future<String?> getOrCreateChat(String otherUserId,
-      {String? projectId}) async {
+  Future<String?> getOrCreateChat(
+    String otherUserId, {
+    String? projectId,
+  }) async {
     _isLoading = true;
     notifyListeners();
 
@@ -102,7 +108,9 @@ class ChatProvider extends ChangeNotifier {
       final existing = await _supabase
           .from('chats')
           .select('id, status')
-          .or('and(client_id.eq.$userId,vendor_id.eq.$otherUserId),and(client_id.eq.$otherUserId,vendor_id.eq.$userId)')
+          .or(
+            'and(client_id.eq.$userId,vendor_id.eq.$otherUserId),and(client_id.eq.$otherUserId,vendor_id.eq.$userId)',
+          )
           .limit(1);
 
       if (existing.isNotEmpty) {
@@ -114,7 +122,8 @@ class ChatProvider extends ChangeNotifier {
       // Tentukan siapa client dan vendor
       final userRole =
           _supabase.auth.currentUser?.userMetadata?['role'] as String?;
-      final isVendorSide = userRole == 'vendor' ||
+      final isVendorSide =
+          userRole == 'vendor' ||
           userRole == 'kontraktor' ||
           userRole == 'architect' ||
           userRole == 'arsitek';
@@ -127,11 +136,13 @@ class ChatProvider extends ChangeNotifier {
         'client_id': isVendorSide ? otherUserId : userId,
         'vendor_id': isVendorSide ? userId : otherUserId,
         'status': chatStatus,
-        if (projectId != null) 'project_id': projectId,
       };
+      if (projectId != null) insertData['project_id'] = projectId;
 
-      final response =
-          await _supabase.from('chats').insert(insertData).select('id');
+      final response = await _supabase
+          .from('chats')
+          .insert(insertData)
+          .select('id');
 
       _isLoading = false;
       notifyListeners();
@@ -150,7 +161,8 @@ class ChatProvider extends ChangeNotifier {
     try {
       await _supabase
           .from('chats')
-          .update({'status': 'accepted'}).eq('id', chatId);
+          .update({'status': 'accepted'})
+          .eq('id', chatId);
 
       await fetchChats();
       return true;
@@ -176,23 +188,29 @@ class ChatProvider extends ChangeNotifier {
   }
 
   /// Kirim pesan
-  Future<bool> sendMessage(String chatId, String content, {String? bidId}) async {
+  Future<bool> sendMessage(
+    String chatId,
+    String content, {
+    String? bidId,
+  }) async {
     try {
       final userId = _supabase.auth.currentUser?.id;
       if (userId == null) return false;
 
-      await _supabase.from('messages').insert({
+      final messageData = {
         'chat_id': chatId,
         'sender_id': userId,
         'content': content,
-        if (bidId != null) 'bid_id': bidId,
-      });
+      };
+      if (bidId != null) messageData['bid_id'] = bidId;
+
+      await _supabase.from('messages').insert(messageData);
 
       // Update updated_at agar naik ke atas
       await _supabase
           .from('chats')
-          .update({'updated_at': DateTime.now().toUtc().toIso8601String()}).eq(
-              'id', chatId);
+          .update({'updated_at': DateTime.now().toUtc().toIso8601String()})
+          .eq('id', chatId);
 
       // Kirim notifikasi ke penerima (ignore error jika tabel tidak ada)
       try {
@@ -207,12 +225,24 @@ class ChatProvider extends ChangeNotifier {
         final senderName =
             _supabase.auth.currentUser?.userMetadata?['name'] ?? 'User';
 
-        await _supabase.from('notifications').insert({
+        final notificationData = {
           'user_id': receiverId,
           'title': 'Pesan Baru',
           'message': '$senderName: $content',
           'type': 'chat',
-        });
+          'chat_id': chatId,
+        };
+
+        try {
+          await _supabase.from('notifications').insert(notificationData);
+        } catch (_) {
+          await _supabase.from('notifications').insert({
+            'user_id': receiverId,
+            'title': 'Pesan Baru',
+            'message': '$senderName: $content',
+            'type': 'chat',
+          });
+        }
       } catch (_) {}
 
       return true;

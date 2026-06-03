@@ -1,11 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../core/constants/colors.dart';
 import '../../../data/providers/architect_provider.dart';
 import '../../../data/providers/notification_provider.dart';
 import '../../shared/screens/notification_screen.dart';
-import '../screens/upload_design_screen.dart';
+import '../screens/upload_desain_screen.dart';
 import '../screens/detail_desain_screen.dart';
 
 class ArsitekDesainTab extends StatefulWidget {
@@ -27,8 +26,7 @@ class _ArsitekDesainTabState extends State<ArsitekDesainTab> {
 
   void _loadPortfolios() {
     final architect = Provider.of<ArchitectProvider>(context, listen: false);
-    final userId = Supabase.instance.client.auth.currentUser?.id ?? "";
-    _portfolioFuture = architect.fetchPortfolios(userId);
+    _portfolioFuture = architect.fetchAllPortfolios();
   }
 
   Future<void> _refresh() async {
@@ -81,7 +79,7 @@ class _ArsitekDesainTabState extends State<ArsitekDesainTab> {
             onTap: () async {
               final result = await Navigator.push(
                 context,
-                MaterialPageRoute(builder: (_) => const UploadDesignScreen()),
+                MaterialPageRoute(builder: (_) => const UploadDesainScreen()),
               );
               if (result == true) {
                 _refresh();
@@ -206,8 +204,7 @@ class _ArsitekDesainTabState extends State<ArsitekDesainTab> {
                           final item = filteredList[i];
                           final title = item['title'] ?? "";
                           final style = item['style'] ?? "Modern";
-                          final likes = item['likes'] ?? "0";
-                          final views = item['views'] ?? "1.2k";
+                          final architectName = item['architect_name'] ?? "Arsitek";
                           final imgUrl = item['image_url'] ?? "";
 
                           return GestureDetector(
@@ -223,6 +220,7 @@ class _ArsitekDesainTabState extends State<ArsitekDesainTab> {
                               decoration: BoxDecoration(
                                 color: Colors.white,
                                 borderRadius: BorderRadius.circular(16),
+                                border: Border.all(color: const Color(0xFFF3EBE3)),
                               ),
                             clipBehavior: Clip.antiAlias,
                             child: Column(
@@ -232,7 +230,7 @@ class _ArsitekDesainTabState extends State<ArsitekDesainTab> {
                                   child: Stack(
                                     fit: StackFit.expand,
                                     children: [
-                                      imgUrl.startsWith('http')
+                                      imgUrl.toString().startsWith('http')
                                         ? Image.network(imgUrl, fit: BoxFit.cover)
                                         : Container(color: AppColors.cardCream),
                                       Positioned(
@@ -259,16 +257,33 @@ class _ArsitekDesainTabState extends State<ArsitekDesainTab> {
                                     crossAxisAlignment: CrossAxisAlignment.start,
                                     children: [
                                       Text(title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.black87), maxLines: 1, overflow: TextOverflow.ellipsis),
-                                      const SizedBox(height: 10),
+                                      const SizedBox(height: 6),
                                       Row(
                                         children: [
-                                          const Icon(Icons.favorite, size: 12, color: Colors.black54),
+                                          const Icon(Icons.person, size: 12, color: Color(0xFFD97706)),
                                           const SizedBox(width: 4),
-                                          Text(likes, style: const TextStyle(fontSize: 10, color: Colors.black54)),
-                                          const Spacer(),
-                                          const Icon(Icons.visibility, size: 12, color: Colors.black54),
-                                          const SizedBox(width: 4),
-                                          Text(views, style: const TextStyle(fontSize: 10, color: Colors.black54)),
+                                          Expanded(
+                                            child: Text(architectName, style: const TextStyle(fontSize: 10, color: Colors.black54, fontWeight: FontWeight.bold), maxLines: 1, overflow: TextOverflow.ellipsis),
+                                          ),
+                                          if ((item['avg_rating'] as num?) != null && (item['avg_rating'] as num) > 0)
+                                            Container(
+                                              padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                                              decoration: BoxDecoration(
+                                                color: const Color(0xFFFEF3C7),
+                                                borderRadius: BorderRadius.circular(4),
+                                              ),
+                                              child: Row(
+                                                mainAxisSize: MainAxisSize.min,
+                                                children: [
+                                                  const Icon(Icons.star, size: 10, color: Color(0xFFD97706)),
+                                                  const SizedBox(width: 2),
+                                                  Text(
+                                                    (item['avg_rating'] as num).toDouble().toStringAsFixed(1),
+                                                    style: const TextStyle(fontSize: 9, fontWeight: FontWeight.bold, color: Color(0xFF92400E)),
+                                                  ),
+                                                ],
+                                              ),
+                                            ),
                                         ],
                                       ),
                                     ],

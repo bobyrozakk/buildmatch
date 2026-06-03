@@ -7,6 +7,7 @@ import 'package:buildmatch/data/models/project_model.dart';
 import 'package:buildmatch/data/models/review_model.dart';
 import '../../../core/constants/colors.dart';
 import '../../../core/utils/formatters.dart';
+import '../../shared/widgets/animated_success_dialog.dart';
 
 /// Screen khusus CLIENT untuk melihat termin pembayaran, melakukan konfirmasi bayar,
 /// dan meninjau laporan progres dari kontraktor.
@@ -1953,27 +1954,8 @@ class _ClientPaymentTermsScreenState extends State<ClientPaymentTermsScreen> {
     showDialog(
       context: context,
       barrierDismissible: false,
-      builder: (ctx) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: const Row(
-          children: [
-            Icon(Icons.celebration_rounded, color: Colors.teal),
-            SizedBox(width: 8),
-            Text('Proyek Selesai! 🎉'),
-          ],
-        ),
-        content: const Text(
-          'Proyek telah selesai. Terima kasih telah menggunakan jasa kami!',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text(
-              'Sama-sama',
-              style: TextStyle(color: Colors.teal, fontWeight: FontWeight.bold),
-            ),
-          ),
-        ],
+      builder: (ctx) => const AnimatedSuccessDialog(
+        message: 'Proyek Selesai! 🎉\nTerima kasih telah menggunakan jasa kami.',
       ),
     );
   }

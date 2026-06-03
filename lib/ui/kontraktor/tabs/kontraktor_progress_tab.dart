@@ -362,7 +362,7 @@ class _KontraktorProgressTabState extends State<KontraktorProgressTab> {
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
         title: const Row(
           children: [
-            Icon(Icons.warning_amber_rounded, color: Colors.redAccent, size: 22),
+            Icon(Icons.warning_amber_rounded, color: AppColors.primary, size: 22),
             SizedBox(width: 10),
             Text('Hapus Penawaran', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 17, color: Colors.black87)),
           ],
@@ -384,8 +384,8 @@ class _KontraktorProgressTabState extends State<KontraktorProgressTab> {
           ElevatedButton(
             onPressed: () => Navigator.pop(ctx, true),
             style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.red.shade50,
-              foregroundColor: Colors.red.shade700,
+              backgroundColor: AppColors.primary.withOpacity(0.1),
+              foregroundColor: AppColors.primary,
               elevation: 0,
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
               padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),

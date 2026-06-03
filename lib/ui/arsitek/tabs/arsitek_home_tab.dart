@@ -6,9 +6,9 @@ import '../../../data/models/profile_model.dart';
 import '../../../data/providers/architect_provider.dart';
 import '../../../data/providers/chat_provider.dart';
 import '../../../data/providers/notification_provider.dart';
-import '../../shared/screens/chat_list_screen.dart';
 import '../../shared/screens/notification_screen.dart';
 import '../screens/edit_profil_screen.dart';
+import '../screens/detail_desain_screen.dart';
 
 class ArsitekHomeTab extends StatefulWidget {
   final ValueChanged<int>? onSwitchTab;
@@ -30,18 +30,21 @@ class _ArsitekHomeTabState extends State<ArsitekHomeTab> {
   void _loadData() {
     final architect = Provider.of<ArchitectProvider>(context, listen: false);
     final userId = Supabase.instance.client.auth.currentUser?.id ?? "";
-    
+
     _dataFuture = Future.wait([
       architect.fetchArchitectDetails(userId), // 0: profile
-      architect.fetchPortfolios(userId),       // 1: own portfolios
-      architect.fetchArchitectStats(userId),   // 2: stats
-      architect.fetchCollaborationRequests(),  // 3: collab requests
-      architect.fetchPopularPortfolios(),      // 4: popular designs
+      architect.fetchPortfolios(userId), // 1: own portfolios
+      architect.fetchArchitectStats(userId), // 2: stats
+      architect.fetchCollaborationRequests(), // 3: collab requests
+      architect.fetchAllPortfolios(), // 4: all designs (unified)
     ]);
-    
+
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
-        Provider.of<NotificationProvider>(context, listen: false).fetchNotifications();
+        Provider.of<NotificationProvider>(
+          context,
+          listen: false,
+        ).fetchNotifications();
         Provider.of<ChatProvider>(context, listen: false).fetchChats();
       }
     });
@@ -66,22 +69,30 @@ class _ArsitekHomeTabState extends State<ArsitekHomeTab> {
             future: _dataFuture,
             builder: (context, snapshot) {
               if (snapshot.connectionState == ConnectionState.waiting) {
-                return const Center(child: CircularProgressIndicator(color: Color(0xFF8F2A0C)));
+                return const Center(
+                  child: CircularProgressIndicator(color: Color(0xFF8F2A0C)),
+                );
               }
 
               final profileData = snapshot.data?[0] as Map<String, dynamic>?;
-              final listPorto = snapshot.data?[1] as List<Map<String, dynamic>>? ?? [];
               final stats = snapshot.data?[2] as Map<String, dynamic>? ?? {};
-              final collabs = snapshot.data?[3] as List<Map<String, dynamic>>? ?? [];
-              final popularDesigns = snapshot.data?[4] as List<Map<String, dynamic>>? ?? [];
+              final collabs =
+                  snapshot.data?[3] as List<Map<String, dynamic>>? ?? [];
+              final popularDesigns =
+                  snapshot.data?[4] as List<Map<String, dynamic>>? ?? [];
 
               final profile = profileData?['profile'] as ProfileModel?;
-              final name = profile?.name.isNotEmpty == true ? profile!.name : "Arsitek";
+              final name = _currentUserName(profile, fallback: 'Arsitek');
               double completionVal = 0.85; // Default for now
-              
+
               return SingleChildScrollView(
-                physics: const AlwaysScrollableScrollPhysics(parent: BouncingScrollPhysics()),
-                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+                physics: const AlwaysScrollableScrollPhysics(
+                  parent: BouncingScrollPhysics(),
+                ),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 20,
+                  vertical: 16,
+                ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -106,33 +117,43 @@ class _ArsitekHomeTabState extends State<ArsitekHomeTab> {
   }
 
   Widget _buildAppBar(ProfileModel? profile) {
-    final name = profile?.name ?? "Arsitek";
+    final name = _currentUserName(profile, fallback: 'Arsitek');
     return Row(
       children: [
         Container(
           padding: const EdgeInsets.all(8),
           decoration: BoxDecoration(
-              color: AppColors.primary,
-              borderRadius: BorderRadius.circular(10)),
-          child: const Icon(Icons.hardware_rounded,
-              color: Colors.white, size: 20),
+            color: AppColors.primary,
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: const Icon(
+            Icons.hardware_rounded,
+            color: Colors.white,
+            size: 20,
+          ),
         ),
         const SizedBox(width: 10),
         RichText(
-          text: const TextSpan(children: [
-            TextSpan(
+          text: const TextSpan(
+            children: [
+              TextSpan(
                 text: 'Build',
                 style: TextStyle(
-                    fontWeight: FontWeight.bold,
-                    fontSize: 18,
-                    color: AppColors.primary)),
-            TextSpan(
+                  fontWeight: FontWeight.bold,
+                  fontSize: 18,
+                  color: AppColors.primary,
+                ),
+              ),
+              TextSpan(
                 text: 'Match',
                 style: TextStyle(
-                    fontWeight: FontWeight.bold,
-                    fontSize: 18,
-                    color: Colors.black87)),
-          ]),
+                  fontWeight: FontWeight.bold,
+                  fontSize: 18,
+                  color: Colors.black87,
+                ),
+              ),
+            ],
+          ),
         ),
         const Spacer(),
         Consumer<ChatProvider>(
@@ -146,9 +167,14 @@ class _ArsitekHomeTabState extends State<ArsitekHomeTab> {
                 Container(
                   padding: const EdgeInsets.all(8),
                   decoration: BoxDecoration(
-                      color: AppColors.cardCream,
-                      borderRadius: BorderRadius.circular(12)),
-                  child: const Icon(Icons.chat_bubble_outline_rounded, size: 20, color: AppColors.primary),
+                    color: AppColors.cardCream,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: const Icon(
+                    Icons.chat_bubble_outline_rounded,
+                    size: 20,
+                    color: AppColors.primary,
+                  ),
                 ),
                 if (chat.totalUnreadCount > 0)
                   Positioned(
@@ -156,11 +182,21 @@ class _ArsitekHomeTabState extends State<ArsitekHomeTab> {
                     right: -2,
                     child: Container(
                       padding: const EdgeInsets.all(4),
-                      decoration: const BoxDecoration(color: Colors.red, shape: BoxShape.circle),
-                      constraints: const BoxConstraints(minWidth: 16, minHeight: 16),
+                      decoration: const BoxDecoration(
+                        color: Colors.red,
+                        shape: BoxShape.circle,
+                      ),
+                      constraints: const BoxConstraints(
+                        minWidth: 16,
+                        minHeight: 16,
+                      ),
                       child: Text(
                         '${chat.totalUnreadCount}',
-                        style: const TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.bold),
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 9,
+                          fontWeight: FontWeight.bold,
+                        ),
                         textAlign: TextAlign.center,
                       ),
                     ),
@@ -173,7 +209,10 @@ class _ArsitekHomeTabState extends State<ArsitekHomeTab> {
         Consumer<NotificationProvider>(
           builder: (context, notif, child) => GestureDetector(
             onTap: () {
-              Navigator.push(context, MaterialPageRoute(builder: (_) => const NotificationScreen()));
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const NotificationScreen()),
+              );
             },
             child: Stack(
               clipBehavior: Clip.none,
@@ -181,9 +220,14 @@ class _ArsitekHomeTabState extends State<ArsitekHomeTab> {
                 Container(
                   padding: const EdgeInsets.all(8),
                   decoration: BoxDecoration(
-                      color: AppColors.cardCream,
-                      borderRadius: BorderRadius.circular(12)),
-                  child: const Icon(Icons.notifications_none_rounded, size: 20, color: AppColors.primary),
+                    color: AppColors.cardCream,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: const Icon(
+                    Icons.notifications_none_rounded,
+                    size: 20,
+                    color: AppColors.primary,
+                  ),
                 ),
                 if (notif.unreadCount > 0)
                   Positioned(
@@ -191,11 +235,21 @@ class _ArsitekHomeTabState extends State<ArsitekHomeTab> {
                     right: -2,
                     child: Container(
                       padding: const EdgeInsets.all(4),
-                      decoration: const BoxDecoration(color: Colors.red, shape: BoxShape.circle),
-                      constraints: const BoxConstraints(minWidth: 16, minHeight: 16),
+                      decoration: const BoxDecoration(
+                        color: Colors.red,
+                        shape: BoxShape.circle,
+                      ),
+                      constraints: const BoxConstraints(
+                        minWidth: 16,
+                        minHeight: 16,
+                      ),
                       child: Text(
                         '${notif.unreadCount}',
-                        style: const TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.bold),
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 9,
+                          fontWeight: FontWeight.bold,
+                        ),
                         textAlign: TextAlign.center,
                       ),
                     ),
@@ -207,17 +261,26 @@ class _ArsitekHomeTabState extends State<ArsitekHomeTab> {
         const SizedBox(width: 8),
         GestureDetector(
           onTap: () async {
-            await Navigator.push(context, MaterialPageRoute(builder: (_) => const EditProfileScreen()));
+            await Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const EditProfileScreen()),
+            );
             _refresh();
           },
           child: CircleAvatar(
             radius: 18,
             backgroundColor: AppColors.cardCream,
-            backgroundImage: profile?.avatarUrl != null ? NetworkImage(profile!.avatarUrl!) : null,
+            backgroundImage: profile?.avatarUrl != null
+                ? NetworkImage(profile!.avatarUrl!)
+                : null,
             child: profile?.avatarUrl == null
                 ? Text(
                     name.isNotEmpty ? name[0].toUpperCase() : 'A',
-                    style: const TextStyle(color: AppColors.primary, fontWeight: FontWeight.bold, fontSize: 14),
+                    style: const TextStyle(
+                      color: AppColors.primary,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 14,
+                    ),
                   )
                 : null,
           ),
@@ -229,7 +292,10 @@ class _ArsitekHomeTabState extends State<ArsitekHomeTab> {
   Widget _buildWelcomeCard(String name, double completion) {
     return GestureDetector(
       onTap: () async {
-        await Navigator.push(context, MaterialPageRoute(builder: (_) => const EditProfileScreen()));
+        await Navigator.push(
+          context,
+          MaterialPageRoute(builder: (_) => const EditProfileScreen()),
+        );
         _refresh();
       },
       child: Container(
@@ -243,20 +309,43 @@ class _ArsitekHomeTabState extends State<ArsitekHomeTab> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             const Text(
-              'Halo, Arsitek Andi!',
-              style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold),
+              'Selamat datang arsitek, ',
+              style: TextStyle(color: Colors.white70, fontSize: 13),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              name,
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 22,
+                fontWeight: FontWeight.bold,
+              ),
             ),
             const SizedBox(height: 12),
             const Text(
               'Profil Anda hampir selesai. Lengkapi\nuntuk menjangkau lebih banyak klien.',
-              style: TextStyle(color: Colors.white70, fontSize: 12, height: 1.4),
+              style: TextStyle(
+                color: Colors.white70,
+                fontSize: 12,
+                height: 1.4,
+              ),
             ),
             const SizedBox(height: 24),
             Row(
               children: [
-                const Text('Kelengkapan Profil', style: TextStyle(color: Colors.white70, fontSize: 11)),
+                const Text(
+                  'Kelengkapan Profil',
+                  style: TextStyle(color: Colors.white70, fontSize: 11),
+                ),
                 const Spacer(),
-                Text('${(completion * 100).toInt()}%', style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold)),
+                Text(
+                  '${(completion * 100).toInt()}%',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 11,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
               ],
             ),
             const SizedBox(height: 8),
@@ -265,14 +354,26 @@ class _ArsitekHomeTabState extends State<ArsitekHomeTab> {
               child: LinearProgressIndicator(
                 value: completion,
                 minHeight: 6,
-                backgroundColor: Colors.white.withOpacity(0.2),
-                valueColor: const AlwaysStoppedAnimation<Color>(Color(0xFFF59E0B)), // Orange
+                backgroundColor: Colors.white.withValues(alpha: 0.2),
+                valueColor: const AlwaysStoppedAnimation<Color>(
+                  Color(0xFFF59E0B),
+                ), // Orange
               ),
             ),
           ],
         ),
       ),
     );
+  }
+
+  String _currentUserName(ProfileModel? profile, {required String fallback}) {
+    final user = Supabase.instance.client.auth.currentUser;
+    final profileName = profile?.name.trim();
+    final metadataName = user?.userMetadata?['name']?.toString().trim();
+
+    if (profileName != null && profileName.isNotEmpty) return profileName;
+    if (metadataName != null && metadataName.isNotEmpty) return metadataName;
+    return fallback;
   }
 
   Widget _buildStatsRow(Map<String, dynamic> stats) {
@@ -289,15 +390,28 @@ class _ArsitekHomeTabState extends State<ArsitekHomeTab> {
       crossAxisSpacing: 12,
       childAspectRatio: 1.5,
       children: [
-        _buildStatCard('Kolaborasi Aktif', activeCollabs, Icons.people_alt_outlined),
-        _buildStatCard('Total Desain', totalDesigns, Icons.design_services_outlined),
+        _buildStatCard(
+          'Kolaborasi Aktif',
+          activeCollabs,
+          Icons.people_alt_outlined,
+        ),
+        _buildStatCard(
+          'Total Desain',
+          totalDesigns,
+          Icons.design_services_outlined,
+        ),
         _buildStatCard('Tahun Pengalaman', experience, Icons.access_time),
         _buildStatCard('Sertifikasi', certs, Icons.workspace_premium_outlined),
       ],
     );
   }
 
-  Widget _buildStatCard(String title, String value, IconData icon, {bool isStar = false}) {
+  Widget _buildStatCard(
+    String title,
+    String value,
+    IconData icon, {
+    bool isStar = false,
+  }) {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -311,13 +425,33 @@ class _ArsitekHomeTabState extends State<ArsitekHomeTab> {
         children: [
           Row(
             children: [
-              Icon(icon, color: isStar ? const Color(0xFFD97706) : const Color(0xFF8F2A0C), size: 16),
+              Icon(
+                icon,
+                color: isStar
+                    ? const Color(0xFFD97706)
+                    : const Color(0xFF8F2A0C),
+                size: 16,
+              ),
               const SizedBox(width: 8),
-              Text(title, style: const TextStyle(fontSize: 10, color: Colors.black54, fontWeight: FontWeight.w600)),
+              Text(
+                title,
+                style: const TextStyle(
+                  fontSize: 10,
+                  color: Colors.black54,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
             ],
           ),
           const SizedBox(height: 12),
-          Text(value, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 20, color: Colors.black87)),
+          Text(
+            value,
+            style: const TextStyle(
+              fontWeight: FontWeight.bold,
+              fontSize: 20,
+              color: Colors.black87,
+            ),
+          ),
         ],
       ),
     );
@@ -330,10 +464,25 @@ class _ArsitekHomeTabState extends State<ArsitekHomeTab> {
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            const Text('Permintaan Kolaborasi', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.black87)),
+            const Text(
+              'Permintaan Kolaborasi',
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.bold,
+                color: Colors.black87,
+              ),
+            ),
             GestureDetector(
-              onTap: () => widget.onSwitchTab?.call(2), // Assume tab 2 is inbox/requests
-              child: const Text('Lihat Semua', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF8F2A0C))),
+              onTap: () =>
+                  widget.onSwitchTab?.call(2), // Assume tab 2 is inbox/requests
+              child: const Text(
+                'Lihat Semua',
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.bold,
+                  color: Color(0xFF8F2A0C),
+                ),
+              ),
             ),
           ],
         ),
@@ -352,7 +501,8 @@ class _ArsitekHomeTabState extends State<ArsitekHomeTab> {
                   item['client_name'] ?? 'Client',
                   'Client',
                   item['title'] ?? '',
-                  item['client_avatar'] ?? 'https://ui-avatars.com/api/?name=${Uri.encodeComponent(item['client_name'] ?? 'Client')}&background=B53D1B&color=fff',
+                  item['client_avatar'] ??
+                      'https://ui-avatars.com/api/?name=${Uri.encodeComponent(item['client_name'] ?? 'Client')}&background=B53D1B&color=fff',
                 );
               }).toList(),
             ),
@@ -379,12 +529,20 @@ class _ArsitekHomeTabState extends State<ArsitekHomeTab> {
               color: Color(0xFFFCF8F5),
               shape: BoxShape.circle,
             ),
-            child: const Icon(Icons.handshake_outlined, size: 40, color: Color(0xFF8F2A0C)),
+            child: const Icon(
+              Icons.handshake_outlined,
+              size: 40,
+              color: Color(0xFF8F2A0C),
+            ),
           ),
           const SizedBox(height: 16),
           const Text(
             'Belum ada permintaan',
-            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Colors.black87),
+            style: TextStyle(
+              fontWeight: FontWeight.bold,
+              fontSize: 14,
+              color: Colors.black87,
+            ),
           ),
           const SizedBox(height: 8),
           const Text(
@@ -399,17 +557,31 @@ class _ArsitekHomeTabState extends State<ArsitekHomeTab> {
             },
             style: ElevatedButton.styleFrom(
               backgroundColor: const Color(0xFF8F2A0C),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(8),
+              ),
               elevation: 0,
             ),
-            child: const Text('Perbarui Portofolio', style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold)),
+            child: const Text(
+              'Perbarui Portofolio',
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: 12,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
           ),
         ],
       ),
     );
   }
 
-  Widget _buildCollabCard(String name, String role, String quote, String imgUrl) {
+  Widget _buildCollabCard(
+    String name,
+    String role,
+    String quote,
+    String imgUrl,
+  ) {
     return Container(
       width: 250,
       margin: const EdgeInsets.only(right: 16),
@@ -434,8 +606,21 @@ class _ArsitekHomeTabState extends State<ArsitekHomeTab> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(name, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.black87)),
-                    Text(role, style: const TextStyle(fontSize: 10, color: Colors.black45)),
+                    Text(
+                      name,
+                      style: const TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 13,
+                        color: Colors.black87,
+                      ),
+                    ),
+                    Text(
+                      role,
+                      style: const TextStyle(
+                        fontSize: 10,
+                        color: Colors.black45,
+                      ),
+                    ),
                   ],
                 ),
               ),
@@ -444,7 +629,11 @@ class _ArsitekHomeTabState extends State<ArsitekHomeTab> {
           const SizedBox(height: 12),
           Text(
             quote,
-            style: const TextStyle(fontSize: 11, color: Colors.black54, height: 1.4),
+            style: const TextStyle(
+              fontSize: 11,
+              color: Colors.black54,
+              height: 1.4,
+            ),
             maxLines: 2,
             overflow: TextOverflow.ellipsis,
           ),
@@ -458,10 +647,19 @@ class _ArsitekHomeTabState extends State<ArsitekHomeTab> {
                     onPressed: () {},
                     style: ElevatedButton.styleFrom(
                       backgroundColor: const Color(0xFF5C1C08), // Dark brown
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
                       padding: EdgeInsets.zero,
                     ),
-                    child: const Text('Terima', style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold)),
+                    child: const Text(
+                      'Terima',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 11,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
                   ),
                 ),
               ),
@@ -473,10 +671,19 @@ class _ArsitekHomeTabState extends State<ArsitekHomeTab> {
                     onPressed: () {},
                     style: OutlinedButton.styleFrom(
                       side: const BorderSide(color: Colors.black87),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
                       padding: EdgeInsets.zero,
                     ),
-                    child: const Text('Detail', style: TextStyle(color: Colors.black87, fontSize: 11, fontWeight: FontWeight.bold)),
+                    child: const Text(
+                      'Detail',
+                      style: TextStyle(
+                        color: Colors.black87,
+                        fontSize: 11,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
                   ),
                 ),
               ),
@@ -492,16 +699,33 @@ class _ArsitekHomeTabState extends State<ArsitekHomeTab> {
       return const SizedBox.shrink();
     }
 
+    // Show at most 6 items
+    final displayList = popularDesigns.take(6).toList();
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            const Text('Desain Populer', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.black87)),
+            const Text(
+              'Desain Populer',
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.bold,
+                color: Colors.black87,
+              ),
+            ),
             GestureDetector(
               onTap: () => widget.onSwitchTab?.call(1),
-              child: const Text('Lihat Galeri', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF8F2A0C))),
+              child: const Text(
+                'Lihat Galeri',
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.bold,
+                  color: Color(0xFF8F2A0C),
+                ),
+              ),
             ),
           ],
         ),
@@ -509,62 +733,126 @@ class _ArsitekHomeTabState extends State<ArsitekHomeTab> {
         GridView.builder(
           shrinkWrap: true,
           physics: const NeverScrollableScrollPhysics(),
-          itemCount: popularDesigns.length,
+          itemCount: displayList.length,
           gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
             crossAxisCount: 2,
             crossAxisSpacing: 12,
             mainAxisSpacing: 12,
-            childAspectRatio: 0.85,
+            childAspectRatio: 0.68,
           ),
           itemBuilder: (context, i) {
-            final item = popularDesigns[i];
+            final item = displayList[i];
             final title = item['title'] ?? "";
+            final style = item['style'] ?? "Modern";
             final imgUrl = item['image_url'] ?? "";
-            final architectName = item['architect_name'] ?? "";
+            final architectName = item['architect_name'] ?? "Arsitek";
 
-            return Container(
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: const Color(0xFFF3EBE3)),
-              ),
-              clipBehavior: Clip.antiAlias,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Expanded(
-                    child: SizedBox(
-                      width: double.infinity,
-                      child: imgUrl.isNotEmpty 
-                        ? Image.network(imgUrl, fit: BoxFit.cover)
-                        : Container(color: AppColors.cardCream),
-                    ),
+            return GestureDetector(
+              onTap: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => DetailDesainScreen(designData: item),
                   ),
-                  Padding(
-                    padding: const EdgeInsets.all(12),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 11, color: Colors.black87), maxLines: 1, overflow: TextOverflow.ellipsis),
-                        const SizedBox(height: 4),
-                        Row(
-                          children: [
-                            const Icon(Icons.person, size: 10, color: Color(0xFFD97706)),
-                            const SizedBox(width: 4),
-                            Expanded(
+                );
+              },
+              child: Container(
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: const Color(0xFFF3EBE3)),
+                ),
+                clipBehavior: Clip.antiAlias,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(
+                      child: Stack(
+                        fit: StackFit.expand,
+                        children: [
+                          imgUrl.toString().startsWith('http')
+                            ? Image.network(imgUrl, fit: BoxFit.cover)
+                            : Container(color: AppColors.cardCream),
+                          Positioned(
+                            top: 8,
+                            right: 8,
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                              decoration: BoxDecoration(
+                                color: Colors.black.withOpacity(0.5),
+                                borderRadius: BorderRadius.circular(12),
+                              ),
                               child: Text(
-                                architectName, 
-                                style: const TextStyle(fontSize: 10, color: Colors.black54, fontWeight: FontWeight.bold),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
+                                style,
+                                style: const TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.bold),
                               ),
                             ),
-                          ],
-                        ),
-                      ],
+                          ),
+                        ],
+                      ),
                     ),
-                  ),
-                ],
+                    Padding(
+                      padding: const EdgeInsets.all(12),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            title,
+                            style: const TextStyle(
+                              fontWeight: FontWeight.bold,
+                              fontSize: 13,
+                              color: Colors.black87,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          const SizedBox(height: 6),
+                          Row(
+                            children: [
+                              const Icon(
+                                Icons.person,
+                                size: 12,
+                                color: Color(0xFFD97706),
+                              ),
+                              const SizedBox(width: 4),
+                              Expanded(
+                                child: Text(
+                                  architectName,
+                                  style: const TextStyle(
+                                    fontSize: 10,
+                                    color: Colors.black54,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                              if ((item['avg_rating'] as num?) != null && (item['avg_rating'] as num) > 0)
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFFFEF3C7),
+                                    borderRadius: BorderRadius.circular(4),
+                                  ),
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      const Icon(Icons.star, size: 10, color: Color(0xFFD97706)),
+                                      const SizedBox(width: 2),
+                                      Text(
+                                        (item['avg_rating'] as num).toDouble().toStringAsFixed(1),
+                                        style: const TextStyle(fontSize: 9, fontWeight: FontWeight.bold, color: Color(0xFF92400E)),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
               ),
             );
           },

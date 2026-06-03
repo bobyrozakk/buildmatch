@@ -1,4 +1,11 @@
+import 'dart:io';
+import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import 'package:image_picker/image_picker.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import '../../../data/providers/architect_provider.dart';
+import '../../../core/constants/colors.dart';
 
 class UploadDesainScreen extends StatefulWidget {
   const UploadDesainScreen({super.key});
@@ -18,19 +25,76 @@ class _UploadDesainScreenState extends State<UploadDesainScreen> {
   bool _showToPublic = true;
   bool _isLoading = false;
 
-  // Thumbnail list
-  final List<String> _thumbnails = [
-    'https://images.unsplash.com/photo-1600585154340-be6161a56a0c?w=400&q=80', // Living room
-    'https://images.unsplash.com/photo-1600607687939-ce8a6c25118c?w=400&q=80', // Kitchen
-  ];
+  final List<File> _imageFiles = [];
 
-  final List<String> _extraImages = [
-    'https://images.unsplash.com/photo-1600566752355-35792bedcfea?w=400&q=80',
-    'https://images.unsplash.com/photo-1600585154526-990dced4db0d?w=400&q=80',
-    'https://images.unsplash.com/photo-1600210492486-724fe5c67fb0?w=400&q=80',
-  ];
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _checkForDraft();
+    });
+  }
 
-  int _extraImageIndex = 0;
+  Future<void> _checkForDraft() async {
+    final prefs = await SharedPreferences.getInstance();
+    final draftStr = prefs.getString('portfolio_draft');
+    if (draftStr != null && mounted) {
+      final confirm = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          backgroundColor: const Color(0xFFFCF8F5),
+          title: const Text(
+            'Lanjutkan Draft?',
+            style: TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF8F2A0C), fontSize: 16),
+          ),
+          content: const Text(
+            'Apakah Anda ingin melanjutkan pengisian draft portofolio sebelumnya?',
+            style: TextStyle(color: Colors.black54, fontSize: 13),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () {
+                prefs.remove('portfolio_draft');
+                Navigator.pop(ctx, false);
+              },
+              child: const Text('Hapus Draft', style: TextStyle(color: Colors.red)),
+            ),
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('Lanjutkan', style: TextStyle(color: Color(0xFF8F2A0C), fontWeight: FontWeight.bold)),
+            ),
+          ],
+        ),
+      );
+
+      if (confirm == true && mounted) {
+        try {
+          final data = jsonDecode(draftStr);
+          setState(() {
+            _nameCtrl.text = data['title'] ?? '';
+            _selectedStyle = data['style'] ?? 'Modern Kontemporer';
+            _selectedType = data['project_type'] ?? 'Rumah Tinggal';
+            _areaCtrl.text = data['area'] ?? '120';
+            _costCtrl.text = data['cost'] ?? '500.000.000';
+            _descCtrl.text = data['description'] ?? '';
+            _showToPublic = data['show_to_public'] ?? true;
+            
+            final List<dynamic> paths = data['image_paths'] ?? [];
+            _imageFiles.clear();
+            for (final p in paths) {
+              final file = File(p.toString());
+              if (file.existsSync()) {
+                _imageFiles.add(file);
+              }
+            }
+          });
+        } catch (e) {
+          debugPrint("Error loading draft: $e");
+        }
+      }
+    }
+  }
 
   @override
   void dispose() {
@@ -41,64 +105,91 @@ class _UploadDesainScreenState extends State<UploadDesainScreen> {
     super.dispose();
   }
 
-  void _addThumbnail() {
-    if (_extraImageIndex < _extraImages.length) {
+  Future<void> _pickImage() async {
+    final picker = ImagePicker();
+    final picked = await picker.pickImage(
+      source: ImageSource.gallery,
+      imageQuality: 70,
+    );
+    if (picked != null) {
       setState(() {
-        _thumbnails.add(_extraImages[_extraImageIndex]);
-        _extraImageIndex++;
+        _imageFiles.add(File(picked.path));
       });
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Foto proyek berhasil ditambahkan!'),
-          backgroundColor: Color(0xFF8F2A0C),
-          duration: Duration(seconds: 1),
-        ),
-      );
-    } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Maksimal batas unggah foto tercapai untuk dummy.'),
-          backgroundColor: Colors.orange,
-        ),
-      );
     }
   }
 
-  void _publishPortfolio() {
+  Future<void> _publishPortfolio() async {
     if (_nameCtrl.text.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Nama Proyek wajib diisi!')),
       );
       return;
     }
+    if (_imageFiles.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Pilih minimal 1 foto proyek!')),
+      );
+      return;
+    }
 
     setState(() => _isLoading = true);
 
-    Future.delayed(const Duration(milliseconds: 1000), () {
-      if (mounted) {
-        setState(() => _isLoading = false);
+    final double cost = double.tryParse(_costCtrl.text.replaceAll('.', '').replaceAll(',', '')) ?? 0.0;
+    final double area = double.tryParse(_areaCtrl.text) ?? 0.0;
+
+    final provider = Provider.of<ArchitectProvider>(context, listen: false);
+    final success = await provider.addPortfolio(
+      title: _nameCtrl.text.trim(),
+      style: _selectedStyle,
+      projectType: _selectedType,
+      area: area,
+      cost: cost,
+      description: _descCtrl.text.trim(),
+      imageFiles: _imageFiles,
+      year: DateTime.now().year.toString(),
+      isPublic: _showToPublic,
+    );
+
+    if (mounted) {
+      setState(() => _isLoading = false);
+      if (success) {
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.remove('portfolio_draft');
+
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text('Desain berhasil dipublikasikan ke portofolio publik!'),
             backgroundColor: Colors.green,
           ),
         );
-        Navigator.pop(context, {
-          'title': _nameCtrl.text.trim(),
-          'style': _selectedStyle,
-          'type': _selectedType,
-          'area': _areaCtrl.text.trim(),
-          'cost': _costCtrl.text.trim(),
-          'image': _thumbnails.isNotEmpty ? _thumbnails.first : 'https://images.unsplash.com/photo-1600585154340-be6161a56a0c?w=500&q=80',
-        });
+        Navigator.pop(context, true);
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Gagal mempublikasikan portofolio.'),
+            backgroundColor: Colors.red,
+          ),
+        );
       }
-    });
+    }
   }
 
-  void _saveDraft() {
+  Future<void> _saveDraft() async {
     setState(() => _isLoading = true);
-
-    Future.delayed(const Duration(milliseconds: 800), () {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final draftData = jsonEncode({
+        'title': _nameCtrl.text,
+        'style': _selectedStyle,
+        'project_type': _selectedType,
+        'area': _areaCtrl.text,
+        'cost': _costCtrl.text,
+        'description': _descCtrl.text,
+        'show_to_public': _showToPublic,
+        'image_paths': _imageFiles.map((f) => f.path).toList(),
+      });
+      await prefs.setString('portfolio_draft', draftData);
+      
       if (mounted) {
         setState(() => _isLoading = false);
         ScaffoldMessenger.of(context).showSnackBar(
@@ -109,7 +200,12 @@ class _UploadDesainScreenState extends State<UploadDesainScreen> {
         );
         Navigator.pop(context);
       }
-    });
+    } catch (e) {
+      debugPrint("Error saving draft: $e");
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
+    }
   }
 
   @override
@@ -153,76 +249,101 @@ class _UploadDesainScreenState extends State<UploadDesainScreen> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   // Upload Main Card
-                  Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.symmetric(vertical: 36),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(16),
-                      border: Border.all(color: const Color(0xFFE5DCD3)),
-                    ),
-                    child: Column(
-                      children: [
-                        Container(
-                          padding: const EdgeInsets.all(12),
-                          decoration: const BoxDecoration(
-                            color: Color(0xFFFDF5EE),
-                            shape: BoxShape.circle,
+                  GestureDetector(
+                    onTap: _pickImage,
+                    child: Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.symmetric(vertical: 36),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(color: const Color(0xFFE5DCD3)),
+                      ),
+                      child: Column(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.all(12),
+                            decoration: const BoxDecoration(
+                              color: Color(0xFFFDF5EE),
+                              shape: BoxShape.circle,
+                            ),
+                            child: const Icon(Icons.cloud_upload_outlined, color: Color(0xFF8F2A0C), size: 24),
                           ),
-                          child: const Icon(Icons.cloud_upload_outlined, color: Color(0xFF8F2A0C), size: 24),
-                        ),
-                        const SizedBox(height: 16),
-                        const Text(
-                          'Unggah Foto Proyek', 
-                          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Colors.black87)
-                        ),
-                        const SizedBox(height: 4),
-                        const Text(
-                          'PNG, JPG hingga 10MB', 
-                          style: TextStyle(color: Colors.black38, fontSize: 11)
-                        ),
-                      ],
+                          const SizedBox(height: 16),
+                          const Text(
+                            'Unggah Foto Proyek', 
+                            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Colors.black87)
+                          ),
+                          const SizedBox(height: 4),
+                          const Text(
+                            'PNG, JPG hingga 10MB', 
+                            style: TextStyle(color: Colors.black38, fontSize: 11)
+                          ),
+                        ],
+                      ),
                     ),
                   ),
                   
                   const SizedBox(height: 16),
                   
                   // Previews Row
-                  SingleChildScrollView(
-                    scrollDirection: Axis.horizontal,
-                    child: Row(
-                      children: [
-                        ..._thumbnails.map((url) => Container(
-                          margin: const EdgeInsets.only(right: 12),
-                          width: 64,
-                          height: 64,
-                          decoration: BoxDecoration(
-                            borderRadius: BorderRadius.circular(12),
-                            border: Border.all(color: Colors.grey.shade200),
-                            image: DecorationImage(
-                              image: NetworkImage(url),
-                              fit: BoxFit.cover,
+                  if (_imageFiles.isNotEmpty)
+                    SingleChildScrollView(
+                      scrollDirection: Axis.horizontal,
+                      child: Row(
+                        children: [
+                          ..._imageFiles.asMap().entries.map((entry) {
+                            final idx = entry.key;
+                            final file = entry.value;
+                            return Container(
+                              margin: const EdgeInsets.only(right: 12),
+                              width: 68,
+                              height: 68,
+                              decoration: BoxDecoration(
+                                borderRadius: BorderRadius.circular(12),
+                                border: Border.all(color: Colors.grey.shade200),
+                                image: DecorationImage(
+                                  image: FileImage(file),
+                                  fit: BoxFit.cover,
+                                ),
+                              ),
+                              alignment: Alignment.topRight,
+                              child: GestureDetector(
+                                onTap: () {
+                                  setState(() {
+                                    _imageFiles.removeAt(idx);
+                                  });
+                                },
+                                child: Container(
+                                  margin: const EdgeInsets.all(4),
+                                  decoration: const BoxDecoration(
+                                    color: Colors.red,
+                                    shape: BoxShape.circle,
+                                  ),
+                                  padding: const EdgeInsets.all(2),
+                                  child: const Icon(Icons.close, color: Colors.white, size: 10),
+                                ),
+                              ),
+                            );
+                          }),
+                          
+                          // Plus Button to add a thumbnail
+                          GestureDetector(
+                            onTap: _pickImage,
+                            child: Container(
+                              width: 68,
+                              height: 68,
+                              decoration: BoxDecoration(
+                                color: Colors.white,
+                                borderRadius: BorderRadius.circular(12),
+                                border: Border.all(color: const Color(0xFFE5DCD3)),
+                              ),
+                              child: const Icon(Icons.add, color: Colors.black45, size: 24),
                             ),
                           ),
-                        )),
-                        
-                        // Plus Button to add a thumbnail
-                        GestureDetector(
-                          onTap: _addThumbnail,
-                          child: Container(
-                            width: 64,
-                            height: 64,
-                            decoration: BoxDecoration(
-                              color: Colors.white,
-                              borderRadius: BorderRadius.circular(12),
-                              border: Border.all(color: const Color(0xFFE5DCD3)),
-                            ),
-                            child: const Icon(Icons.add, color: Colors.black45, size: 24),
-                          ),
-                        ),
-                      ],
+                        ],
+                      ),
                     ),
-                  ),
                   
                   const SizedBox(height: 24),
                   

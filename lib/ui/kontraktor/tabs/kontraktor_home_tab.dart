@@ -25,11 +25,6 @@ class KontraktorHomeTab extends StatefulWidget {
 
 class _KontraktorHomeTabState extends State<KontraktorHomeTab> {
   late Future<List<dynamic>> _dataFuture;
-  final List<_NotifItem> _notifications = [
-    _NotifItem(Icons.mail_outline_rounded, 'Penawaran baru masuk untuk Proyek Renovasi Minimalis', '2 menit yang lalu', AppColors.primary),
-    _NotifItem(Icons.chat_bubble_outline_rounded, 'Pesan baru dari Klien Agus Prasetyo', '30 menit yang lalu', AppColors.primary),
-    _NotifItem(Icons.warning_amber_rounded, 'Ingat: Update progres Proyek Villa Tropis Bali', '1 jam yang lalu', Colors.orange),
-  ];
 
   @override
   void initState() {
@@ -82,8 +77,6 @@ class _KontraktorHomeTabState extends State<KontraktorHomeTab> {
   void _goToProgressTab() {
     widget.onSwitchTab?.call(3);
   }
-
-  // Removed dummy _showNotifSheet, we use NotificationScreen now.
 
 
   // --- BUILD ---
@@ -660,12 +653,4 @@ class _KontraktorHomeTabState extends State<KontraktorHomeTab> {
     const months = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'];
     return '${date.day} ${months[date.month - 1]} ${date.year}';
   }
-}
-
-class _NotifItem {
-  final IconData icon;
-  final String text;
-  final String time;
-  final Color color;
-  _NotifItem(this.icon, this.text, this.time, this.color);
 }

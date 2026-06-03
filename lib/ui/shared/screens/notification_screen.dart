@@ -1,7 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../core/constants/colors.dart';
+import '../../../data/models/notification_model.dart';
 import '../../../data/providers/notification_provider.dart';
+import '../../../data/providers/project_provider.dart';
+import '../../client/screens/project_detail_screen.dart';
+import 'chat_detail_screen.dart';
 
 class NotificationScreen extends StatefulWidget {
   const NotificationScreen({super.key});
@@ -13,6 +18,7 @@ class NotificationScreen extends StatefulWidget {
 class _NotificationScreenState extends State<NotificationScreen> {
   static const String _markAllReadAction = 'mark_all_read';
   static const String _deleteReadAction = 'delete_read';
+  final _supabase = Supabase.instance.client;
 
   @override
   void initState() {
@@ -81,6 +87,159 @@ class _NotificationScreenState extends State<NotificationScreen> {
               : 'Gagal menghapus notifikasi terbaca',
         ),
         backgroundColor: ok ? Colors.green : Colors.red,
+      ),
+    );
+  }
+
+  Future<void> _handleNotificationTap(
+    NotificationModel notif,
+    NotificationProvider notifProvider,
+  ) async {
+    if (!notif.isRead) {
+      await notifProvider.markAsRead(notif.id);
+    }
+
+    if (notif.type == 'chat') {
+      final opened = await _openChatNotification(notif);
+      if (!opened) _showNavigationUnavailable();
+      return;
+    }
+
+    if (notif.type == 'bid' || notif.type == 'project_update') {
+      final opened = await _openProjectNotification(notif);
+      if (!opened) _showNavigationUnavailable();
+      return;
+    }
+
+    _showNavigationUnavailable();
+  }
+
+  Future<bool> _openChatNotification(NotificationModel notif) async {
+    try {
+      final chatRow = notif.chatId != null
+          ? await _fetchChatById(notif.chatId!)
+          : await _findChatFromNotificationContent(notif);
+      if (chatRow == null || !mounted) return false;
+
+      final currentUserId = _supabase.auth.currentUser?.id;
+      final isClientSide = currentUserId == chatRow['client_id'];
+      final client = Map<String, dynamic>.from(
+        (chatRow['client'] as Map?) ?? {},
+      );
+      final vendor = Map<String, dynamic>.from(
+        (chatRow['vendor'] as Map?) ?? {},
+      );
+
+      final receiverName = isClientSide
+          ? (vendor['name'] as String? ?? 'Pengguna')
+          : (client['name'] as String? ?? 'Pengguna');
+      final receiverAvatar = isClientSide
+          ? vendor['avatar_url'] as String?
+          : client['avatar_url'] as String?;
+      final receiverId = isClientSide
+          ? chatRow['vendor_id'] as String?
+          : chatRow['client_id'] as String?;
+
+      await Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => ChatDetailScreen(
+            chatId: chatRow['id'] as String,
+            receiverName: receiverName,
+            receiverAvatar: receiverAvatar,
+            receiverId: receiverId,
+            chatStatus: chatRow['status'] as String? ?? 'accepted',
+          ),
+        ),
+      );
+      return true;
+    } catch (e) {
+      debugPrint('Error open chat notification: $e');
+      return false;
+    }
+  }
+
+  Future<Map<String, dynamic>?> _fetchChatById(String chatId) async {
+    final response = await _supabase
+        .from('chats')
+        .select(
+          'id, client_id, vendor_id, status, client:client_id(name, avatar_url), vendor:vendor_id(name, avatar_url)',
+        )
+        .eq('id', chatId)
+        .maybeSingle();
+    if (response == null) return null;
+    return Map<String, dynamic>.from(response);
+  }
+
+  Future<Map<String, dynamic>?> _findChatFromNotificationContent(
+    NotificationModel notif,
+  ) async {
+    final userId = _supabase.auth.currentUser?.id;
+    if (userId == null) return null;
+
+    final messagePart = notif.message.contains(':')
+        ? notif.message.substring(notif.message.indexOf(':') + 1).trim()
+        : notif.message.trim();
+
+    final response = await _supabase
+        .from('chats')
+        .select(
+          'id, client_id, vendor_id, status, updated_at, client:client_id(name, avatar_url), vendor:vendor_id(name, avatar_url), messages(content, created_at, sender_id)',
+        )
+        .or('client_id.eq.$userId,vendor_id.eq.$userId')
+        .order('updated_at', ascending: false)
+        .limit(20);
+
+    final chats = List<Map<String, dynamic>>.from(response);
+    for (final chat in chats) {
+      final messages = List<Map<String, dynamic>>.from(
+        (chat['messages'] as List?) ?? [],
+      );
+      final hasMatchingMessage = messages.any(
+        (message) => (message['content'] as String? ?? '') == messagePart,
+      );
+      if (hasMatchingMessage) return chat;
+    }
+
+    return null;
+  }
+
+  Future<bool> _openProjectNotification(NotificationModel notif) async {
+    try {
+      final projectProvider = context.read<ProjectProvider>();
+      String? projectId = notif.projectId;
+      if ((projectId == null || projectId.isEmpty) && notif.bidId != null) {
+        final bid = await _supabase
+            .from('bids')
+            .select('project_id')
+            .eq('id', notif.bidId!)
+            .maybeSingle();
+        projectId = bid?['project_id'] as String?;
+      }
+      if (projectId == null || projectId.isEmpty) return false;
+
+      final project = await projectProvider.fetchProjectById(projectId);
+      if (project == null || !mounted) return false;
+
+      await Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => ProjectDetailScreen(project: project),
+        ),
+      );
+      return true;
+    } catch (e) {
+      debugPrint('Error open project notification: $e');
+      return false;
+    }
+  }
+
+  void _showNavigationUnavailable() {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Tujuan notifikasi ini belum tersedia'),
+        backgroundColor: Colors.orange,
       ),
     );
   }
@@ -242,12 +401,7 @@ class _NotificationScreenState extends State<NotificationScreen> {
                       ),
                     ],
                   ),
-                  onTap: () {
-                    if (!notif.isRead) {
-                      notifProvider.markAsRead(notif.id);
-                    }
-                    // Implement navigation based on type later if needed
-                  },
+                  onTap: () => _handleNotificationTap(notif, notifProvider),
                 );
               },
             ),

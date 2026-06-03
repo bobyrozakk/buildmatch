@@ -1163,16 +1163,41 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
   Future<void> _deleteOffer(String bidId) async {
     final ok = await showDialog<bool>(
       context: context,
-      builder: (_) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: const Text('Hapus Penawaran'),
-        content: const Text('Yakin ingin menghapus penawaran ini secara permanen dari percakapan?'),
+      builder: (ctx) => AlertDialog(
+        backgroundColor: Colors.white,
+        surfaceTintColor: Colors.transparent,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+        title: const Row(
+          children: [
+            Icon(Icons.warning_amber_rounded, color: AppColors.primary, size: 22),
+            SizedBox(width: 10),
+            Text('Hapus Penawaran', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 17, color: Colors.black87)),
+          ],
+        ),
+        content: const Text(
+          'Yakin ingin menghapus penawaran ini secara permanen dari percakapan?',
+          style: TextStyle(color: Colors.black54, height: 1.5, fontSize: 14),
+        ),
+        actionsPadding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Tidak')),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            style: TextButton.styleFrom(
+              foregroundColor: Colors.black54,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            ),
+            child: const Text('Tidak', style: TextStyle(fontWeight: FontWeight.w600)),
+          ),
           ElevatedButton(
-            onPressed: () => Navigator.pop(context, true),
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.red, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8))),
-            child: const Text('Ya, Hapus', style: TextStyle(color: Colors.white)),
+            onPressed: () => Navigator.pop(ctx, true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.primary.withOpacity(0.1),
+              foregroundColor: AppColors.primary,
+              elevation: 0,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+            ),
+            child: const Text('Ya, Hapus', style: TextStyle(fontWeight: FontWeight.bold)),
           ),
         ],
       ),

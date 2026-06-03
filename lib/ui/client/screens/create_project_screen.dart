@@ -8,6 +8,7 @@ import '../../../data/providers/project_provider.dart';
 import '../../../data/models/project_model.dart';
 import 'package:latlong2/latlong.dart';
 import '../../shared/screens/map_picker_screen.dart';
+import '../../shared/widgets/animated_success_dialog.dart';
 import '../../../core/constants/colors.dart';
 import '../../../core/utils/formatters.dart';
 import '../../../core/utils/validators.dart';
@@ -511,10 +512,11 @@ class _CreateProjectScreenState extends State<CreateProjectScreen> {
         await provider.deleteDraft(_editingDraftId!);
       }
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: const Text('Proyek berhasil dipublikasikan! 🚀'),
-          backgroundColor: Colors.green.shade800,
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => const AnimatedSuccessDialog(
+          message: 'Proyek berhasil dipublikasikan! 🚀',
         ),
       );
       Navigator.pop(context);

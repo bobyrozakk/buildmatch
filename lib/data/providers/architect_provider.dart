@@ -82,10 +82,14 @@ class ArchitectProvider extends ChangeNotifier {
       final profile = ProfileModel.fromJson(response);
       Map<String, dynamic> specializations = {};
       String bio = "";
+      String location = "";
+      String status = "Tersedia untuk Proyek";
       if (profile.nib != null && profile.nib!.startsWith('{')) {
         try {
           final data = jsonDecode(profile.nib!);
           bio = data['bio'] ?? "";
+          location = data['location'] ?? "";
+          status = data['status'] ?? "Tersedia untuk Proyek";
           specializations = Map<String, dynamic>.from(data['specializations'] ?? {});
         } catch (_) {}
       }
@@ -94,6 +98,8 @@ class ArchitectProvider extends ChangeNotifier {
         'profile': profile,
         'bio': bio,
         'specializations': specializations,
+        'location': location,
+        'status': status,
       };
     } catch (e) {
       debugPrint('Error fetch architect details: $e');
@@ -101,15 +107,17 @@ class ArchitectProvider extends ChangeNotifier {
     }
   }
 
-  Future<bool> updateProfile({
+  Future<String?> updateProfile({
     required String name,
     required String studioName,
     required String bio,
     required String experience,
     required String location,
+    String status = 'Tersedia untuk Proyek',
     required List<String> styles,
     required List<String> projectTypes,
     required List<String> technicalSkills,
+    File? avatarFile,
   }) async {
     _isLoading = true;
     notifyListeners();
@@ -117,6 +125,14 @@ class ArchitectProvider extends ChangeNotifier {
     try {
       final userId = _supabase.auth.currentUser?.id;
       if (userId == null) throw Exception('Belum login');
+
+      String? avatarUrl;
+      if (avatarFile != null) {
+        final ext = avatarFile.path.split('.').last;
+        final fileName = 'avatar_${userId}_${DateTime.now().millisecondsSinceEpoch}.$ext';
+        await _supabase.storage.from('project-renders').upload(fileName, avatarFile);
+        avatarUrl = _supabase.storage.from('project-renders').getPublicUrl(fileName);
+      }
 
       // Pack Bio + Specializations into 'nib' column as JSON
       final nibJson = jsonEncode({
@@ -127,32 +143,40 @@ class ArchitectProvider extends ChangeNotifier {
           'technical_skills': technicalSkills,
         },
         'location': location,
+        'status': status,
       });
 
-      await _supabase.from('profiles').update({
+      final updateData = {
         'name': name,
         'company_name': studioName, // studio name in company_name
         'experience_years': experience,
         'nib': nibJson,
-      }).eq('id', userId);
+      };
+
+      if (avatarUrl != null) {
+        updateData['avatar_url'] = avatarUrl;
+      }
+
+      await _supabase.from('profiles').update(updateData).eq('id', userId);
 
       await _supabase.auth.updateUser(
         UserAttributes(
           data: {
             'name': name,
             'company_name': studioName,
+            if (avatarUrl != null) 'avatar_url': avatarUrl,
           },
         ),
       );
 
       _isLoading = false;
       notifyListeners();
-      return true;
+      return null;
     } catch (e) {
       debugPrint('Error update architect profile: $e');
       _isLoading = false;
       notifyListeners();
-      return false;
+      return e.toString();
     }
   }
 
@@ -164,7 +188,7 @@ class ArchitectProvider extends ChangeNotifier {
     try {
       final response = await _supabase
           .from('portfolios')
-          .select()
+          .select('*, portfolio_reviews(rating)')
           .eq('vendor_id', architectId)
           .order('created_at', ascending: false);
 
@@ -194,6 +218,17 @@ class ArchitectProvider extends ChangeNotifier {
 
         final singleImage = row['image_url'] as String? ?? (imageUrls.isNotEmpty ? imageUrls.first : null);
 
+        // Calculate average rating
+        final reviews = row['portfolio_reviews'] as List<dynamic>? ?? [];
+        double avgRating = 0.0;
+        if (reviews.isNotEmpty) {
+          int totalRating = 0;
+          for (var rev in reviews) {
+            totalRating += (rev['rating'] as int? ?? 0);
+          }
+          avgRating = totalRating / reviews.length;
+        }
+
         result.add({
           'id': row['id'] as String,
           'title': title,
@@ -205,6 +240,8 @@ class ArchitectProvider extends ChangeNotifier {
           'area': area,
           'cost': cost,
           'description': description,
+          'avg_rating': avgRating,
+          'review_count': reviews.length,
         });
       }
       return result;
@@ -286,6 +323,53 @@ class ArchitectProvider extends ChangeNotifier {
     }
   }
 
+  Future<bool> updatePortfolio({
+    required String id,
+    required String title,
+    required String style,
+    required String projectType,
+    required double area,
+    required double cost,
+    required String description,
+    required List<String> imageUrls,
+    required String year,
+    bool isPublic = true,
+  }) async {
+    _isLoading = true;
+    notifyListeners();
+
+    try {
+      final String mainImageUrl = imageUrls.isNotEmpty ? imageUrls.first : "";
+
+      // Pack extra details into title column as JSON
+      final packedTitle = jsonEncode({
+        'title': title,
+        'style': style,
+        'project_type': projectType,
+        'area': area,
+        'cost': cost,
+        'description': description,
+        'image_urls': imageUrls,
+        'is_public': isPublic,
+      });
+
+      await _supabase.from('portfolios').update({
+        'title': packedTitle,
+        'year': year,
+        'image_url': mainImageUrl.isEmpty ? null : mainImageUrl,
+      }).eq('id', id);
+
+      _isLoading = false;
+      notifyListeners();
+      return true;
+    } catch (e) {
+      debugPrint('Error update portfolio: $e');
+      _isLoading = false;
+      notifyListeners();
+      return false;
+    }
+  }
+
   // =========================================================
   // CERTIFICATION MANAGEMENT
   // =========================================================
@@ -309,7 +393,10 @@ class ArchitectProvider extends ChangeNotifier {
 
   Future<bool> addCertification({
     required String title,
-    required String issuer,
+    required String registrationNumber,
+    required String issuedDate,
+    required String expiryDate,
+    File? documentFile,
   }) async {
     _isLoading = true;
     notifyListeners();
@@ -318,10 +405,25 @@ class ArchitectProvider extends ChangeNotifier {
       final userId = _supabase.auth.currentUser?.id;
       if (userId == null) throw Exception('Belum login');
 
+      String? documentUrl;
+      if (documentFile != null) {
+        final ext = documentFile.path.split('.').last;
+        final fileName = 'cert_${userId}_${DateTime.now().millisecondsSinceEpoch}.$ext';
+        await _supabase.storage.from('portfolios').upload(fileName, documentFile);
+        documentUrl = _supabase.storage.from('portfolios').getPublicUrl(fileName);
+      }
+
+      final packedIssuer = jsonEncode({
+        'registration_number': registrationNumber,
+        'issued_date': issuedDate,
+        'expiry_date': expiryDate,
+        'document_url': documentUrl ?? '',
+      });
+
       await _supabase.from('certifications').insert({
         'vendor_id': userId,
         'title': title,
-        'issuer': issuer,
+        'issuer': packedIssuer,
       });
 
       _isLoading = false;
@@ -346,57 +448,83 @@ class ArchitectProvider extends ChangeNotifier {
     }
   }
 
+
   // =========================================================
-  // POPULAR PORTFOLIOS (FROM OTHER ARCHITECTS)
+  // ALL PORTFOLIOS (FROM ALL ARCHITECTS, INCLUDING SELF)
   // =========================================================
 
-  Future<List<Map<String, dynamic>>> fetchPopularPortfolios() async {
+  /// Fetch all portfolios from all architects (including current user).
+  /// Used by both "Eksplorasi Ide" (tab Desain) and "Desain Populer" (tab Home).
+  Future<List<Map<String, dynamic>>> fetchAllPortfolios() async {
     try {
-      final userId = _supabase.auth.currentUser?.id;
-
-      // Fetch portfolios from ALL architects, exclude current user
-      var query = _supabase
+      final response = await _supabase
           .from('portfolios')
-          .select('*, profiles:vendor_id(name, avatar_url, company_name)');
-
-      if (userId != null) {
-        query = query.neq('vendor_id', userId);
-      }
-
-      final response = await query
-          .order('created_at', ascending: false)
-          .limit(10);
+          .select('*, profiles:vendor_id(id, name, avatar_url, company_name), portfolio_reviews(rating)')
+          .order('created_at', ascending: false);
 
       final result = <Map<String, dynamic>>[];
       for (final row in response) {
         final rawTitle = row['title'] as String? ?? "";
         String title = rawTitle;
         String style = "Modern";
+        String projectType = "Rumah Tinggal";
+        double area = 120.0;
+        double cost = 100000000.0;
+        String description = "";
+        List<String> imageUrls = [];
 
         if (rawTitle.startsWith('{')) {
           try {
             final data = jsonDecode(rawTitle);
             title = data['title'] ?? "Desain Tanpa Judul";
             style = data['style'] ?? "Modern";
+            projectType = data['project_type'] ?? "Rumah Tinggal";
+            area = (data['area'] as num?)?.toDouble() ?? 120.0;
+            cost = (data['cost'] as num?)?.toDouble() ?? 100000000.0;
+            description = data['description'] ?? "";
+            imageUrls = List<String>.from(data['image_urls'] ?? []);
           } catch (_) {}
         }
 
-        final imageUrl = row['image_url'] as String?;
+        final singleImage = row['image_url'] as String? ?? (imageUrls.isNotEmpty ? imageUrls.first : null);
         final profileData = row['profiles'] as Map<String, dynamic>?;
-        final architectName = profileData?['name'] as String? ?? 'Arsitek';
+        final architectName = profileData?['name'] as String? ?? profileData?['company_name'] as String? ?? 'Arsitek';
+        final architectAvatar = profileData?['avatar_url'] as String?;
+        final studioName = profileData?['company_name'] as String? ?? '';
+
+        // Calculate average rating
+        final reviews = row['portfolio_reviews'] as List<dynamic>? ?? [];
+        double avgRating = 0.0;
+        if (reviews.isNotEmpty) {
+          int totalRating = 0;
+          for (var rev in reviews) {
+            totalRating += (rev['rating'] as int? ?? 0);
+          }
+          avgRating = totalRating / reviews.length;
+        }
 
         result.add({
           'id': row['id'] as String,
-          'title': title,
-          'style': style,
-          'image_url': imageUrl ?? '',
-          'architect_name': architectName,
           'vendor_id': row['vendor_id'] as String,
+          'title': title,
+          'year': row['year'] as String? ?? "2026",
+          'image_url': singleImage,
+          'image_urls': imageUrls.isEmpty && singleImage != null ? [singleImage] : imageUrls,
+          'style': style,
+          'project_type': projectType,
+          'area': area,
+          'cost': cost,
+          'description': description,
+          'architect_name': architectName,
+          'architect_avatar': architectAvatar,
+          'studio_name': studioName,
+          'avg_rating': avgRating,
+          'review_count': reviews.length,
         });
       }
       return result;
     } catch (e) {
-      debugPrint('Error fetch popular portfolios: $e');
+      debugPrint('Error fetch all portfolios: $e');
       return [];
     }
   }
@@ -466,6 +594,44 @@ class ArchitectProvider extends ChangeNotifier {
     } catch (e) {
       debugPrint('Error fetch architect reviews: $e');
       return [];
+    }
+  }
+
+  // =========================================================
+  // PORTFOLIO REVIEWS (ARCHITECT TO ARCHITECT)
+  // =========================================================
+
+  Future<List<Map<String, dynamic>>> fetchPortfolioReviews(String portfolioId) async {
+    try {
+      final response = await _supabase
+          .from('portfolio_reviews')
+          .select('*, reviewer:reviewer_id(name, avatar_url)')
+          .eq('portfolio_id', portfolioId)
+          .order('created_at', ascending: false);
+      return List<Map<String, dynamic>>.from(response);
+    } catch (e) {
+      debugPrint('Error fetch portfolio reviews: $e');
+      return [];
+    }
+  }
+
+  Future<bool> addPortfolioReview({
+    required String portfolioId,
+    required String reviewerId,
+    required int rating,
+    required String comment,
+  }) async {
+    try {
+      await _supabase.from('portfolio_reviews').insert({
+        'portfolio_id': portfolioId,
+        'reviewer_id': reviewerId,
+        'rating': rating,
+        'comment': comment,
+      });
+      return true;
+    } catch (e) {
+      debugPrint('Error add portfolio review: $e');
+      return false;
     }
   }
 

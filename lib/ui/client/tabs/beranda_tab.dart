@@ -35,11 +35,14 @@ class _BerandaTabState extends State<BerandaTab> {
   void _loadData() {
     final project = Provider.of<ProjectProvider>(context, listen: false);
     final vendor = Provider.of<VendorProvider>(context, listen: false);
-    
+
     // Fetch notifications and chats in background after initial build frame
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
-        Provider.of<NotificationProvider>(context, listen: false).fetchNotifications();
+        Provider.of<NotificationProvider>(
+          context,
+          listen: false,
+        ).fetchNotifications();
         Provider.of<ChatProvider>(context, listen: false).fetchChats();
       }
     });
@@ -48,7 +51,26 @@ class _BerandaTabState extends State<BerandaTab> {
       project.fetchProjects(), // 0: client projects (non-draft)
       vendor.fetchTopVendors(), // 1: top rated vendors
       project.fetchClientIncomingBids(), // 2: incoming bids
+      _fetchCurrentProfile(), // 3: current client profile
     ]);
+  }
+
+  Future<ProfileModel?> _fetchCurrentProfile() async {
+    final userId = Supabase.instance.client.auth.currentUser?.id;
+    if (userId == null) return null;
+
+    try {
+      final response = await Supabase.instance.client
+          .from('profiles')
+          .select()
+          .eq('id', userId)
+          .maybeSingle();
+
+      return response == null ? null : ProfileModel.fromJson(response);
+    } catch (e) {
+      debugPrint('Error fetch current client profile: $e');
+      return null;
+    }
   }
 
   Future<void> _refresh() async {
@@ -73,8 +95,8 @@ class _BerandaTabState extends State<BerandaTab> {
     }
 
     final ProjectModel latestDraft = drafts.first;
-    final String draftTitle = latestDraft.title.isNotEmpty &&
-            latestDraft.title != 'Draft Tanpa Judul'
+    final String draftTitle =
+        latestDraft.title.isNotEmpty && latestDraft.title != 'Draft Tanpa Judul'
         ? latestDraft.title
         : 'Draft Tanpa Judul';
 
@@ -106,13 +128,16 @@ class _BerandaTabState extends State<BerandaTab> {
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
               decoration: BoxDecoration(
-                color: AppColors.primary.withOpacity(0.07),
+                color: AppColors.primary.withValues(alpha: 0.07),
                 borderRadius: BorderRadius.circular(10),
               ),
               child: Row(
                 children: [
-                  const Icon(Icons.edit_note_rounded,
-                      size: 16, color: AppColors.primary),
+                  const Icon(
+                    Icons.edit_note_rounded,
+                    size: 16,
+                    color: AppColors.primary,
+                  ),
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
@@ -143,21 +168,27 @@ class _BerandaTabState extends State<BerandaTab> {
             onPressed: () => Navigator.pop(ctx, 'new'),
             style: OutlinedButton.styleFrom(
               shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12)),
+                borderRadius: BorderRadius.circular(12),
+              ),
               side: BorderSide(color: Colors.grey.shade300),
             ),
-            child: const Text('Buat Baru',
-                style: TextStyle(color: Colors.black54)),
+            child: const Text(
+              'Buat Baru',
+              style: TextStyle(color: Colors.black54),
+            ),
           ),
           ElevatedButton(
             onPressed: () => Navigator.pop(ctx, 'continue'),
             style: ElevatedButton.styleFrom(
               backgroundColor: AppColors.primary,
               shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12)),
+                borderRadius: BorderRadius.circular(12),
+              ),
             ),
-            child: const Text('Lanjutkan Draft',
-                style: TextStyle(color: Colors.white)),
+            child: const Text(
+              'Lanjutkan Draft',
+              style: TextStyle(color: Colors.white),
+            ),
           ),
         ],
       ),
@@ -205,33 +236,37 @@ class _BerandaTabState extends State<BerandaTab> {
             builder: (context, snapshot) {
               if (snapshot.connectionState == ConnectionState.waiting) {
                 return const Center(
-                    child: CircularProgressIndicator(color: AppColors.primary));
+                  child: CircularProgressIndicator(color: AppColors.primary),
+                );
               }
 
-              final projects =
-                  (snapshot.data?[0] as List<ProjectModel>? ?? []);
+              final projects = (snapshot.data?[0] as List<ProjectModel>? ?? []);
               final topVendors =
                   (snapshot.data?[1] as List<Map<String, dynamic>>? ?? []);
-              final incomingBids =
-                  (snapshot.data?[2] as List<BidModel>? ?? []);
+              final incomingBids = (snapshot.data?[2] as List<BidModel>? ?? []);
+              final profile = snapshot.data?[3] as ProfileModel?;
 
               final activeProjects = projects
                   .where((p) => p.status == 'in_progress')
                   .toList();
-              final openProjects =
-                  projects.where((p) => p.status == 'open').toList();
+              final openProjects = projects
+                  .where((p) => p.status == 'open')
+                  .toList();
 
               return SingleChildScrollView(
                 physics: const AlwaysScrollableScrollPhysics(
-                    parent: BouncingScrollPhysics()),
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+                  parent: BouncingScrollPhysics(),
+                ),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 20,
+                  vertical: 16,
+                ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    _buildAppBar(),
+                    _buildAppBar(profile),
                     const SizedBox(height: 20),
-                    _buildHeroCard(),
+                    _buildHeroCard(profile),
                     const SizedBox(height: 24),
                     _buildStatsRow(
                       activeCount: activeProjects.length,
@@ -243,13 +278,14 @@ class _BerandaTabState extends State<BerandaTab> {
                     const SizedBox(height: 12),
                     _buildMenuGrid(),
                     const SizedBox(height: 28),
-                    _buildSectionHeader('Kontraktor Terpopuler',
-                        onTap: _goToContractorTab),
+                    _buildSectionHeader(
+                      'Kontraktor Terpopuler',
+                      onTap: _goToContractorTab,
+                    ),
                     const SizedBox(height: 12),
                     _buildKontraktorList(topVendors),
                     const SizedBox(height: 28),
-                    _buildSectionHeader('Proyek Saya',
-                        onTap: _goToProgressTab),
+                    _buildSectionHeader('Proyek Saya', onTap: _goToProgressTab),
                     const SizedBox(height: 12),
                     _buildProyekSaya([...activeProjects, ...openProjects]),
                     const SizedBox(height: 100),
@@ -265,55 +301,67 @@ class _BerandaTabState extends State<BerandaTab> {
 
   // --- APP BAR ---
 
-  Widget _buildAppBar() {
-    final user = Supabase.instance.client.auth.currentUser;
-    final name = user?.userMetadata?['name'] ?? 'Klien';
+  Widget _buildAppBar(ProfileModel? profile) {
+    final name = _currentUserName(profile, fallback: 'Klien');
 
     return Row(
       children: [
         Container(
           padding: const EdgeInsets.all(8),
           decoration: BoxDecoration(
-              color: AppColors.primary,
-              borderRadius: BorderRadius.circular(10)),
-          child: const Icon(Icons.hardware_rounded,
-              color: Colors.white, size: 20),
+            color: AppColors.primary,
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: const Icon(
+            Icons.hardware_rounded,
+            color: Colors.white,
+            size: 20,
+          ),
         ),
         const SizedBox(width: 10),
         RichText(
-          text: const TextSpan(children: [
-            TextSpan(
+          text: const TextSpan(
+            children: [
+              TextSpan(
                 text: 'Build',
                 style: TextStyle(
-                    fontWeight: FontWeight.bold,
-                    fontSize: 18,
-                    color: AppColors.primary)),
-            TextSpan(
+                  fontWeight: FontWeight.bold,
+                  fontSize: 18,
+                  color: AppColors.primary,
+                ),
+              ),
+              TextSpan(
                 text: 'Match',
                 style: TextStyle(
-                    fontWeight: FontWeight.bold,
-                    fontSize: 18,
-                    color: Colors.black87)),
-          ]),
+                  fontWeight: FontWeight.bold,
+                  fontSize: 18,
+                  color: Colors.black87,
+                ),
+              ),
+            ],
+          ),
         ),
         const Spacer(),
         Consumer<ChatProvider>(
           builder: (context, chat, child) => _buildIconBtn(
-            Icons.chat_bubble_outline_rounded, 
+            Icons.chat_bubble_outline_rounded,
             badge: chat.totalUnreadCount,
             onTap: () {
               widget.onSwitchTab?.call(2);
-            }
+            },
           ),
         ),
         const SizedBox(width: 8),
         Consumer<NotificationProvider>(
           builder: (context, notif, child) => _buildIconBtn(
-            Icons.notifications_none_rounded, 
+            Icons.notifications_none_rounded,
             badge: notif.unreadCount,
             onTap: () {
-              Navigator.push(context, MaterialPageRoute(builder: (_) => const NotificationScreen()));
-            }
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const NotificationScreen()),
+              );
+            },
           ),
         ),
         const SizedBox(width: 8),
@@ -323,9 +371,10 @@ class _BerandaTabState extends State<BerandaTab> {
           child: Text(
             name.isNotEmpty ? name[0].toUpperCase() : 'K',
             style: const TextStyle(
-                color: AppColors.primary,
-                fontWeight: FontWeight.bold,
-                fontSize: 14),
+              color: AppColors.primary,
+              fontWeight: FontWeight.bold,
+              fontSize: 14,
+            ),
           ),
         ),
       ],
@@ -341,8 +390,9 @@ class _BerandaTabState extends State<BerandaTab> {
           Container(
             padding: const EdgeInsets.all(8),
             decoration: BoxDecoration(
-                color: AppColors.cardCream,
-                borderRadius: BorderRadius.circular(12)),
+              color: AppColors.cardCream,
+              borderRadius: BorderRadius.circular(12),
+            ),
             child: Icon(icon, size: 20, color: AppColors.primary),
           ),
           if (badge > 0)
@@ -351,11 +401,18 @@ class _BerandaTabState extends State<BerandaTab> {
               right: -2,
               child: Container(
                 padding: const EdgeInsets.all(4),
-                decoration: const BoxDecoration(color: Colors.red, shape: BoxShape.circle),
+                decoration: const BoxDecoration(
+                  color: Colors.red,
+                  shape: BoxShape.circle,
+                ),
                 constraints: const BoxConstraints(minWidth: 16, minHeight: 16),
                 child: Text(
                   '$badge',
-                  style: const TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.bold),
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 9,
+                    fontWeight: FontWeight.bold,
+                  ),
                   textAlign: TextAlign.center,
                 ),
               ),
@@ -367,9 +424,8 @@ class _BerandaTabState extends State<BerandaTab> {
 
   // --- HERO CARD ---
 
-  Widget _buildHeroCard() {
-    final user = Supabase.instance.client.auth.currentUser;
-    final name = user?.userMetadata?['name'] ?? 'Klien';
+  Widget _buildHeroCard(ProfileModel? profile) {
+    final name = _currentUserName(profile, fallback: 'Klien');
 
     return Container(
       width: double.infinity,
@@ -379,22 +435,28 @@ class _BerandaTabState extends State<BerandaTab> {
         borderRadius: BorderRadius.circular(20),
         boxShadow: [
           BoxShadow(
-              color: AppColors.primaryDark.withOpacity(0.2),
-              blurRadius: 12,
-              offset: const Offset(0, 6))
+            color: AppColors.primaryDark.withValues(alpha: 0.2),
+            blurRadius: 12,
+            offset: const Offset(0, 6),
+          ),
         ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text('Selamat datang,',
-              style: TextStyle(color: Colors.white70, fontSize: 13)),
+          const Text(
+            'Selamat datang,',
+            style: TextStyle(color: Colors.white70, fontSize: 13),
+          ),
           const SizedBox(height: 4),
-          Text(name,
-              style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 22,
-                  fontWeight: FontWeight.bold)),
+          Text(
+            name,
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 22,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
           const SizedBox(height: 14),
           const Text(
             'Bangun rumah impianmu mulai dari sini. Buat proyek, dapatkan penawaran terbaik dari kontraktor.',
@@ -404,22 +466,28 @@ class _BerandaTabState extends State<BerandaTab> {
           GestureDetector(
             onTap: _onMulaiProyek,
             child: Container(
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
               decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(20)),
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(20),
+              ),
               child: const Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Icon(Icons.add_circle_outline_rounded,
-                      size: 16, color: AppColors.primaryDark),
+                  Icon(
+                    Icons.add_circle_outline_rounded,
+                    size: 16,
+                    color: AppColors.primaryDark,
+                  ),
                   SizedBox(width: 6),
-                  Text('Mulai Proyek',
-                      style: TextStyle(
-                          color: AppColors.primaryDark,
-                          fontWeight: FontWeight.bold,
-                          fontSize: 13)),
+                  Text(
+                    'Mulai Proyek',
+                    style: TextStyle(
+                      color: AppColors.primaryDark,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 13,
+                    ),
+                  ),
                 ],
               ),
             ),
@@ -452,18 +520,25 @@ class _BerandaTabState extends State<BerandaTab> {
       child: Container(
         padding: const EdgeInsets.symmetric(vertical: 14),
         decoration: BoxDecoration(
-            color: Colors.white, borderRadius: BorderRadius.circular(14)),
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(14),
+        ),
         child: Column(
           children: [
-            Text(val,
-                style: const TextStyle(
-                    fontWeight: FontWeight.w900,
-                    fontSize: 18,
-                    color: AppColors.primary)),
+            Text(
+              val,
+              style: const TextStyle(
+                fontWeight: FontWeight.w900,
+                fontSize: 18,
+                color: AppColors.primary,
+              ),
+            ),
             const SizedBox(height: 2),
-            Text(label,
-                style: const TextStyle(fontSize: 10, color: Colors.black54),
-                textAlign: TextAlign.center),
+            Text(
+              label,
+              style: const TextStyle(fontSize: 10, color: Colors.black54),
+              textAlign: TextAlign.center,
+            ),
           ],
         ),
       ),
@@ -476,17 +551,21 @@ class _BerandaTabState extends State<BerandaTab> {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        Text(title,
-            style:
-                const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+        Text(
+          title,
+          style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+        ),
         if (onTap != null)
           GestureDetector(
             onTap: onTap,
-            child: const Text('Lihat Semua',
-                style: TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
-                    color: AppColors.primary)),
+            child: const Text(
+              'Lihat Semua',
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                color: AppColors.primary,
+              ),
+            ),
           ),
       ],
     );
@@ -496,10 +575,21 @@ class _BerandaTabState extends State<BerandaTab> {
 
   Widget _buildMenuGrid() {
     final menuItems = [
-      _MenuItem(Icons.add_circle_outline_rounded, 'Buat Proyek', _onMulaiProyek),
-      _MenuItem(Icons.engineering_rounded, 'Cari Kontraktor', _goToContractorTab),
-      _MenuItem(Icons.architecture_outlined, 'Cari Arsitek',
-          () => widget.onSwitchTab?.call(2)),
+      _MenuItem(
+        Icons.add_circle_outline_rounded,
+        'Buat Proyek',
+        _onMulaiProyek,
+      ),
+      _MenuItem(
+        Icons.engineering_rounded,
+        'Cari Kontraktor',
+        _goToContractorTab,
+      ),
+      _MenuItem(
+        Icons.architecture_outlined,
+        'Cari Arsitek',
+        () => widget.onSwitchTab?.call(2),
+      ),
       _MenuItem(Icons.timeline_rounded, 'Lihat Progress', _goToProgressTab),
     ];
 
@@ -530,9 +620,10 @@ class _BerandaTabState extends State<BerandaTab> {
                 item.label,
                 textAlign: TextAlign.center,
                 style: const TextStyle(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w600,
-                    color: Colors.black87),
+                  fontSize: 11,
+                  fontWeight: FontWeight.w600,
+                  color: Colors.black87,
+                ),
               ),
             ],
           ),
@@ -588,7 +679,9 @@ class _BerandaTabState extends State<BerandaTab> {
                       top: -4,
                       child: Container(
                         padding: const EdgeInsets.symmetric(
-                            horizontal: 6, vertical: 2),
+                          horizontal: 6,
+                          vertical: 2,
+                        ),
                         decoration: BoxDecoration(
                           color: Colors.white,
                           borderRadius: BorderRadius.circular(10),
@@ -597,13 +690,19 @@ class _BerandaTabState extends State<BerandaTab> {
                         child: Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            const Icon(Icons.star_rounded,
-                                color: Colors.amber, size: 11),
+                            const Icon(
+                              Icons.star_rounded,
+                              color: Colors.amber,
+                              size: 11,
+                            ),
                             const SizedBox(width: 2),
-                            Text(avgRating.toStringAsFixed(1),
-                                style: const TextStyle(
-                                    fontSize: 10,
-                                    fontWeight: FontWeight.bold)),
+                            Text(
+                              avgRating.toStringAsFixed(1),
+                              style: const TextStyle(
+                                fontSize: 10,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
                           ],
                         ),
                       ),
@@ -617,7 +716,9 @@ class _BerandaTabState extends State<BerandaTab> {
                       child: Text(
                         displayName,
                         style: const TextStyle(
-                            fontWeight: FontWeight.bold, fontSize: 13),
+                          fontWeight: FontWeight.bold,
+                          fontSize: 13,
+                        ),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                       ),
@@ -643,15 +744,19 @@ class _BerandaTabState extends State<BerandaTab> {
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      const Icon(Icons.star_rounded,
-                          color: Colors.amber, size: 12),
+                      const Icon(
+                        Icons.star_rounded,
+                        color: Colors.amber,
+                        size: 12,
+                      ),
                       const SizedBox(width: 4),
                       Text(
                         '${avgRating.toStringAsFixed(1)} • $reviewCount review',
                         style: const TextStyle(
-                            fontSize: 10,
-                            color: Colors.black54,
-                            fontWeight: FontWeight.w500),
+                          fontSize: 10,
+                          color: Colors.black54,
+                          fontWeight: FontWeight.w500,
+                        ),
                       ),
                     ],
                   ),
@@ -678,7 +783,11 @@ class _BerandaTabState extends State<BerandaTab> {
         ),
         child: Column(
           children: [
-            Icon(Icons.folder_open_rounded, size: 40, color: Colors.grey.shade300),
+            Icon(
+              Icons.folder_open_rounded,
+              size: 40,
+              color: Colors.grey.shade300,
+            ),
             const SizedBox(height: 12),
             const Text(
               'Belum ada proyek',
@@ -692,13 +801,20 @@ class _BerandaTabState extends State<BerandaTab> {
             const Text(
               'Buat proyek pertamamu untuk mulai\nmendapatkan penawaran kontraktor',
               textAlign: TextAlign.center,
-              style: TextStyle(fontSize: 11, color: Colors.black38, height: 1.4),
+              style: TextStyle(
+                fontSize: 11,
+                color: Colors.black38,
+                height: 1.4,
+              ),
             ),
             const SizedBox(height: 14),
             GestureDetector(
               onTap: _onMulaiProyek,
               child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 8,
+                ),
                 decoration: BoxDecoration(
                   color: AppColors.primary,
                   borderRadius: BorderRadius.circular(10),
@@ -708,11 +824,14 @@ class _BerandaTabState extends State<BerandaTab> {
                   children: [
                     Icon(Icons.add_rounded, size: 16, color: Colors.white),
                     SizedBox(width: 4),
-                    Text('Buat Proyek',
-                        style: TextStyle(
-                            color: Colors.white,
-                            fontWeight: FontWeight.w600,
-                            fontSize: 12)),
+                    Text(
+                      'Buat Proyek',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w600,
+                        fontSize: 12,
+                      ),
+                    ),
                   ],
                 ),
               ),
@@ -759,58 +878,82 @@ class _BerandaTabState extends State<BerandaTab> {
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     Expanded(
-                      child: Text(p.title,
-                          style: const TextStyle(
-                              fontWeight: FontWeight.bold, fontSize: 14),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis),
+                      child: Text(
+                        p.title,
+                        style: const TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 14,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
                     ),
                     Container(
                       padding: const EdgeInsets.symmetric(
-                          horizontal: 8, vertical: 3),
+                        horizontal: 8,
+                        vertical: 3,
+                      ),
                       decoration: BoxDecoration(
-                          color: statusColor.withOpacity(0.1),
-                          borderRadius: BorderRadius.circular(8)),
+                        color: statusColor.withValues(alpha: 0.1),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
                       child: Text(
                         statusLabel,
                         style: TextStyle(
-                            fontSize: 9,
-                            fontWeight: FontWeight.bold,
-                            color: statusColor),
+                          fontSize: 9,
+                          fontWeight: FontWeight.bold,
+                          color: statusColor,
+                        ),
                       ),
                     ),
                   ],
                 ),
                 const SizedBox(height: 4),
-                Row(children: [
-                  const Icon(Icons.location_on_outlined,
-                      size: 13, color: Colors.black54),
-                  const SizedBox(width: 4),
-                  Expanded(
-                    child: Text(p.location ?? 'Lokasi tidak diketahui',
+                Row(
+                  children: [
+                    const Icon(
+                      Icons.location_on_outlined,
+                      size: 13,
+                      color: Colors.black54,
+                    ),
+                    const SizedBox(width: 4),
+                    Expanded(
+                      child: Text(
+                        p.location ?? 'Lokasi tidak diketahui',
                         style: const TextStyle(
-                            fontSize: 12, color: Colors.black54),
+                          fontSize: 12,
+                          color: Colors.black54,
+                        ),
                         maxLines: 1,
-                        overflow: TextOverflow.ellipsis),
-                  ),
-                  Text(
-                    AppFormatters.formatRupiah(p.budget),
-                    style: const TextStyle(
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    Text(
+                      AppFormatters.formatRupiah(p.budget),
+                      style: const TextStyle(
                         fontSize: 11,
                         color: AppColors.primary,
-                        fontWeight: FontWeight.w600),
-                  ),
-                ]),
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
+                ),
                 if (isActive) ...[
                   const SizedBox(height: 12),
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      const Text('Progres',
-                          style: TextStyle(fontSize: 12, color: Colors.black54)),
-                      Text('${p.progressPercent}%',
-                          style: const TextStyle(
-                              fontSize: 12, fontWeight: FontWeight.bold)),
+                      const Text(
+                        'Progres',
+                        style: TextStyle(fontSize: 12, color: Colors.black54),
+                      ),
+                      Text(
+                        '${p.progressPercent}%',
+                        style: const TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
                     ],
                   ),
                   const SizedBox(height: 6),
@@ -821,7 +964,8 @@ class _BerandaTabState extends State<BerandaTab> {
                       minHeight: 7,
                       backgroundColor: Colors.grey.shade200,
                       valueColor: const AlwaysStoppedAnimation<Color>(
-                          AppColors.primary),
+                        AppColors.primary,
+                      ),
                     ),
                   ),
                 ],
@@ -845,13 +989,26 @@ class _BerandaTabState extends State<BerandaTab> {
         border: Border.all(color: Colors.grey.shade200),
       ),
       child: Center(
-        child: Text(text,
-            style: const TextStyle(
-                fontStyle: FontStyle.italic,
-                color: Colors.grey,
-                fontSize: 12)),
+        child: Text(
+          text,
+          style: const TextStyle(
+            fontStyle: FontStyle.italic,
+            color: Colors.grey,
+            fontSize: 12,
+          ),
+        ),
       ),
     );
+  }
+
+  String _currentUserName(ProfileModel? profile, {required String fallback}) {
+    final user = Supabase.instance.client.auth.currentUser;
+    final profileName = profile?.name.trim();
+    final metadataName = user?.userMetadata?['name']?.toString().trim();
+
+    if (profileName != null && profileName.isNotEmpty) return profileName;
+    if (metadataName != null && metadataName.isNotEmpty) return metadataName;
+    return fallback;
   }
 }
 

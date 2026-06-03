@@ -1,12 +1,15 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../data/providers/auth_provider.dart';
 import '../../../data/providers/architect_provider.dart';
 import '../../../data/models/profile_model.dart';
+import '../../../data/models/certification_model.dart';
 import '../../../core/constants/colors.dart';
 import '../screens/edit_profil_screen.dart';
 import '../screens/upload_desain_screen.dart';
+import '../screens/detail_portofolio_arsitek_screen.dart';
 import '../../auth/login_screen.dart';
 
 
@@ -35,6 +38,7 @@ class _ArsitekProfileTabState extends State<ArsitekProfileTab> {
       architect.fetchPortfolios(userId),       // 1: portfolios
       architect.fetchArchitectStats(userId),   // 2: stats
       architect.fetchReviews(userId),          // 3: reviews
+      architect.fetchCertifications(userId),   // 4: certifications
     ]);
   }
 
@@ -51,9 +55,7 @@ class _ArsitekProfileTabState extends State<ArsitekProfileTab> {
       MaterialPageRoute(builder: (_) => const EditProfileScreen()),
     );
     if (result == true && mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Profil diperbarui!'), backgroundColor: Colors.green),
-      );
+      _refresh();
     }
   }
 
@@ -171,12 +173,18 @@ class _ArsitekProfileTabState extends State<ArsitekProfileTab> {
             final portfolios = snapshot.data?[1] as List<Map<String, dynamic>>? ?? [];
             final stats = snapshot.data?[2] as Map<String, dynamic>? ?? {};
             final reviews = snapshot.data?[3] as List<Map<String, dynamic>>? ?? [];
+            final certsList = snapshot.data?[4] as List<CertificationModel>? ?? [];
 
             final profile = profileData?['profile'] as ProfileModel?;
             final bio = profileData?['bio'] as String? ?? "Belum ada bio.";
             
             final name = profile?.name.isNotEmpty == true ? profile!.name : "Arsitek";
-            final location = "Indonesia"; 
+            final String location;
+            if (profileData != null && profileData['location'] != null && profileData['location'].toString().isNotEmpty) {
+              location = profileData['location'].toString();
+            } else {
+              location = "Indonesia";
+            }
 
             double totalRating = 0;
             for (final r in reviews) {
@@ -325,17 +333,7 @@ class _ArsitekProfileTabState extends State<ArsitekProfileTab> {
                   // Spesialisasi Section
                   const Text('Spesialisasi', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Colors.black87)),
                   const SizedBox(height: 12),
-                  Wrap(
-                    spacing: 8,
-                    runSpacing: 8,
-                    children: [
-                      _buildTagChip('Rumah Tropis'),
-                      _buildTagChip('Restorasi Bangunan'),
-                      _buildTagChip('Desain Eksterior'),
-                      _buildTagChip('Eco-Friendly Design'),
-                      _buildTagChip('Urban Planning'),
-                    ],
-                  ),
+                  _buildSpecializationsChips(profileData?['specializations']),
                   
                   const SizedBox(height: 28),
             
@@ -363,16 +361,135 @@ class _ArsitekProfileTabState extends State<ArsitekProfileTab> {
                       ),
                     )
                   else
-                    ...portfolios.map((p) => Padding(
-                          padding: const EdgeInsets.only(bottom: 16.0),
-                          child: _buildPortfolioCard(
-                            imageUrl: p['image_url'] as String? ?? 'https://via.placeholder.com/500',
-                            title: p['title'] as String? ?? 'Desain Tanpa Judul',
-                            category: p['style'] as String? ?? 'Desain',
-                            badgeText: 'Portofolio',
-                            badgeColor: const Color(0xFF8F2A0C),
+                    GridView.builder(
+                      shrinkWrap: true,
+                      physics: const NeverScrollableScrollPhysics(),
+                      itemCount: portfolios.length,
+                      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                        crossAxisCount: 2,
+                        crossAxisSpacing: 12,
+                        mainAxisSpacing: 12,
+                        childAspectRatio: 0.85,
+                      ),
+                      itemBuilder: (context, i) {
+                        final p = portfolios[i];
+                        final title = p['title'] as String? ?? 'Desain Tanpa Judul';
+                        final imageUrl = p['image_url'] as String? ?? 'https://via.placeholder.com/500';
+                        final style = p['style'] as String? ?? 'Modern';
+
+                        return GestureDetector(
+                          onTap: () async {
+                            final result = await Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => DetailPortofolioArsitekScreen(portfolioData: p),
+                              ),
+                            );
+                            if (result == true && mounted) {
+                              _refresh();
+                            }
+                          },
+                          child: Container(
+                            decoration: BoxDecoration(
+                              color: Colors.white,
+                              borderRadius: BorderRadius.circular(16),
+                              border: Border.all(color: const Color(0xFFF3EBE3)),
+                            ),
+                            clipBehavior: Clip.antiAlias,
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Expanded(
+                                  child: Stack(
+                                    fit: StackFit.expand,
+                                    children: [
+                                      imageUrl.isNotEmpty
+                                          ? Image.network(imageUrl, fit: BoxFit.cover)
+                                          : Container(color: const Color(0xFFFDF5EE)),
+                                      Positioned(
+                                        top: 8,
+                                        right: 8,
+                                        child: Container(
+                                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                          decoration: BoxDecoration(
+                                            color: Colors.black.withOpacity(0.5),
+                                            borderRadius: BorderRadius.circular(12),
+                                          ),
+                                          child: Text(
+                                            style,
+                                            style: const TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.bold),
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                Padding(
+                                  padding: const EdgeInsets.all(12),
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        title,
+                                        style: const TextStyle(
+                                          fontWeight: FontWeight.bold,
+                                          fontSize: 13,
+                                          color: Colors.black87,
+                                        ),
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                      const SizedBox(height: 6),
+                                      Row(
+                                        children: [
+                                          const Icon(
+                                            Icons.calendar_month,
+                                            size: 12,
+                                            color: Color(0xFFD97706),
+                                          ),
+                                          const SizedBox(width: 4),
+                                          Expanded(
+                                            child: Text(
+                                              p['year']?.toString() ?? "2026",
+                                              style: const TextStyle(
+                                                fontSize: 10,
+                                                color: Colors.black54,
+                                                fontWeight: FontWeight.bold,
+                                              ),
+                                              maxLines: 1,
+                                              overflow: TextOverflow.ellipsis,
+                                            ),
+                                          ),
+                                          if ((p['avg_rating'] as num?) != null && (p['avg_rating'] as num) > 0)
+                                            Container(
+                                              padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                                              decoration: BoxDecoration(
+                                                color: const Color(0xFFFEF3C7),
+                                                borderRadius: BorderRadius.circular(4),
+                                              ),
+                                              child: Row(
+                                                mainAxisSize: MainAxisSize.min,
+                                                children: [
+                                                  const Icon(Icons.star, size: 10, color: Color(0xFFD97706)),
+                                                  const SizedBox(width: 2),
+                                                  Text(
+                                                    (p['avg_rating'] as num).toDouble().toStringAsFixed(1),
+                                                    style: const TextStyle(fontSize: 9, fontWeight: FontWeight.bold, color: Color(0xFF92400E)),
+                                                  ),
+                                                ],
+                                              ),
+                                            ),
+                                        ],
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                            ),
                           ),
-                        )).toList(),
+                        );
+                      },
+                    ),
                   
                   const SizedBox(height: 24),
                   
@@ -405,17 +522,42 @@ class _ArsitekProfileTabState extends State<ArsitekProfileTab> {
             // Sertifikasi & Lisensi Section
             const Text('Sertifikasi & Lisensi', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Colors.black87)),
             const SizedBox(height: 12),
-            _buildCertificationCard(
-              title: 'Anggota Utama IAI (Ikatan Arsitek Indonesia)',
-              subtitle: 'Nomor Registrasi: 12.3456.78.90 • Berlaku hingga 2028',
-              iconData: Icons.badge_outlined,
-            ),
-            const SizedBox(height: 12),
-            _buildCertificationCard(
-              title: 'Sertifikasi Arsitek Madya',
-              subtitle: 'Lembaga Pengembangan Jasa Konstruksi (LPJK)',
-              iconData: Icons.verified_outlined,
-            ),
+            if (certsList.isEmpty)
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(vertical: 24),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: Colors.grey.shade200),
+                ),
+                child: const Center(
+                  child: Text(
+                    'Belum ada sertifikasi terdaftar.',
+                    style: TextStyle(color: Colors.black54, fontSize: 12, fontStyle: FontStyle.italic),
+                  ),
+                ),
+              )
+            else
+              ...certsList.map((cert) {
+                String regNo = cert.issuer;
+                String expiry = '-';
+                if (cert.issuer.startsWith('{')) {
+                  try {
+                    final data = jsonDecode(cert.issuer);
+                    regNo = data['registration_number'] ?? '';
+                    expiry = data['expiry_date'] ?? '-';
+                  } catch (_) {}
+                }
+                return Padding(
+                  padding: const EdgeInsets.only(bottom: 12.0),
+                  child: _buildCertificationCard(
+                    title: cert.title,
+                    subtitle: 'Nomor Registrasi: $regNo • Berlaku hingga $expiry',
+                    iconData: Icons.badge_outlined,
+                  ),
+                );
+              }).toList(),
             
             const SizedBox(height: 32),
             
@@ -791,6 +933,33 @@ class _ArsitekProfileTabState extends State<ArsitekProfileTab> {
           ),
         ],
       ),
+    );
+  }
+
+  Widget _buildSpecializationsChips(Map<String, dynamic>? specializations) {
+    if (specializations == null) {
+      return const Text('Belum ditentukan', style: TextStyle(color: Colors.black54, fontSize: 12, fontStyle: FontStyle.italic));
+    }
+    
+    final List<String> allTags = [];
+    if (specializations['styles'] != null) {
+      allTags.addAll(List<String>.from(specializations['styles']));
+    }
+    if (specializations['project_types'] != null) {
+      allTags.addAll(List<String>.from(specializations['project_types']));
+    }
+    if (specializations['technical_skills'] != null) {
+      allTags.addAll(List<String>.from(specializations['technical_skills']));
+    }
+
+    if (allTags.isEmpty) {
+      return const Text('Belum ditentukan', style: TextStyle(color: Colors.black54, fontSize: 12, fontStyle: FontStyle.italic));
+    }
+
+    return Wrap(
+      spacing: 8,
+      runSpacing: 8,
+      children: allTags.map((tag) => _buildTagChip(tag)).toList(),
     );
   }
 
