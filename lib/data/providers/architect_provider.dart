@@ -686,6 +686,33 @@ class ArchitectProvider extends ChangeNotifier {
         'amount': price,
       }).eq('bid_id', bidId);
 
+      // Update the chat message content in messages table
+      final newContent = jsonEncode({
+        'type': 'offer',
+        'bid_id': bidId,
+        'title': title,
+        'price': price,
+        'revisions': revisions,
+        'description': description,
+        'duration_days': durationDays,
+        'status': 'pending',
+      });
+
+      // Try updating via bid_id first
+      final res = await _supabase
+          .from('messages')
+          .update({'content': newContent})
+          .eq('bid_id', bidId)
+          .select('id');
+
+      if (res == null || res.isEmpty) {
+        // Fallback for older messages without bid_id column set
+        await _supabase
+            .from('messages')
+            .update({'content': newContent, 'bid_id': bidId})
+            .like('content', '%$bidId%');
+      }
+
       notifyListeners();
       return true;
     } catch (e) {
@@ -704,6 +731,31 @@ class ArchitectProvider extends ChangeNotifier {
       return true;
     } catch (e) {
       debugPrint('Error cancel architect offer: $e');
+      return false;
+    }
+  }
+
+  /// Hapus penawaran secara permanen (bids, payment_terms, dan message di chat)
+  Future<bool> deleteArchitectOffer(String bidId) async {
+    try {
+      // 1. Delete referencing messages first to avoid foreign key violations
+      await _supabase.from('messages').delete().eq('bid_id', bidId);
+      // Fallback for older messages
+      await _supabase.from('messages').delete().like('content', '%$bidId%');
+      
+      // 2. Delete associated payment terms
+      await _supabase.from('payment_terms').delete().eq('bid_id', bidId);
+      
+      // 3. Delete associated contracts (if any exists, just in case)
+      await _supabase.from('contracts').delete().eq('bid_id', bidId);
+      
+      // 4. Finally delete the bid itself
+      await _supabase.from('bids').delete().eq('id', bidId);
+      
+      notifyListeners();
+      return true;
+    } catch (e) {
+      debugPrint('Error delete architect offer: $e');
       return false;
     }
   }
@@ -741,6 +793,7 @@ class ArchitectProvider extends ChangeNotifier {
         'description': description,
         'revisions': revisions,
         'duration_days': durationDays,
+        'created_at': response['created_at'],
       };
     } catch (e) {
       debugPrint('Error fetch bid by id: $e');

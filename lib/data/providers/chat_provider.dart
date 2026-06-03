@@ -176,7 +176,7 @@ class ChatProvider extends ChangeNotifier {
   }
 
   /// Kirim pesan
-  Future<bool> sendMessage(String chatId, String content) async {
+  Future<bool> sendMessage(String chatId, String content, {String? bidId}) async {
     try {
       final userId = _supabase.auth.currentUser?.id;
       if (userId == null) return false;
@@ -185,6 +185,7 @@ class ChatProvider extends ChangeNotifier {
         'chat_id': chatId,
         'sender_id': userId,
         'content': content,
+        if (bidId != null) 'bid_id': bidId,
       });
 
       // Update updated_at agar naik ke atas
@@ -269,7 +270,7 @@ class ChatProvider extends ChangeNotifier {
       'duration_days': durationDays,
       'status': 'pending',
     });
-    return sendMessage(chatId, content);
+    return sendMessage(chatId, content, bidId: bidId);
   }
 
   /// Kirim pesan pengiriman desain dari arsitek ke client

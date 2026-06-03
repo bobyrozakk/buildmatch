@@ -51,6 +51,109 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
   String? _activeProjectId;   // projectId dari penawaran aktif
   String _offerPaymentStatus = 'none'; // 'none' | 'pending' | 'paid' | 'confirmed' | 'submitted' | 'revision_requested' | 'completed'
 
+  // Track status per bid id to keep cards independent
+  final Map<String, String> _bidStatuses = {}; // bidId -> status ('pending', 'paid', etc.)
+  final Map<String, String> _bidTermIds = {};  // bidId -> termId
+  final Map<String, String> _bidProjectIds = {}; // bidId -> projectId
+  final Map<String, String> _bidActualStatuses = {}; // bidId -> bid actual status ('pending', 'accepted', 'rejected', 'cancelled', etc.)
+  final Map<String, DateTime> _bidCreatedAts = {}; // bidId -> bid created_at
+
+  Future<void> _loadBidsStatuses(List<String> bidIds) async {
+    if (bidIds.isEmpty) return;
+    try {
+      final supabase = Supabase.instance.client;
+      
+      // Query bids
+      final bidsResponse = await supabase
+          .from('bids')
+          .select('id, status, created_at, project_id')
+          .inFilter('id', bidIds);
+          
+      // Query payment terms
+      final termsResponse = await supabase
+          .from('payment_terms')
+          .select('id, bid_id, status, project_id, paid_at, confirmed_at, progress_submitted_at, progress_reviewed_at, revision_requested_at')
+          .inFilter('bid_id', bidIds);
+          
+      if (!mounted) return;
+      
+      setState(() {
+        for (final bid in bidsResponse) {
+          final bidId = bid['id'] as String;
+          _bidActualStatuses[bidId] = bid['status'] as String? ?? 'pending';
+          if (bid['created_at'] != null) {
+            _bidCreatedAts[bidId] = DateTime.parse(bid['created_at']);
+          }
+          if (bid['project_id'] != null) {
+            _bidProjectIds[bidId] = bid['project_id'] as String;
+          }
+        }
+        
+        for (final bidId in bidIds) {
+          if (!_bidStatuses.containsKey(bidId)) {
+            _bidStatuses[bidId] = 'pending';
+          }
+        }
+        
+        for (final term in termsResponse) {
+          final bidId = term['bid_id'] as String;
+          final termId = term['id'] as String;
+          _bidTermIds[bidId] = termId;
+          if (term['project_id'] != null) {
+            _bidProjectIds[bidId] = term['project_id'] as String;
+          }
+          
+          final termStatus = term['status'] as String? ?? 'pending';
+          final isCompleted = termStatus == 'completed';
+          final isProgressSubmitted = term['progress_submitted_at'] != null;
+          final isRevisionRequested = term['revision_requested_at'] != null && term['progress_reviewed_at'] == null;
+          final isConfirmed = term['confirmed_at'] != null;
+          final isWaitingConfirmation = term['paid_at'] != null && term['confirmed_at'] == null;
+          
+          if (isCompleted) {
+            _bidStatuses[bidId] = 'completed';
+          } else if (isProgressSubmitted) {
+            _bidStatuses[bidId] = 'submitted';
+          } else if (isRevisionRequested) {
+            _bidStatuses[bidId] = 'revision_requested';
+          } else if (isConfirmed) {
+            _bidStatuses[bidId] = 'confirmed';
+          } else if (isWaitingConfirmation) {
+            _bidStatuses[bidId] = 'paid';
+          } else {
+            _bidStatuses[bidId] = 'pending';
+          }
+        }
+      });
+    } catch (e) {
+      debugPrint('Error loading bids statuses: $e');
+    }
+  }
+
+  void _checkAndLoadBidStatuses(List<Map<String, dynamic>> messages) {
+    final List<String> newBidIds = [];
+    for (final m in messages) {
+      final content = m['content'] as String? ?? '';
+      if (content.startsWith('{')) {
+        try {
+          final data = jsonDecode(content);
+          if (data['type'] == 'offer') {
+            final bidId = data['bid_id'] as String?;
+            if (bidId != null && !_bidStatuses.containsKey(bidId)) {
+              newBidIds.add(bidId);
+            }
+          }
+        } catch (_) {}
+      }
+    }
+    
+    if (newBidIds.isNotEmpty) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _loadBidsStatuses(newBidIds);
+      });
+    }
+  }
+
   @override
   void initState() {
     super.initState();
@@ -210,6 +313,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
                 }
 
                 final messages = snapshot.data ?? [];
+                _checkAndLoadBidStatuses(messages);
 
                 if (messages.isEmpty) {
                   return Center(
@@ -419,9 +523,17 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
                 if (isImage)
                   GestureDetector(
                     onTap: () async {
-                      final uri = Uri.parse(content);
-                      if (await canLaunchUrl(uri)) {
-                        await launchUrl(uri, mode: LaunchMode.externalApplication);
+                      try {
+                        final uri = Uri.parse(content);
+                        if (!await launchUrl(uri, mode: LaunchMode.externalApplication)) {
+                          throw 'Could not launch';
+                        }
+                      } catch (e) {
+                        if (mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(content: Text('Tidak dapat membuka gambar: $e'), backgroundColor: Colors.redAccent),
+                          );
+                        }
                       }
                     },
                     child: _buildImageBubble(content, isMe),
@@ -429,9 +541,17 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
                 else if (isUrl)
                   GestureDetector(
                     onTap: () async {
-                      final uri = Uri.parse(content);
-                      if (await canLaunchUrl(uri)) {
-                        await launchUrl(uri, mode: LaunchMode.externalApplication);
+                      try {
+                        final uri = Uri.parse(content);
+                        if (!await launchUrl(uri, mode: LaunchMode.externalApplication)) {
+                          throw 'Could not launch';
+                        }
+                      } catch (e) {
+                        if (mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(content: Text('Tidak dapat membuka file: $e'), backgroundColor: Colors.redAccent),
+                          );
+                        }
                       }
                     },
                     child: _buildFileBubble(content, isMe),
@@ -577,16 +697,117 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
       ],
     );
   }
+  Widget _buildOfferActions(String bidId, bool isMe, double price, String title, String description, int revisions, int durationDays) {
+    final status = _bidStatuses[bidId] ?? 'pending';
+    final actualStatus = _bidActualStatuses[bidId] ?? 'pending';
+    final createdAt = _bidCreatedAts[bidId];
+    final termId = _bidTermIds[bidId];
+    final projectId = _bidProjectIds[bidId];
 
-  Widget _buildOfferActions(String bidId, bool isMe, double price, String title, String description, int revisions, int durationDays) {
-    // Cek status pembayaran
-    final isPaid = _offerPaymentStatus == 'paid' || _offerPaymentStatus == 'confirmed' ||
-        _offerPaymentStatus == 'submitted' || _offerPaymentStatus == 'revision_requested' || _offerPaymentStatus == 'completed';
+    final isCancelled = actualStatus == 'cancelled';
+    final isExpired = actualStatus == 'expired' ||
+        (actualStatus == 'pending' &&
+         status == 'pending' &&
+         createdAt != null &&
+         DateTime.now().difference(createdAt).inHours >= 24);
+
+    final isPaid = status == 'paid' || status == 'confirmed' ||
+        status == 'submitted' || status == 'revision_requested' || status == 'completed';
+
+    if (isCancelled) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            decoration: BoxDecoration(
+              color: Colors.grey.shade100,
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: Colors.grey.shade300),
+            ),
+            child: Row(
+              children: [
+                Icon(Icons.cancel_outlined, color: Colors.grey.shade500, size: 16),
+                const SizedBox(width: 6),
+                const Expanded(
+                  child: Text(
+                    'Penawaran Dibatalkan',
+                    style: TextStyle(color: Colors.black45, fontSize: 11, fontWeight: FontWeight.w600),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          if (isMe && _isArchitect) ...[
+            const SizedBox(height: 8),
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton.icon(
+                onPressed: () => _deleteOffer(bidId),
+                icon: const Icon(Icons.delete_outline_rounded, size: 14, color: Colors.red),
+                label: const Text('Hapus Penawaran', style: TextStyle(color: Colors.red, fontSize: 12, fontWeight: FontWeight.bold)),
+                style: OutlinedButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(vertical: 10),
+                  side: const BorderSide(color: Colors.red),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                ),
+              ),
+            ),
+          ],
+        ],
+      );
+    }
+
+    if (isExpired) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            decoration: BoxDecoration(
+              color: Colors.red.shade50,
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: Colors.red.shade100),
+            ),
+            child: Row(
+              children: [
+                Icon(Icons.history_toggle_off_rounded, color: Colors.red.shade700, size: 16),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: Text(
+                    'Penawaran Kadaluarsa',
+                    style: TextStyle(color: Colors.red.shade700, fontSize: 11, fontWeight: FontWeight.w600),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          if (isMe && _isArchitect) ...[
+            const SizedBox(height: 8),
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton.icon(
+                onPressed: () => _deleteOffer(bidId),
+                icon: const Icon(Icons.delete_outline_rounded, size: 14, color: Colors.red),
+                label: const Text('Hapus Penawaran', style: TextStyle(color: Colors.red, fontSize: 12, fontWeight: FontWeight.bold)),
+                style: OutlinedButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(vertical: 10),
+                  side: const BorderSide(color: Colors.red),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                ),
+              ),
+            ),
+          ],
+        ],
+      );
+    }
 
     if (isMe && _isArchitect) {
       // Arsitek: edit atau batalkan (hanya jika belum dibayar)
       if (isPaid) {
-        if (_offerPaymentStatus == 'paid') {
+        if (status == 'paid') {
           return Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -616,17 +837,18 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
                 width: double.infinity,
                 child: ElevatedButton.icon(
                   onPressed: () async {
-                    if (_activeTermId == null || _activeProjectId == null) return;
+                    if (termId == null || projectId == null) return;
                     setState(() => _isSending = true);
                     final ok = await Provider.of<ProjectProvider>(context, listen: false)
                         .architectConfirmClientPayment(
-                          termId: _activeTermId!,
+                          termId: termId,
                           bidId: bidId,
-                          projectId: _activeProjectId!,
+                          projectId: projectId,
                         );
                     if (ok) {
                       await Provider.of<ChatProvider>(context, listen: false)
                           .sendMessage(widget.chatId, '✅ Arsitek telah mengonfirmasi pembayaran! Proyek pembuatan denah/desain resmi dimulai.');
+                      _loadBidsStatuses([bidId]);
                       _loadActiveBidStatus();
                     }
                     setState(() => _isSending = false);
@@ -650,16 +872,16 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
         Color borderAndTextColor = Colors.green.shade700;
         IconData icon = Icons.check_circle_outline;
 
-        if (_offerPaymentStatus == 'confirmed') {
+        if (status == 'confirmed') {
           statusLabel = 'Pembayaran dikonfirmasi – proyek aktif';
-        } else if (_offerPaymentStatus == 'submitted') {
+        } else if (status == 'submitted') {
           statusLabel = 'Desain sudah dikirim – menunggu review';
-        } else if (_offerPaymentStatus == 'revision_requested') {
+        } else if (status == 'revision_requested') {
           statusLabel = 'Client meminta revisi draf';
           boxColor = Colors.orange.shade50;
           borderAndTextColor = Colors.orange.shade700;
           icon = Icons.edit_note_rounded;
-        } else if (_offerPaymentStatus == 'completed') {
+        } else if (status == 'completed') {
           statusLabel = 'Proyek selesai ✓';
           boxColor = Colors.blue.shade50;
           borderAndTextColor = Colors.blue.shade700;
@@ -721,15 +943,15 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
       // Client: bayar atau lihat status
       if (isPaid) {
         String clientStatusLabel = '';
-        if (_offerPaymentStatus == 'paid') {
+        if (status == 'paid') {
           clientStatusLabel = 'Menunggu konfirmasi arsitek...';
-        } else if (_offerPaymentStatus == 'confirmed') {
+        } else if (status == 'confirmed') {
           clientStatusLabel = 'Pembayaran dikonfirmasi – arsitek sedang mengerjakan';
-        } else if (_offerPaymentStatus == 'submitted') {
+        } else if (status == 'submitted') {
           clientStatusLabel = 'Desain sudah dikirim – silakan tinjau';
-        } else if (_offerPaymentStatus == 'revision_requested') {
+        } else if (status == 'revision_requested') {
           clientStatusLabel = 'Menunggu arsitek mengirim revisi...';
-        } else if (_offerPaymentStatus == 'completed') {
+        } else if (status == 'completed') {
           clientStatusLabel = 'Proyek selesai ✓';
         }
 
@@ -771,6 +993,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
                 ),
               ),
             );
+            _loadBidsStatuses([bidId]);
             _loadActiveBidStatus();
           },
           icon: const Icon(Icons.payment_rounded, size: 16, color: Colors.white),
@@ -869,6 +1092,10 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
                             content: Text(ok ? '✅ Penawaran diperbarui' : '❌ Gagal memperbarui penawaran'),
                             backgroundColor: ok ? Colors.green : Colors.red,
                           ));
+                          if (ok) {
+                            _loadBidsStatuses([bidId]);
+                            _loadActiveBidStatus();
+                          }
                         }
                       },
                       style: ElevatedButton.styleFrom(
@@ -922,7 +1149,59 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
         content: Text(done ? '✅ Penawaran dibatalkan' : '❌ Gagal membatalkan'),
         backgroundColor: done ? Colors.orange : Colors.red,
       ));
-      if (done) setState(() { _activeBidId = null; _offerPaymentStatus = 'none'; });
+      if (done) {
+        setState(() {
+          _activeBidId = null;
+          _offerPaymentStatus = 'none';
+        });
+        _loadBidsStatuses([bidId]);
+        _loadActiveBidStatus();
+      }
+    }
+  }
+
+  Future<void> _deleteOffer(String bidId) async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Text('Hapus Penawaran'),
+        content: const Text('Yakin ingin menghapus penawaran ini secara permanen dari percakapan?'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Tidak')),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8))),
+            child: const Text('Ya, Hapus', style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+    if (ok != true || !mounted) return;
+
+    setState(() => _isSending = true);
+    final done = await Provider.of<ArchitectProvider>(context, listen: false).deleteArchitectOffer(bidId);
+    setState(() => _isSending = false);
+
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(done ? '✅ Penawaran berhasil dihapus' : '❌ Gagal menghapus penawaran'),
+        backgroundColor: done ? Colors.red : Colors.red,
+      ));
+      if (done) {
+        setState(() {
+          _bidStatuses.remove(bidId);
+          _bidActualStatuses.remove(bidId);
+          _bidTermIds.remove(bidId);
+          _bidProjectIds.remove(bidId);
+          _bidCreatedAts.remove(bidId);
+          if (_activeBidId == bidId) {
+            _activeBidId = null;
+            _offerPaymentStatus = 'none';
+          }
+        });
+        _loadActiveBidStatus();
+      }
     }
   }
 
