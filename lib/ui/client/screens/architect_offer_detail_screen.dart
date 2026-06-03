@@ -146,6 +146,22 @@ class _ArchitectOfferDetailScreenState extends State<ArchitectOfferDetailScreen>
   Widget build(BuildContext context) {
     final currencyFmt = NumberFormat.currency(locale: 'id', symbol: 'Rp ', decimalDigits: 0);
 
+    final actualStatus = _bidDetails?['status'] as String? ?? 'pending';
+    final createdAtData = _bidDetails?['created_at'];
+    DateTime? createdAt;
+    if (createdAtData is DateTime) {
+      createdAt = createdAtData;
+    } else if (createdAtData is String) {
+      createdAt = DateTime.tryParse(createdAtData);
+    }
+    
+    final isCancelled = actualStatus == 'cancelled';
+    final isExpired = actualStatus == 'expired' || 
+        (actualStatus == 'pending' && 
+         (_paymentTerm == null || _paymentTerm!.isPending) && 
+         createdAt != null && 
+         DateTime.now().difference(createdAt).inHours >= 24);
+
     return Scaffold(
       backgroundColor: const Color(0xFFFCF8F5),
       appBar: AppBar(
@@ -172,7 +188,59 @@ class _ArchitectOfferDetailScreenState extends State<ArchitectOfferDetailScreen>
                   const SizedBox(height: 24),
 
                   // Payment Status / Action Section
-                  if (_paymentTerm == null || _paymentTerm!.isPending) ...[
+                  if (isCancelled) ...[
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(20),
+                      decoration: BoxDecoration(
+                        color: Colors.grey.shade50,
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(color: Colors.grey.shade200, width: 1.5),
+                      ),
+                      child: Column(
+                        children: [
+                          Icon(Icons.cancel_outlined, color: Colors.grey.shade400, size: 48),
+                          const SizedBox(height: 12),
+                          const Text(
+                            'Penawaran Dibatalkan',
+                            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Colors.black87),
+                          ),
+                          const SizedBox(height: 8),
+                          const Text(
+                            'Penawaran ini telah dibatalkan oleh arsitek. Hubungi arsitek melalui chat untuk meminta penawaran baru.',
+                            textAlign: TextAlign.center,
+                            style: TextStyle(fontSize: 12, color: Colors.black54, height: 1.4),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ] else if (isExpired) ...[
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(20),
+                      decoration: BoxDecoration(
+                        color: Colors.red.shade50,
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(color: Colors.red.shade100, width: 1.5),
+                      ),
+                      child: Column(
+                        children: [
+                          Icon(Icons.history_toggle_off_rounded, color: Colors.red.shade700, size: 48),
+                          const SizedBox(height: 12),
+                          Text(
+                            'Penawaran Kadaluarsa',
+                            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Colors.red.shade700),
+                          ),
+                          const SizedBox(height: 8),
+                          const Text(
+                            'Batas waktu pembayaran untuk penawaran ini (24 jam) telah habis. Anda tidak dapat melakukan pembayaran. Hubungi arsitek melalui chat untuk meminta penawaran baru.',
+                            textAlign: TextAlign.center,
+                            style: TextStyle(fontSize: 12, color: Colors.black54, height: 1.4),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ] else if (_paymentTerm == null || _paymentTerm!.isPending) ...[
                     const Text(
                       'Pilih Metode Pembayaran',
                       style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Colors.black87),
