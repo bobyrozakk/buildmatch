@@ -102,7 +102,7 @@ class _ArsitekHomeTabState extends State<ArsitekHomeTab> {
                     const SizedBox(height: 24),
                     _buildStatsRow(stats),
                     const SizedBox(height: 28),
-                    _buildPermintaanKolaborasi(collabs),
+                    _buildPermintaanKolaborasi(),
                     const SizedBox(height: 28),
                     _buildDesainPopuler(popularDesigns),
                     const SizedBox(height: 100), // Spacing for bottom nav
@@ -290,78 +290,65 @@ class _ArsitekHomeTabState extends State<ArsitekHomeTab> {
   }
 
   Widget _buildWelcomeCard(String name, double completion) {
-    return GestureDetector(
-      onTap: () async {
-        await Navigator.push(
-          context,
-          MaterialPageRoute(builder: (_) => const EditProfileScreen()),
-        );
-        _refresh();
-      },
-      child: Container(
-        width: double.infinity,
-        padding: const EdgeInsets.all(20),
-        decoration: BoxDecoration(
-          color: const Color(0xFF8F2A0C),
-          borderRadius: BorderRadius.circular(16),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text(
-              'Selamat datang arsitek, ',
-              style: TextStyle(color: Colors.white70, fontSize: 13),
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: const Color(0xFF8F2A0C),
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Selamat datang arsitek, ',
+            style: TextStyle(color: Colors.white70, fontSize: 13),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            name,
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 22,
+              fontWeight: FontWeight.bold,
             ),
-            const SizedBox(height: 4),
-            Text(
-              name,
-              style: const TextStyle(
-                color: Colors.white,
-                fontSize: 22,
-                fontWeight: FontWeight.bold,
+          ),
+          const SizedBox(height: 12),
+          const Text(
+            'Profil Anda hampir selesai. Lengkapi\nuntuk menjangkau lebih banyak klien.',
+            style: TextStyle(color: Colors.white70, fontSize: 12, height: 1.4),
+          ),
+          const SizedBox(height: 24),
+          Row(
+            children: [
+              const Text(
+                'Kelengkapan Profil',
+                style: TextStyle(color: Colors.white70, fontSize: 11),
               ),
-            ),
-            const SizedBox(height: 12),
-            const Text(
-              'Profil Anda hampir selesai. Lengkapi\nuntuk menjangkau lebih banyak klien.',
-              style: TextStyle(
-                color: Colors.white70,
-                fontSize: 12,
-                height: 1.4,
-              ),
-            ),
-            const SizedBox(height: 24),
-            Row(
-              children: [
-                const Text(
-                  'Kelengkapan Profil',
-                  style: TextStyle(color: Colors.white70, fontSize: 11),
+              const Spacer(),
+              Text(
+                '${(completion * 100).toInt()}%',
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 11,
+                  fontWeight: FontWeight.bold,
                 ),
-                const Spacer(),
-                Text(
-                  '${(completion * 100).toInt()}%',
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 11,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 8),
-            ClipRRect(
-              borderRadius: BorderRadius.circular(10),
-              child: LinearProgressIndicator(
-                value: completion,
-                minHeight: 6,
-                backgroundColor: Colors.white.withValues(alpha: 0.2),
-                valueColor: const AlwaysStoppedAnimation<Color>(
-                  Color(0xFFF59E0B),
-                ), // Orange
               ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(10),
+            child: LinearProgressIndicator(
+              value: completion,
+              minHeight: 6,
+              backgroundColor: Colors.white.withValues(alpha: 0.2),
+              valueColor: const AlwaysStoppedAnimation<Color>(
+                Color(0xFFF59E0B),
+              ), // Orange
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
@@ -457,122 +444,74 @@ class _ArsitekHomeTabState extends State<ArsitekHomeTab> {
     );
   }
 
-  Widget _buildPermintaanKolaborasi(List<Map<String, dynamic>> collabs) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+  Widget _buildPermintaanKolaborasi() {
+    return Consumer<ChatProvider>(
+      builder: (context, chatProv, child) {
+        final pendingChats = chatProv.pendingChats;
+        if (pendingChats.isEmpty) return const SizedBox.shrink();
+
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text(
-              'Permintaan Kolaborasi',
-              style: TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.bold,
-                color: Colors.black87,
-              ),
-            ),
-            GestureDetector(
-              onTap: () =>
-                  widget.onSwitchTab?.call(2), // Assume tab 2 is inbox/requests
-              child: const Text(
-                'Lihat Semua',
-                style: TextStyle(
-                  fontSize: 11,
-                  fontWeight: FontWeight.bold,
-                  color: Color(0xFF8F2A0C),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                const Text(
+                  'Permintaan Kolaborasi',
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.black87,
+                  ),
                 ),
+                GestureDetector(
+                  onTap: () =>
+                      widget.onSwitchTab?.call(2), // Assume tab 2 is inbox/requests
+                  child: const Text(
+                    'Lihat Semua',
+                    style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.bold,
+                      color: Color(0xFF8F2A0C),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            SizedBox(
+              height: 165,
+              child: ListView(
+                scrollDirection: Axis.horizontal,
+                physics: const BouncingScrollPhysics(),
+                clipBehavior: Clip.none,
+                children: pendingChats.map((chat) {
+                  final clientName = chat.clientName ?? 'Client';
+                  final clientAvatar = chat.clientAvatar ??
+                      'https://ui-avatars.com/api/?name=${Uri.encodeComponent(clientName)}&background=B53D1B&color=fff';
+                  final lastMsg = chat.lastMessage ?? 'Ingin berkonsultasi dengan Anda';
+
+                  return _buildCollabCard(
+                    clientName,
+                    'Client',
+                    lastMsg,
+                    clientAvatar,
+                    onAccept: () async {
+                      final ok = await chatProv.acceptChat(chat.id);
+                      if (ok && mounted) {
+                        widget.onSwitchTab?.call(2);
+                      }
+                    },
+                    onDetail: () {
+                      widget.onSwitchTab?.call(2);
+                    },
+                  );
+                }).toList(),
               ),
             ),
           ],
-        ),
-        const SizedBox(height: 16),
-        if (collabs.isEmpty)
-          _buildEmptyCollabState()
-        else
-          SizedBox(
-            height: 165,
-            child: ListView(
-              scrollDirection: Axis.horizontal,
-              physics: const BouncingScrollPhysics(),
-              clipBehavior: Clip.none,
-              children: collabs.map((item) {
-                return _buildCollabCard(
-                  item['client_name'] ?? 'Client',
-                  'Client',
-                  item['title'] ?? '',
-                  item['client_avatar'] ??
-                      'https://ui-avatars.com/api/?name=${Uri.encodeComponent(item['client_name'] ?? 'Client')}&background=B53D1B&color=fff',
-                );
-              }).toList(),
-            ),
-          ),
-      ],
-    );
-  }
-
-  Widget _buildEmptyCollabState() {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.symmetric(vertical: 32, horizontal: 16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0xFFF3EBE3)),
-      ),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Container(
-            padding: const EdgeInsets.all(16),
-            decoration: const BoxDecoration(
-              color: Color(0xFFFCF8F5),
-              shape: BoxShape.circle,
-            ),
-            child: const Icon(
-              Icons.handshake_outlined,
-              size: 40,
-              color: Color(0xFF8F2A0C),
-            ),
-          ),
-          const SizedBox(height: 16),
-          const Text(
-            'Belum ada permintaan',
-            style: TextStyle(
-              fontWeight: FontWeight.bold,
-              fontSize: 14,
-              color: Colors.black87,
-            ),
-          ),
-          const SizedBox(height: 8),
-          const Text(
-            'Klien yang tertarik dengan portofolio Anda\nakan muncul di sini.',
-            textAlign: TextAlign.center,
-            style: TextStyle(fontSize: 12, color: Colors.black54),
-          ),
-          const SizedBox(height: 16),
-          ElevatedButton(
-            onPressed: () {
-              widget.onSwitchTab?.call(1); // Go to portfolio tab
-            },
-            style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF8F2A0C),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(8),
-              ),
-              elevation: 0,
-            ),
-            child: const Text(
-              'Perbarui Portofolio',
-              style: TextStyle(
-                color: Colors.white,
-                fontSize: 12,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-          ),
-        ],
-      ),
+        );
+      },
     );
   }
 
@@ -580,8 +519,10 @@ class _ArsitekHomeTabState extends State<ArsitekHomeTab> {
     String name,
     String role,
     String quote,
-    String imgUrl,
-  ) {
+    String imgUrl, {
+    VoidCallback? onAccept,
+    VoidCallback? onDetail,
+  }) {
     return Container(
       width: 250,
       margin: const EdgeInsets.only(right: 16),
@@ -644,7 +585,7 @@ class _ArsitekHomeTabState extends State<ArsitekHomeTab> {
                 child: SizedBox(
                   height: 32,
                   child: ElevatedButton(
-                    onPressed: () {},
+                    onPressed: onAccept ?? () {},
                     style: ElevatedButton.styleFrom(
                       backgroundColor: const Color(0xFF5C1C08), // Dark brown
                       shape: RoundedRectangleBorder(
@@ -668,7 +609,7 @@ class _ArsitekHomeTabState extends State<ArsitekHomeTab> {
                 child: SizedBox(
                   height: 32,
                   child: OutlinedButton(
-                    onPressed: () {},
+                    onPressed: onDetail ?? () {},
                     style: OutlinedButton.styleFrom(
                       side: const BorderSide(color: Colors.black87),
                       shape: RoundedRectangleBorder(
@@ -699,8 +640,8 @@ class _ArsitekHomeTabState extends State<ArsitekHomeTab> {
       return const SizedBox.shrink();
     }
 
-    // Show at most 6 items
-    final displayList = popularDesigns.take(6).toList();
+    // Show at most 4 items menyamping
+    final displayList = popularDesigns.take(4).toList();
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -730,132 +671,108 @@ class _ArsitekHomeTabState extends State<ArsitekHomeTab> {
           ],
         ),
         const SizedBox(height: 16),
-        GridView.builder(
-          shrinkWrap: true,
-          physics: const NeverScrollableScrollPhysics(),
-          itemCount: displayList.length,
-          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-            crossAxisCount: 2,
-            crossAxisSpacing: 12,
-            mainAxisSpacing: 12,
-            childAspectRatio: 0.68,
-          ),
-          itemBuilder: (context, i) {
-            final item = displayList[i];
-            final title = item['title'] ?? "";
-            final style = item['style'] ?? "Modern";
-            final imgUrl = item['image_url'] ?? "";
-            final architectName = item['architect_name'] ?? "Arsitek";
+        SizedBox(
+          height: 280,
+          child: ListView.builder(
+            scrollDirection: Axis.horizontal,
+            physics: const BouncingScrollPhysics(),
+            clipBehavior: Clip.none,
+            itemCount: displayList.length,
+            itemBuilder: (context, i) {
+              final item = displayList[i];
+              final title = item['title'] ?? "";
+              final style = item['style'] ?? "Modern";
+              final imgUrl = item['image_url'] ?? "";
+              final architectName = item['architect_name'] ?? "Arsitek";
+              final rating = (item['avg_rating'] as num?) ?? 0;
 
-            return GestureDetector(
-              onTap: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (_) => DetailDesainScreen(designData: item),
+              return GestureDetector(
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => DetailDesainScreen(designData: item),
+                    ),
+                  );
+                },
+                child: Container(
+                  width: 220,
+                  margin: EdgeInsets.only(right: i < displayList.length - 1 ? 12 : 0),
+                  padding: const EdgeInsets.all(14),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: Colors.grey.shade200),
                   ),
-                );
-              },
-              child: Container(
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(color: const Color(0xFFF3EBE3)),
-                ),
-                clipBehavior: Clip.antiAlias,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Expanded(
-                      child: Stack(
-                        fit: StackFit.expand,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      if (imgUrl.toString().isNotEmpty)
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(8),
+                          child: imgUrl.toString().startsWith('http')
+                            ? Image.network(imgUrl, height: 100, width: double.infinity, fit: BoxFit.cover, errorBuilder: (_, __, ___) => Container(height: 100, color: Colors.grey.shade200, child: const Icon(Icons.image_not_supported_outlined, color: Colors.grey)))
+                            : Container(height: 100, width: double.infinity, color: AppColors.cardCream),
+                        )
+                      else
+                        Container(height: 100, width: double.infinity, decoration: BoxDecoration(color: Colors.grey.shade200, borderRadius: BorderRadius.circular(8)), child: const Icon(Icons.image_outlined, color: Colors.grey)),
+                      const SizedBox(height: 8),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                        decoration: BoxDecoration(color: AppColors.primary.withOpacity(0.1), borderRadius: BorderRadius.circular(8)),
+                        child: Text(style, style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: AppColors.primary)),
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        title,
+                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      const SizedBox(height: 6),
+                      Row(
                         children: [
-                          imgUrl.toString().startsWith('http')
-                            ? Image.network(imgUrl, fit: BoxFit.cover)
-                            : Container(color: AppColors.cardCream),
-                          Positioned(
-                            top: 8,
-                            right: 8,
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                              decoration: BoxDecoration(
-                                color: Colors.black.withOpacity(0.5),
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                              child: Text(
-                                style,
-                                style: const TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.bold),
-                              ),
+                          const Icon(Icons.person_outline, size: 12, color: Colors.black54),
+                          const SizedBox(width: 4),
+                          Expanded(
+                            child: Text(
+                              architectName,
+                              style: const TextStyle(fontSize: 11, color: Colors.black54),
+                              overflow: TextOverflow.ellipsis,
                             ),
                           ),
                         ],
                       ),
-                    ),
-                    Padding(
-                      padding: const EdgeInsets.all(12),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
+                      const Spacer(),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
-                          Text(
-                            title,
-                            style: const TextStyle(
-                              fontWeight: FontWeight.bold,
-                              fontSize: 13,
-                              color: Colors.black87,
-                            ),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                          const SizedBox(height: 6),
-                          Row(
-                            children: [
-                              const Icon(
-                                Icons.person,
-                                size: 12,
-                                color: Color(0xFFD97706),
-                              ),
-                              const SizedBox(width: 4),
-                              Expanded(
-                                child: Text(
-                                  architectName,
-                                  style: const TextStyle(
-                                    fontSize: 10,
-                                    color: Colors.black54,
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
+                          if (rating > 0)
+                            Row(
+                              children: [
+                                const Icon(Icons.star, size: 12, color: Colors.amber),
+                                const SizedBox(width: 4),
+                                Text(
+                                  rating.toDouble().toStringAsFixed(1),
+                                  style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.black87),
                                 ),
-                              ),
-                              if ((item['avg_rating'] as num?) != null && (item['avg_rating'] as num) > 0)
-                                Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
-                                  decoration: BoxDecoration(
-                                    color: const Color(0xFFFEF3C7),
-                                    borderRadius: BorderRadius.circular(4),
-                                  ),
-                                  child: Row(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      const Icon(Icons.star, size: 10, color: Color(0xFFD97706)),
-                                      const SizedBox(width: 2),
-                                      Text(
-                                        (item['avg_rating'] as num).toDouble().toStringAsFixed(1),
-                                        style: const TextStyle(fontSize: 9, fontWeight: FontWeight.bold, color: Color(0xFF92400E)),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                            ],
+                              ],
+                            )
+                          else
+                            const SizedBox(),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                            decoration: BoxDecoration(color: AppColors.primary, borderRadius: BorderRadius.circular(8)),
+                            child: const Text('Lihat Detail', style: TextStyle(fontSize: 10, color: Colors.white, fontWeight: FontWeight.w600)),
                           ),
                         ],
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
-              ),
-            );
-          },
+              );
+            },
+          ),
         ),
       ],
     );

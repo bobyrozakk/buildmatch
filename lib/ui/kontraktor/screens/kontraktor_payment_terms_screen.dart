@@ -9,6 +9,7 @@ import 'package:buildmatch/data/models/payment_term_model.dart';
 import 'package:buildmatch/data/models/project_model.dart';
 import '../../../core/constants/colors.dart';
 import '../../../core/utils/formatters.dart';
+import '../../shared/widgets/animated_success_dialog.dart';
 
 // ─────────────────────────────────────────────────────────────────────────
 // CATATAN DEPENDENCY (tambahkan ke pubspec.yaml jika belum ada):
@@ -2183,18 +2184,22 @@ class _KontraktorPaymentTermsScreenState
         setState(() {
           _loadingProject = false;
         });
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              ok
-                  ? '✅ Proyek berhasil diselesaikan!'
-                  : '❌ Gagal menyelesaikan proyek',
-            ),
-            backgroundColor: ok ? Colors.green : Colors.red,
-          ),
-        );
         if (ok) {
+          showDialog(
+            context: context,
+            barrierDismissible: false,
+            builder: (context) => const AnimatedSuccessDialog(
+              message: 'Proyek berhasil diselesaikan! ✅',
+            ),
+          );
           _load();
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('❌ Gagal menyelesaikan proyek'),
+              backgroundColor: Colors.red,
+            ),
+          );
         }
       }
     }
