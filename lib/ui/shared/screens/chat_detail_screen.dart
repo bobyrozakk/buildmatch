@@ -58,6 +58,9 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
   final Map<String, String> _bidActualStatuses = {}; // bidId -> bid actual status ('pending', 'accepted', 'rejected', 'cancelled', etc.)
   final Map<String, DateTime> _bidCreatedAts = {}; // bidId -> bid created_at
 
+  // Track the highest revision number across all design messages in this chat
+  int _maxDesignRevision = 0;
+
   Future<void> _loadBidsStatuses(List<String> bidIds) async {
     if (bidIds.isEmpty) return;
     try {
@@ -132,6 +135,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
 
   void _checkAndLoadBidStatuses(List<Map<String, dynamic>> messages) {
     final List<String> newBidIds = [];
+    int maxRev = 0;
     for (final m in messages) {
       final content = m['content'] as String? ?? '';
       if (content.startsWith('{')) {
@@ -142,11 +146,21 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
             if (bidId != null && !_bidStatuses.containsKey(bidId)) {
               newBidIds.add(bidId);
             }
+          } else if (data['type'] == 'design') {
+            final rev = data['revision_number'] as int? ?? 1;
+            if (rev > maxRev) maxRev = rev;
           }
         } catch (_) {}
       }
     }
-    
+
+    // Update max design revision if it changed
+    if (maxRev > _maxDesignRevision) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) setState(() => _maxDesignRevision = maxRev);
+      });
+    }
+
     if (newBidIds.isNotEmpty) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         _loadBidsStatuses(newBidIds);
@@ -1237,6 +1251,14 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
     final filesRaw = data['files'] as List<dynamic>? ?? [];
     final files = filesRaw.map((f) => Map<String, String>.from(f as Map)).toList();
 
+    // Determine if this is the latest design card
+    final isLatestDesign = revisionNumber >= _maxDesignRevision;
+
+    // Effective status for this card
+    // - If not the latest card: always show as "revised"
+    // - If latest card: use current offer payment status
+    final effectiveStatus = isLatestDesign ? _offerPaymentStatus : 'previously_revised';
+
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 4),
       child: Center(
@@ -1286,127 +1308,188 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
                 Text('Catatan: $notes', style: const TextStyle(color: Colors.black54, fontSize: 12, height: 1.4), maxLines: 3, overflow: TextOverflow.ellipsis),
                 const SizedBox(height: 10),
               ],
-              // File chips
+              // File chips — always tappable regardless of status
               Wrap(
                 spacing: 8,
                 runSpacing: 6,
                 children: files.map((f) {
                   final name = f['name'] ?? 'File';
                   final type = f['type'] ?? 'file';
+                  final url = f['url'] ?? '';
                   final icon = type == 'image' ? Icons.image_outlined :
                                type == 'pdf' ? Icons.picture_as_pdf :
                                Icons.insert_drive_file_outlined;
                   final color = type == 'pdf' ? Colors.red.shade700 : type == 'image' ? Colors.blue.shade700 : Colors.grey.shade700;
-                  return Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                    decoration: BoxDecoration(color: Colors.grey.shade50, borderRadius: BorderRadius.circular(8), border: Border.all(color: Colors.grey.shade200)),
-                    child: Row(mainAxisSize: MainAxisSize.min, children: [
-                      Icon(icon, size: 13, color: color),
-                      const SizedBox(width: 5),
-                      Text(name.length > 20 ? '${name.substring(0, 18)}...' : name, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w500)),
-                    ]),
+                  return GestureDetector(
+                    onTap: url.isNotEmpty ? () async {
+                      try {
+                        final uri = Uri.parse(url);
+                        if (!await launchUrl(uri, mode: LaunchMode.externalApplication)) {
+                          throw 'Could not launch';
+                        }
+                      } catch (e) {
+                        if (mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(content: Text('Tidak dapat membuka file: $e'), backgroundColor: Colors.redAccent),
+                          );
+                        }
+                      }
+                    } : null,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                      decoration: BoxDecoration(
+                        color: url.isNotEmpty ? Colors.grey.shade50 : Colors.grey.shade100,
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: url.isNotEmpty ? Colors.grey.shade200 : Colors.grey.shade300),
+                      ),
+                      child: Row(mainAxisSize: MainAxisSize.min, children: [
+                        Icon(icon, size: 13, color: color),
+                        const SizedBox(width: 5),
+                        Text(name.length > 20 ? '${name.substring(0, 18)}...' : name, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w500)),
+                        if (url.isNotEmpty) ...[
+                          const SizedBox(width: 4),
+                          Icon(Icons.open_in_new_rounded, size: 10, color: Colors.grey.shade500),
+                        ],
+                      ]),
+                    ),
                   );
                 }).toList(),
               ),
               const SizedBox(height: 14),
-              if (!_isArchitect) ...[
-                if (_offerPaymentStatus == 'completed')
-                  Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                    decoration: BoxDecoration(color: Colors.green.shade50, borderRadius: BorderRadius.circular(10)),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(Icons.verified_rounded, color: Colors.green.shade700, size: 16),
-                        const SizedBox(width: 6),
-                        Text('Desain Disetujui ✓', style: TextStyle(color: Colors.green.shade700, fontSize: 12, fontWeight: FontWeight.bold)),
-                      ],
-                    ),
-                  )
-                else if (_offerPaymentStatus == 'revision_requested')
-                  Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                    decoration: BoxDecoration(color: Colors.orange.shade50, borderRadius: BorderRadius.circular(10)),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(Icons.hourglass_top_rounded, color: Colors.orange.shade700, size: 16),
-                        const SizedBox(width: 6),
-                        Text('Revisi Diajukan – Menunggu Arsitek', style: TextStyle(color: Colors.orange.shade700, fontSize: 12, fontWeight: FontWeight.bold)),
-                      ],
-                    ),
-                  )
-                else
-                  SizedBox(
-                    width: double.infinity,
-                    child: ElevatedButton.icon(
-                      onPressed: () => Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => ClientDesignReviewScreen(
-                            bidId: bidId,
-                            chatId: widget.chatId,
-                            designData: data,
-                            onReviewed: () {
-                              _loadActiveBidStatus();
-                            },
-                          ),
-                        ),
-                      ),
-                      icon: const Icon(Icons.rate_review_outlined, size: 16, color: Colors.white),
-                      label: const Text('Tinjau Desain', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white, fontSize: 13)),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.teal,
-                        padding: const EdgeInsets.symmetric(vertical: 12),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                      ),
-                    ),
-                  ),
-              ] else ...[
-                if (_offerPaymentStatus == 'completed')
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                    decoration: BoxDecoration(color: Colors.green.shade50, borderRadius: BorderRadius.circular(10)),
-                    child: Row(
-                      children: [
-                        Icon(Icons.verified_rounded, color: Colors.green.shade700, size: 14),
-                        const SizedBox(width: 6),
-                        Text('Desain Disetujui ✓ (Selesai)', style: TextStyle(color: Colors.green.shade700, fontSize: 11, fontWeight: FontWeight.w600)),
-                      ],
-                    ),
-                  )
-                else if (_offerPaymentStatus == 'revision_requested')
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                    decoration: BoxDecoration(color: Colors.orange.shade50, borderRadius: BorderRadius.circular(10)),
-                    child: Row(
-                      children: [
-                        Icon(Icons.edit_note_rounded, color: Colors.orange.shade700, size: 14),
-                        const SizedBox(width: 6),
-                        Text('Client meminta revisi draf', style: TextStyle(color: Colors.orange.shade700, fontSize: 11, fontWeight: FontWeight.w600)),
-                      ],
-                    ),
-                  )
-                else
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                    decoration: BoxDecoration(color: Colors.teal.shade50, borderRadius: BorderRadius.circular(10)),
-                    child: Row(
-                      children: [
-                        Icon(Icons.hourglass_top_rounded, color: Colors.teal.shade700, size: 14),
-                        const SizedBox(width: 6),
-                        Text('Menunggu tinjauan client', style: TextStyle(color: Colors.teal.shade700, fontSize: 11, fontWeight: FontWeight.w600)),
-                      ],
-                    ),
-                  ),
-              ],
+              // Status area
+              _buildDesignCardStatus(effectiveStatus, bidId, data, isLatestDesign),
             ],
           ),
         ),
       ),
     );
+  }
+
+  /// Bangun area status/aksi di bawah card desain
+  Widget _buildDesignCardStatus(String effectiveStatus, String bidId, Map<String, dynamic> data, bool isLatestDesign) {
+    // Card desain yang sudah direvisi (bukan yang terbaru)
+    if (effectiveStatus == 'previously_revised') {
+      return Container(
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        decoration: BoxDecoration(
+          color: Colors.grey.shade100,
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: Colors.grey.shade300),
+        ),
+        child: Row(
+          children: [
+            Icon(Icons.loop_rounded, color: Colors.grey.shade600, size: 16),
+            const SizedBox(width: 6),
+            Expanded(
+              child: Text(
+                'Desain Direvisi',
+                style: TextStyle(color: Colors.grey.shade600, fontSize: 12, fontWeight: FontWeight.w600),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    if (!_isArchitect) {
+      // Client
+      if (effectiveStatus == 'completed') {
+        return Container(
+          width: double.infinity,
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          decoration: BoxDecoration(color: Colors.green.shade50, borderRadius: BorderRadius.circular(10)),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(Icons.verified_rounded, color: Colors.green.shade700, size: 16),
+              const SizedBox(width: 6),
+              Text('Desain Telah Selesai ✓', style: TextStyle(color: Colors.green.shade700, fontSize: 12, fontWeight: FontWeight.bold)),
+            ],
+          ),
+        );
+      } else if (effectiveStatus == 'revision_requested') {
+        return Container(
+          width: double.infinity,
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          decoration: BoxDecoration(color: Colors.orange.shade50, borderRadius: BorderRadius.circular(10)),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(Icons.hourglass_top_rounded, color: Colors.orange.shade700, size: 16),
+              const SizedBox(width: 6),
+              Text('Revisi Diajukan – Menunggu Arsitek', style: TextStyle(color: Colors.orange.shade700, fontSize: 12, fontWeight: FontWeight.bold)),
+            ],
+          ),
+        );
+      } else {
+        // submitted or confirmed — can still review
+        return SizedBox(
+          width: double.infinity,
+          child: ElevatedButton.icon(
+            onPressed: () => Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) => ClientDesignReviewScreen(
+                  bidId: bidId,
+                  chatId: widget.chatId,
+                  designData: data,
+                  onReviewed: () {
+                    _loadActiveBidStatus();
+                  },
+                ),
+              ),
+            ),
+            icon: const Icon(Icons.rate_review_outlined, size: 16, color: Colors.white),
+            label: const Text('Tinjau Desain', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white, fontSize: 13)),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.teal,
+              padding: const EdgeInsets.symmetric(vertical: 12),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            ),
+          ),
+        );
+      }
+    } else {
+      // Arsitek
+      if (effectiveStatus == 'completed') {
+        return Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          decoration: BoxDecoration(color: Colors.green.shade50, borderRadius: BorderRadius.circular(10)),
+          child: Row(
+            children: [
+              Icon(Icons.verified_rounded, color: Colors.green.shade700, size: 14),
+              const SizedBox(width: 6),
+              Text('Desain Telah Selesai ✓ (Client Setujui)', style: TextStyle(color: Colors.green.shade700, fontSize: 11, fontWeight: FontWeight.w600)),
+            ],
+          ),
+        );
+      } else if (effectiveStatus == 'revision_requested') {
+        return Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          decoration: BoxDecoration(color: Colors.orange.shade50, borderRadius: BorderRadius.circular(10)),
+          child: Row(
+            children: [
+              Icon(Icons.edit_note_rounded, color: Colors.orange.shade700, size: 14),
+              const SizedBox(width: 6),
+              Text('Client meminta revisi draf', style: TextStyle(color: Colors.orange.shade700, fontSize: 11, fontWeight: FontWeight.w600)),
+            ],
+          ),
+        );
+      } else {
+        return Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          decoration: BoxDecoration(color: Colors.teal.shade50, borderRadius: BorderRadius.circular(10)),
+          child: Row(
+            children: [
+              Icon(Icons.hourglass_top_rounded, color: Colors.teal.shade700, size: 14),
+              const SizedBox(width: 6),
+              Text('Menunggu tinjauan client', style: TextStyle(color: Colors.teal.shade700, fontSize: 11, fontWeight: FontWeight.w600)),
+            ],
+          ),
+        );
+      }
+    }
   }
 
   // ===== Original message bubble continues =====

@@ -46,4 +46,5 @@ dev_dependencies:
 flutter:
   uses-material-design: true
 
-  # 🔹 Contoh kalau nanti mau pakai assets
+  assets:
+    - lib/ui/client/assets/images/house_styles/

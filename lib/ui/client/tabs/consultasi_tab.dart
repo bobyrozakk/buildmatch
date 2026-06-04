@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -44,6 +45,39 @@ class _ConsultasiTabState extends State<ConsultasiTab>
     _searchInboxController.dispose();
     _searchArchitectController.dispose();
     super.dispose();
+  }
+
+  /// Ubah konten pesan terakhir menjadi teks yang ramah pengguna
+  String _formatLastMessage(String? content) {
+    if (content == null || content.isEmpty) return 'Belum ada pesan';
+
+    // Deteksi JSON (penawaran atau desain)
+    if (content.startsWith('{')) {
+      try {
+        final data = jsonDecode(content) as Map<String, dynamic>;
+        final type = data['type'] as String?;
+        if (type == 'offer') {
+          return '📋 Penawaran desain dikirim';
+        } else if (type == 'design') {
+          final rev = data['revision_number'] as int? ?? 1;
+          return '🎨 Desain revisi ke-$rev dikirimkan';
+        }
+      } catch (_) {}
+    }
+
+    // Deteksi URL Supabase / lampiran
+    if (content.startsWith('http://') || content.startsWith('https://')) {
+      final lower = content.toLowerCase();
+      final isImage = lower.contains('.png') ||
+          lower.contains('.jpg') ||
+          lower.contains('.jpeg') ||
+          lower.contains('.gif') ||
+          lower.contains('.webp');
+      if (isImage) return '🖼️ Gambar dilampirkan';
+      return '📎 File dilampirkan';
+    }
+
+    return content;
   }
 
   String _formatTime(DateTime? dt) {
@@ -295,7 +329,7 @@ class _ConsultasiTabState extends State<ConsultasiTab>
                     children: [
                       Expanded(
                         child: Text(
-                          chat.lastMessage ?? 'Belum ada pesan',
+                          _formatLastMessage(chat.lastMessage),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: TextStyle(

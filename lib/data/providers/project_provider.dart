@@ -384,7 +384,6 @@ class ProjectProvider extends ChangeNotifier {
   // ─────────────────────────────────────────────
   // AMBIL PENAWARAN MASUK UNTUK CLIENT (SEMUA PROYEK OPEN)
   // ─────────────────────────────────────────────
-  // Ambil bid masuk dari KONTRAKTOR saja (bukan arsitek) untuk proyek open
   Future<List<BidModel>> fetchClientIncomingBids() async {
     try {
       final userId = _supabase.auth.currentUser?.id;

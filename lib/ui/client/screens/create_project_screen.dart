@@ -35,6 +35,10 @@ class _CreateProjectScreenState extends State<CreateProjectScreen> {
   final _buildingSizeController = TextEditingController();
   final _locationController = TextEditingController();
 
+  // Controllers untuk input custom luas tanah (panjang × lebar)
+  final _customLandPanjangController = TextEditingController();
+  final _customLandLebarController = TextEditingController();
+
   LatLng? _selectedLocation;
 
   // ── ID draft yang sedang diedit (untuk dihapus otomatis setelah publish) ──
@@ -46,10 +50,16 @@ class _CreateProjectScreenState extends State<CreateProjectScreen> {
   int _floors = 1;
   String? _selectedStyle;
 
+  // Harga borongan standar Jatim 2025: Rp 4.000.000 / m²
+  static const double _hargaBoronganPerM2 = 4_000_000.0;
+
   // ── initState: populate form jika membuka dari draft ──
   @override
   void initState() {
     super.initState();
+    _customLandPanjangController.addListener(_onCustomLandChanged);
+    _customLandLebarController.addListener(_onCustomLandChanged);
+    _buildingSizeController.addListener(_onBuildingSizeChanged);
     final draft = widget.draft;
     if (draft != null) {
       _editingDraftId = draft.id;
@@ -89,69 +99,122 @@ class _CreateProjectScreenState extends State<CreateProjectScreen> {
   ];
 
   // ════════════════════════════════════════════════════
-  // TEMPLATE TANAH — Referensi harga konstruksi Jatim 2025
-  // basePrice = estimasi biaya konstruksi minimum (bukan harga beli tanah)
-  // Biaya bangun standar Jatim 2025: ~Rp 4.000.000 – 6.000.000/m2
+  // TEMPLATE TANAH — harga minimum = luas_tanah × 60% × Rp 4.000.000
   // ════════════════════════════════════════════════════
+
+  // Sentinel untuk pilihan Custom
+  static const Map<String, dynamic> _customTemplate = {
+    'label': 'Custom (Masukkan sendiri)',
+    'size': 0.0,
+    'basePrice': 0.0,
+    'isCustom': true,
+  };
+
   final List<Map<String, dynamic>> _landTemplates = [
-    // Tipe 36 — Rumah starter
-    // Luas tanah 60 m2 × biaya bangun ~Rp 4 jt/m2 = ~Rp 240 jt (dibulatkan)
-    {
-      'label': 'Tipe 36 (6 × 10 m)',
-      'size': 60.0,
-      'basePrice': 250_000_000.0,
-    },
-
-    // Tipe 45 — Perumahan menengah
-    // Luas tanah 96 m2 × biaya bangun ~Rp 4,5 jt/m2 = ~Rp 430 jt
-    {
-      'label': 'Tipe 45 (8 × 12 m)',
-      'size': 96.0,
-      'basePrice': 450_000_000.0,
-    },
-
-    // Tipe 60 — Rumah keluarga
-    // Luas tanah 150 m2 × biaya bangun ~Rp 5 jt/m2 = ~Rp 750 jt
-    {
-      'label': 'Tipe 60 (10 × 15 m)',
-      'size': 150.0,
-      'basePrice': 750_000_000.0,
-    },
-
-    // Tipe 72 — Perumahan premium
-    // Luas tanah 144 m2 × biaya bangun ~Rp 5,5 jt/m2 = ~Rp 790 jt
-    {
-      'label': 'Tipe 72 (9 × 16 m)',
-      'size': 144.0,
-      'basePrice': 800_000_000.0,
-    },
-
-    // Tipe 90 — Rumah mewah
-    // Luas tanah 180 m2 × biaya bangun ~Rp 6 jt/m2 = ~Rp 1,08 M
-    {
-      'label': 'Tipe 90 (10 × 18 m)',
-      'size': 180.0,
-      'basePrice': 1_100_000_000.0,
-    },
-
-    // Custom Mansion — Properti eksklusif
-    // Luas tanah 375 m2 × biaya bangun ~Rp 6 jt/m2 = ~Rp 2,25 M (minimum)
-    {
-      'label': 'Custom Mansion (15 × 25 m)',
-      'size': 375.0,
-      'basePrice': 2_500_000_000.0,
-    },
+    // Tipe 36 — 6×10 m = 60 m² → 60×0.6×Rp4jt = Rp 144 jt
+    {'label': 'Tipe 36 (6 × 10 m)', 'size': 60.0, 'basePrice': 144_000_000.0},
+    // Tipe 45 — 8×12 m = 96 m² → 96×0.6×Rp4jt = Rp 230,4 jt
+    {'label': 'Tipe 45 (8 × 12 m)', 'size': 96.0, 'basePrice': 230_400_000.0},
+    // Tipe 60 — 10×15 m = 150 m² → 150×0.6×Rp4jt = Rp 360 jt
+    {'label': 'Tipe 60 (10 × 15 m)', 'size': 150.0, 'basePrice': 360_000_000.0},
+    // Tipe 72 — 9×16 m = 144 m² → 144×0.6×Rp4jt = Rp 345,6 jt
+    {'label': 'Tipe 72 (9 × 16 m)', 'size': 144.0, 'basePrice': 345_600_000.0},
+    // Tipe 90 — 10×18 m = 180 m² → 180×0.6×Rp4jt = Rp 432 jt
+    {'label': 'Tipe 90 (10 × 18 m)', 'size': 180.0, 'basePrice': 432_000_000.0},
+    // Mansion — 15×25 m = 375 m² → 375×0.6×Rp4jt = Rp 900 jt
+    {'label': 'Mansion (15 × 25 m)', 'size': 375.0, 'basePrice': 900_000_000.0},
   ];
 
   Map<String, dynamic>? _selectedLand;
   double _budget = 0;
   double _minBudget = 0;
+
+  /// True jika user memilih opsi Custom
+  bool get _isCustomLand =>
+      _selectedLand != null && (_selectedLand!['isCustom'] == true);
+
+  /// Luas tanah dari input custom (panjang × lebar)
+  double get _customLandSize {
+    final p = double.tryParse(_customLandPanjangController.text) ?? 0.0;
+    final l = double.tryParse(_customLandLebarController.text) ?? 0.0;
+    return p * l;
+  }
+
+  /// Luas tanah efektif (custom atau dari template)
+  double get _effectiveLandSize {
+    if (_isCustomLand) return _customLandSize;
+    return (_selectedLand?['size'] as double?) ?? 0.0;
+  }
+
+  /// Budget minimum otomatis: luas tanah × 60% × Rp 4.000.000
+  double get _autoMinBudget {
+    final ls = _effectiveLandSize;
+    if (ls <= 0) return 0.0;
+    return ls * 0.6 * _hargaBoronganPerM2;
+  }
+
+  /// Dipanggil saat input custom berubah untuk update budget realtime
+  void _onCustomLandChanged() {
+    if (!_isCustomLand) return;
+
+    // Batasi input panjang secara otomatis
+    final pStr = _customLandPanjangController.text;
+    final pVal = double.tryParse(pStr) ?? 0.0;
+    if (pVal > 200.0) {
+      _customLandPanjangController.value = TextEditingValue(
+        text: '200',
+        selection: const TextSelection.collapsed(offset: 3),
+      );
+    }
+
+    // Batasi input lebar secara otomatis
+    final lStr = _customLandLebarController.text;
+    final lVal = double.tryParse(lStr) ?? 0.0;
+    if (lVal > 200.0) {
+      _customLandLebarController.value = TextEditingValue(
+        text: '200',
+        selection: const TextSelection.collapsed(offset: 3),
+      );
+    }
+
+    final newMin = _autoMinBudget;
+    final ls = _customLandSize;
+    final int maxF = ls > 0 ? AppValidators.maxFloors(ls) : 5;
+
+    setState(() {
+      _minBudget = newMin;
+      if (_budget < newMin) _budget = newMin;
+      if (_floors > maxF) {
+        _floors = maxF;
+        _clampRooms();
+      }
+    });
+  }
+
+  /// Dipanggil saat luas bangunan diinput untuk membatasi nilai maksimal
+  void _onBuildingSizeChanged() {
+    final valStr = _buildingSizeController.text;
+    final val = double.tryParse(valStr) ?? 0.0;
+    if (val > 20000.0) {
+      _buildingSizeController.value = TextEditingValue(
+        text: '20000',
+        selection: const TextSelection.collapsed(offset: 5),
+      );
+    }
+    setState(() {});
+  }
+
+  /// Batas max luas bangunan: min(90% dari luas tanah, 20.000 m²)
+  double get _maxBuildingSize {
+    final ls = _effectiveLandSize;
+    if (ls <= 0) return 20000.0;
+    return math.min(ls * 0.9, 20000.0);
+  }
+
   double get _maxBudget {
-    // Maksimum slider menyesuaikan template yang dipilih (3× basePrice)
-    if (_selectedLand == null) return 2_000_000_000.0;
-    final base = _selectedLand!['basePrice'] as double;
-    // Minimal ceiling 2 M, maksimal 20 M untuk Mansion
-    return (base * 3.0).clamp(2_000_000_000.0, 20_000_000_000.0);
+    final minB = _isCustomLand ? _autoMinBudget : (_minBudget > 0 ? _minBudget : 0);
+    if (minB <= 0) return 20_000_000_000.0;
+    return (minB * 5.0).clamp(2_000_000_000.0, 20_000_000_000.0);
   }
 
   // ── File fisik ──
@@ -165,8 +228,9 @@ class _CreateProjectScreenState extends State<CreateProjectScreen> {
 
   /// Batas lantai berdasarkan template tanah yang dipilih.
   int get _maxFloors {
-    if (_selectedLand == null) return 5;
-    return AppValidators.maxFloors(_selectedLand!['size'] as double);
+    final ls = _effectiveLandSize;
+    if (ls <= 0) return 5;
+    return AppValidators.maxFloors(ls);
   }
 
   /// Batas kamar tidur berdasarkan jumlah lantai (4 kamar/lantai).
@@ -211,16 +275,19 @@ class _CreateProjectScreenState extends State<CreateProjectScreen> {
   }
 
   bool _validateStep2() {
-    final List<String> errors = AppValidators.validateBuildingSpecs(
-      floors: _floors,
-      bedrooms: _bedrooms,
-      bathrooms: _bathrooms,
-      buildingSize:
-          double.tryParse(_buildingSizeController.text.trim()) ?? 0.0,
-      landSizeM2: _selectedLand?['size'] as double?,
-    );
-    if (errors.isNotEmpty) {
-      _showError(errors.first);
+    // Luas bangunan diisi di Step 3, jadi di Step 2 hanya validasi kamar, lantai, dan style
+    if (_bedrooms < 1) {
+      _showError('Minimal 1 kamar tidur diperlukan');
+      return false;
+    }
+    final maxBR = AppValidators.maxBedroomsForFloors(_floors);
+    if (_bedrooms > maxBR) {
+      _showError('Terlalu banyak kamar tidur untuk $_floors lantai (maks $maxBR)');
+      return false;
+    }
+    final maxBath = AppValidators.maxBathroomsForBedrooms(_bedrooms);
+    if (_bathrooms > maxBath) {
+      _showError('Kamar mandi terlalu banyak (maks $maxBath untuk $_bedrooms kamar tidur)');
       return false;
     }
     if (_selectedStyle == null) {
@@ -235,20 +302,51 @@ class _CreateProjectScreenState extends State<CreateProjectScreen> {
       _showError('Pilih template luas tanah terlebih dahulu');
       return false;
     }
+    if (_isCustomLand) {
+      final p = double.tryParse(_customLandPanjangController.text) ?? 0;
+      final l = double.tryParse(_customLandLebarController.text) ?? 0;
+      if (p <= 0 || l <= 0) {
+        _showError('Masukkan panjang dan lebar tanah untuk pilihan Custom');
+        return false;
+      }
+      if (p > 200 || l > 200) {
+        _showError('Panjang atau lebar tanah custom maksimal 200 meter');
+        return false;
+      }
+    }
+
+    final ls = _effectiveLandSize;
+    final buildingSize = double.tryParse(_buildingSizeController.text.trim()) ?? 0.0;
+    if (buildingSize <= 0) {
+      _showError('Luas bangunan wajib diisi');
+      return false;
+    }
+    if (buildingSize > _maxBuildingSize) {
+      _showError(
+        'Luas bangunan (${buildingSize.toStringAsFixed(0)} m²) tidak boleh '
+        'melebihi ${_maxBuildingSize.toStringAsFixed(0)} m² '
+        '(${ls <= 22222 ? "90% dari luas tanah" : "batas maksimum 20.000 m²"})',
+      );
+      return false;
+    }
+
+    final List<String> errors = AppValidators.validateBuildingSpecs(
+      floors: _floors,
+      bedrooms: _bedrooms,
+      bathrooms: _bathrooms,
+      buildingSize: buildingSize,
+      landSizeM2: ls,
+    );
+    if (errors.isNotEmpty) {
+      _showError(errors.first);
+      return false;
+    }
+
     if (_budget <= 0) {
       _showError('Tentukan budget proyek Anda');
       return false;
     }
-    final int maxF = AppValidators.maxFloors(
-      _selectedLand!['size'] as double,
-    );
-    if (_floors > maxF) {
-      _showError(
-        'Jumlah lantai ($_floors) melebihi batas untuk tanah ini '
-        '(maks $maxF lantai). Kembali ke Step 2 untuk mengurangi.',
-      );
-      return false;
-    }
+
     return true;
   }
 
@@ -337,7 +435,6 @@ class _CreateProjectScreenState extends State<CreateProjectScreen> {
     } else if (result == 'save') {
       await _saveDraftAndExit();
     }
-    // 'cancel' atau null → tetap di form
   }
 
   /// Simpan data form saat ini ke Supabase sebagai draft, lalu keluar.
@@ -417,15 +514,22 @@ class _CreateProjectScreenState extends State<CreateProjectScreen> {
 
   void _onTemplateSelected(Map<String, dynamic>? template) {
     if (template == null) return;
-    final double landSize = template['size'] as double;
-    final int maxF = AppValidators.maxFloors(landSize);
-    final bool floorsAdjusted = _floors > maxF;
+    final bool isCustom = template['isCustom'] == true;
+    final double landSize = isCustom ? _customLandSize : (template['size'] as double);
+    final int maxF = landSize > 0 ? AppValidators.maxFloors(landSize) : 5;
+    final bool floorsAdjusted = landSize > 0 && _floors > maxF;
 
     setState(() {
       _selectedLand = template;
-      _minBudget = template['basePrice'] as double;
-      _budget = template['basePrice'] as double;
-      if (_floors > maxF) _floors = maxF;
+      if (!isCustom) {
+        _minBudget = template['basePrice'] as double;
+        _budget = template['basePrice'] as double;
+        if (_floors > maxF) _floors = maxF;
+      } else {
+        // Custom: reset budget agar user isi dari input
+        _minBudget = 0;
+        _budget = 0;
+      }
       _clampRooms();
     });
 
@@ -434,7 +538,7 @@ class _CreateProjectScreenState extends State<CreateProjectScreen> {
         SnackBar(
           content: Text(
             '⚠️ Jumlah lantai disesuaikan menjadi $maxF '
-            'lantai untuk tanah ${landSize.toStringAsFixed(0)} m2',
+            'lantai untuk tanah ${landSize.toStringAsFixed(0)} m²',
           ),
           backgroundColor: Colors.orange.shade700,
           duration: const Duration(seconds: 3),
@@ -491,7 +595,7 @@ class _CreateProjectScreenState extends State<CreateProjectScreen> {
       title: _titleController.text.trim(),
       description: _descController.text.trim(),
       budget: _budget,
-      landSize: _selectedLand!['size'],
+      landSize: _effectiveLandSize,
       buildingSize: double.tryParse(_buildingSizeController.text) ?? 0.0,
       floors: _floors,
       bedrooms: _bedrooms,
@@ -530,8 +634,13 @@ class _CreateProjectScreenState extends State<CreateProjectScreen> {
     _pageController.dispose();
     _titleController.dispose();
     _descController.dispose();
+    _buildingSizeController.removeListener(_onBuildingSizeChanged);
     _buildingSizeController.dispose();
     _locationController.dispose();
+    _customLandPanjangController.removeListener(_onCustomLandChanged);
+    _customLandLebarController.removeListener(_onCustomLandChanged);
+    _customLandPanjangController.dispose();
+    _customLandLebarController.dispose();
     super.dispose();
   }
 
@@ -666,6 +775,133 @@ class _CreateProjectScreenState extends State<CreateProjectScreen> {
     );
   }
 
+  Widget _buildHouseStyleCard(String style) {
+    final bool isSelected = _selectedStyle == style;
+    final String imagePath = 'lib/ui/client/assets/images/house_styles/${style.toLowerCase()}.jpg';
+
+    return GestureDetector(
+      onTap: () {
+        setState(() {
+          _selectedStyle = style;
+        });
+      },
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 250),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+            color: isSelected ? const Color(0xFF8B2B0F) : Colors.grey.shade300,
+            width: isSelected ? 3 : 1.5,
+          ),
+          boxShadow: isSelected
+              ? [
+                  BoxShadow(
+                    color: const Color(0xFF8B2B0F).withOpacity(0.15),
+                    blurRadius: 8,
+                    offset: const Offset(0, 4),
+                  )
+                ]
+              : [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.02),
+                    blurRadius: 4,
+                    offset: const Offset(0, 2),
+                  )
+                ],
+        ),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(13),
+          child: Stack(
+            children: [
+              Positioned.fill(
+                child: Image.asset(
+                  imagePath,
+                  fit: BoxFit.cover,
+                  errorBuilder: (context, error, stackTrace) {
+                    return Container(
+                      color: Colors.grey.shade100,
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(
+                            Icons.home_work_outlined,
+                            color: isSelected ? const Color(0xFF8B2B0F).withOpacity(0.6) : Colors.grey.shade400,
+                            size: 32,
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            'Gambar belum ada',
+                            style: TextStyle(
+                              color: Colors.grey.shade500,
+                              fontSize: 10,
+                            ),
+                          ),
+                        ],
+                      ),
+                    );
+                  },
+                ),
+              ),
+              Positioned.fill(
+                child: Container(
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
+                      colors: [
+                        Colors.transparent,
+                        Colors.black.withOpacity(0.1),
+                        Colors.black.withOpacity(0.7),
+                      ],
+                      stops: const [0.0, 0.5, 1.0],
+                    ),
+                  ),
+                ),
+              ),
+              Positioned(
+                left: 12,
+                right: 12,
+                bottom: 12,
+                child: Text(
+                  style,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 14,
+                    shadows: [
+                      Shadow(
+                        color: Colors.black45,
+                        blurRadius: 4,
+                        offset: Offset(0, 1),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              if (isSelected)
+                Positioned(
+                  top: 8,
+                  right: 8,
+                  child: Container(
+                    padding: const EdgeInsets.all(4),
+                    decoration: const BoxDecoration(
+                      color: Color(0xFF8B2B0F),
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(
+                      Icons.check,
+                      color: Colors.white,
+                      size: 14,
+                    ),
+                  ),
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   Widget _buildStep2() {
     return SingleChildScrollView(
       physics: const BouncingScrollPhysics(),
@@ -725,44 +961,15 @@ class _CreateProjectScreenState extends State<CreateProjectScreen> {
             ],
           ),
           const SizedBox(height: 24),
-          _buildSectionTitle("Luas Bangunan"),
-          _buildSmoothTextField(
-            _buildingSizeController,
-            "Contoh: 120",
-            Icons.square_foot_rounded,
-            isNumber: true,
-            suffix: "m2",
-          ),
-          const SizedBox(height: 24),
           _buildSectionTitle("Tipe Rumah"),
-          Wrap(
-            spacing: 10,
-            runSpacing: 10,
-            children: _houseStyles.map((style) {
-              final bool isSelected = _selectedStyle == style;
-              return ChoiceChip(
-                label: Text(
-                  style,
-                  style: TextStyle(
-                    color: isSelected ? Colors.white : Colors.black87,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                selected: isSelected,
-                selectedColor: const Color(0xFF8B2B0F),
-                backgroundColor: Colors.white,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(20),
-                  side: BorderSide(
-                    color: isSelected
-                        ? Colors.transparent
-                        : Colors.grey.shade300,
-                  ),
-                ),
-                onSelected: (selected) =>
-                    setState(() => _selectedStyle = selected ? style : null),
-              );
-            }).toList(),
+          GridView.count(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            crossAxisCount: 2,
+            childAspectRatio: 1.4,
+            crossAxisSpacing: 12,
+            mainAxisSpacing: 12,
+            children: _houseStyles.map((style) => _buildHouseStyleCard(style)).toList(),
           ),
         ],
       ),
@@ -822,93 +1029,98 @@ class _CreateProjectScreenState extends State<CreateProjectScreen> {
             value: _selectedLand,
             hint: 'Pilih Template...',
             icon: Icons.landscape_outlined,
-            items: _landTemplates
-                .map(
-                  (t) => DropdownMenuItem(
-                    value: t,
-                    child: Text(
-                      t['label'],
-                      overflow: TextOverflow.ellipsis,
+            items: [
+              ..._landTemplates.map(
+                (t) => DropdownMenuItem(
+                  value: t,
+                  child: Text(t['label'], overflow: TextOverflow.ellipsis),
+                ),
+              ),
+              // Opsi Custom paling bawah
+              const DropdownMenuItem(
+                value: _customTemplate,
+                child: Row(
+                  children: [
+                    Icon(Icons.edit_outlined, size: 16, color: Color(0xFF8B2B0F)),
+                    SizedBox(width: 8),
+                    Text(
+                      'Custom (Masukkan sendiri)',
+                      style: TextStyle(fontWeight: FontWeight.w600, color: Color(0xFF8B2B0F)),
                     ),
-                  ),
-                )
-                .toList(),
+                  ],
+                ),
+              ),
+            ],
             onChanged: _onTemplateSelected,
           ),
 
-          if (_selectedLand != null) ...[
+          // ── Input custom panjang × lebar (hanya muncul jika Custom dipilih) ──
+          if (_isCustomLand) ...[
+            const SizedBox(height: 12),
+            _buildCustomLandInput(),
+          ],
+
+          if (_selectedLand != null && (_isCustomLand ? _customLandSize > 0 : true)) ...[
             const SizedBox(height: 12),
             _buildLandLimitInfo(),
           ],
-          const SizedBox(height: 32),
 
-          _buildSectionTitle("Budget Anda"),
-          AnimatedOpacity(
-            duration: const Duration(milliseconds: 300),
-            opacity: _selectedLand != null ? 1.0 : 0.4,
-            child: Container(
-              padding: const EdgeInsets.all(20),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(16),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withOpacity(0.03),
-                    blurRadius: 10,
-                    offset: const Offset(0, 4),
+          const SizedBox(height: 24),
+          _buildSectionTitle("Luas Bangunan"),
+          _buildSmoothTextField(
+            _buildingSizeController,
+            _effectiveLandSize > 0
+                ? 'Maks ${_maxBuildingSize.toStringAsFixed(0)} m² (maks 20.000m²)'
+                : 'Contoh: 120',
+            Icons.square_foot_rounded,
+            isNumber: true,
+            suffix: "m²",
+          ),
+          if (_effectiveLandSize > 0) ...() {
+            final inputVal = double.tryParse(_buildingSizeController.text) ?? 0.0;
+            final maxB = _maxBuildingSize;
+            final isOver = inputVal > 0 && inputVal > maxB;
+            return [
+              const SizedBox(height: 6),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+                decoration: BoxDecoration(
+                  color: isOver ? Colors.red.shade50 : Colors.teal.shade50,
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(
+                    color: isOver ? Colors.red.shade200 : Colors.teal.shade100,
                   ),
-                ],
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Center(
-                    child: Text(
-                      AppFormatters.formatRupiah(_budget),
-                      style: const TextStyle(
-                        fontWeight: FontWeight.w900,
-                        fontSize: 24,
-                        color: AppColors.primary,
-                      ),
+                ),
+                child: Row(
+                  children: [
+                    Icon(
+                      isOver ? Icons.warning_amber_rounded : Icons.info_outline_rounded,
+                      size: 14,
+                      color: isOver ? Colors.red.shade700 : Colors.teal.shade700,
                     ),
-                  ),
-                  const SizedBox(height: 16),
-                  SliderTheme(
-                    data: SliderTheme.of(context).copyWith(
-                      trackHeight: 6.0,
-                      activeTrackColor: AppColors.primary,
-                      inactiveTrackColor: Colors.grey.shade200,
-                      thumbColor: Colors.white,
-                      thumbShape: const RoundSliderThumbShape(
-                        enabledThumbRadius: 12.0,
-                        elevation: 4,
-                      ),
-                    ),
-                    child: Slider(
-                      value: _budget < _minBudget ? _minBudget : _budget,
-                      min: _minBudget > 0 ? _minBudget : 0,
-                      max: _maxBudget,
-                      divisions: 100,
-                      onChanged: _selectedLand != null
-                          ? (val) => setState(() => _budget = val)
-                          : null,
-                    ),
-                  ),
-                  if (_selectedLand != null)
-                    Center(
+                    const SizedBox(width: 6),
+                    Expanded(
                       child: Text(
-                        'Minimal biaya konstruksi: ${AppFormatters.formatRupiah(_minBudget)}',
-                        style: const TextStyle(
-                          fontSize: 12,
-                          color: Colors.black38,
-                          fontStyle: FontStyle.italic,
+                        isOver
+                            ? 'Melebihi batas! Maks ${maxB.toStringAsFixed(0)} m² (90% tanah / maks 20.000m²)'
+                            : 'Batas luas bangunan: ${maxB.toStringAsFixed(0)} m² (90% tanah / maks 20.000m²)',
+                        style: TextStyle(
+                          fontSize: 11,
+                          color: isOver ? Colors.red.shade700 : Colors.teal.shade700,
+                          fontWeight: FontWeight.w600,
                         ),
                       ),
                     ),
-                ],
+                  ],
+                ),
               ),
-            ),
-          ),
+            ];
+          }(),
+
+          const SizedBox(height: 32),
+
+          _buildSectionTitle("Budget Anda"),
+          _buildBudgetCard(),
         ],
       ),
     );
@@ -949,7 +1161,6 @@ class _CreateProjectScreenState extends State<CreateProjectScreen> {
                 ),
               );
 
-              // MapPickerScreen sekarang bisa return LatLng atau Map{lat, lng, name}
               if (result != null) {
                 LatLng pickedLocation;
                 String? pickedName;
@@ -968,7 +1179,6 @@ class _CreateProjectScreenState extends State<CreateProjectScreen> {
 
                 setState(() {
                   _selectedLocation = pickedLocation;
-                  // Gunakan nama dari Nominatim jika tersedia, fallback ke koordinat
                   _locationController.text = pickedName?.isNotEmpty == true
                       ? pickedName!
                       : "Lat: ${pickedLocation.latitude.toStringAsFixed(4)}, "
@@ -1073,6 +1283,174 @@ class _CreateProjectScreenState extends State<CreateProjectScreen> {
   // ════════════════════════════════════════════════════
   // REUSABLE UI COMPONENTS
   // ════════════════════════════════════════════════════
+
+  /// Input dua kolom panjang × lebar untuk custom tanah
+  Widget _buildCustomLandInput() {
+    final ls = _customLandSize;
+    final minBudget = _autoMinBudget;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // Info formula
+        Container(
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: const Color(0xFF8B2B0F).withOpacity(0.05),
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(color: const Color(0xFF8B2B0F).withOpacity(0.15)),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Row(
+                children: [
+                  Icon(Icons.calculate_outlined, size: 14, color: Color(0xFF8B2B0F)),
+                  SizedBox(width: 6),
+                  Text('Rumus Estimasi Budget',
+                      style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFF8B2B0F))),
+                ],
+              ),
+              const SizedBox(height: 4),
+              const Text(
+                'Luas Tanah × 60% × Rp 4.000.000 = Budget Minimum',
+                style: TextStyle(fontSize: 11, color: Colors.black54),
+              ),
+              if (ls > 0) ...[
+                const SizedBox(height: 6),
+                Text(
+                  '${ls.toStringAsFixed(0)} m² × 60% × Rp4jt = ${AppFormatters.formatRupiah(minBudget)}',
+                  style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: Color(0xFF8B2B0F)),
+                ),
+              ],
+            ],
+          ),
+        ),
+        const SizedBox(height: 10),
+        // Input panjang dan lebar
+        Row(
+          children: [
+            Expanded(
+              child: TextFormField(
+                controller: _customLandPanjangController,
+                keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                decoration: InputDecoration(
+                  labelText: 'Panjang (m)',
+                  hintText: 'cth: 10 (maks 200)',
+                  prefixIcon: const Icon(Icons.swap_horiz_rounded, size: 18),
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+                  filled: true,
+                  fillColor: Colors.white,
+                  contentPadding: const EdgeInsets.symmetric(vertical: 14, horizontal: 12),
+                ),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 10),
+              child: Text('×', style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Colors.grey.shade600)),
+            ),
+            Expanded(
+              child: TextFormField(
+                controller: _customLandLebarController,
+                keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                decoration: InputDecoration(
+                  labelText: 'Lebar (m)',
+                  hintText: 'cth: 15 (maks 200)',
+                  prefixIcon: const Icon(Icons.swap_vert_rounded, size: 18),
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+                  filled: true,
+                  fillColor: Colors.white,
+                  contentPadding: const EdgeInsets.symmetric(vertical: 14, horizontal: 12),
+                ),
+              ),
+            ),
+          ],
+        ),
+        if (ls > 0) ...[
+          const SizedBox(height: 8),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            decoration: BoxDecoration(
+              color: Colors.green.shade50,
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: Colors.green.shade200),
+            ),
+            child: Text(
+              'Luas Tanah: ${ls.toStringAsFixed(1)} m²',
+              style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.green.shade700),
+              textAlign: TextAlign.center,
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+
+  /// Budget card dengan slider dan info minimum
+  Widget _buildBudgetCard() {
+    final effectiveMin = _isCustomLand ? _autoMinBudget : _minBudget;
+    final bool canUse = _selectedLand != null && (!_isCustomLand || _customLandSize > 0);
+    final double sliderVal = _budget < effectiveMin ? effectiveMin : _budget;
+
+    return AnimatedOpacity(
+      duration: const Duration(milliseconds: 300),
+      opacity: canUse ? 1.0 : 0.4,
+      child: Container(
+        padding: const EdgeInsets.all(20),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          boxShadow: [
+            BoxShadow(color: Colors.black.withOpacity(0.03), blurRadius: 10, offset: const Offset(0, 4)),
+          ],
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Center(
+              child: Text(
+                canUse && _budget > 0 ? AppFormatters.formatRupiah(_budget) : 'Pilih ukuran tanah dulu',
+                style: TextStyle(
+                  fontWeight: FontWeight.w900,
+                  fontSize: 22,
+                  color: canUse && _budget > 0 ? AppColors.primary : Colors.black38,
+                ),
+              ),
+            ),
+            const SizedBox(height: 16),
+            SliderTheme(
+              data: SliderTheme.of(context).copyWith(
+                trackHeight: 6.0,
+                activeTrackColor: AppColors.primary,
+                inactiveTrackColor: Colors.grey.shade200,
+                thumbColor: Colors.white,
+                thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 12.0, elevation: 4),
+              ),
+              child: Slider(
+                value: canUse && effectiveMin > 0 ? sliderVal : 0,
+                min: effectiveMin > 0 ? effectiveMin : 0,
+                max: _maxBudget > effectiveMin ? _maxBudget : effectiveMin + 1_000_000,
+                divisions: 100,
+                onChanged: canUse ? (val) => setState(() => _budget = val) : null,
+              ),
+            ),
+            if (canUse && effectiveMin > 0) ...[
+              const SizedBox(height: 4),
+              Center(
+                child: Text(
+                  'Minimum: ${AppFormatters.formatRupiah(effectiveMin)} '
+                  '(${_effectiveLandSize.toStringAsFixed(0)} m² × 60% × Rp 4jt)',
+                  style: const TextStyle(fontSize: 11, color: Colors.black38, fontStyle: FontStyle.italic),
+                  textAlign: TextAlign.center,
+                ),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
 
   Widget _buildStepper() {
     return Row(
@@ -1237,8 +1615,8 @@ class _CreateProjectScreenState extends State<CreateProjectScreen> {
                   '$_bedrooms kamar tidur → maks $_maxBathrooms kamar mandi',
                 ),
                 _buildInfoLine(
-                  _selectedLand != null
-                      ? 'Tanah ${(_selectedLand!['size'] as double).toStringAsFixed(0)} m2 → maks $_maxFloors lantai'
+                  _effectiveLandSize > 0
+                      ? 'Tanah ${_effectiveLandSize.toStringAsFixed(0)} m² → maks $_maxFloors lantai'
                       : 'Pilih template tanah (Step 3) untuk batas lantai',
                 ),
               ],
@@ -1260,7 +1638,8 @@ class _CreateProjectScreenState extends State<CreateProjectScreen> {
   }
 
   Widget _buildLandLimitInfo() {
-    final double landSize = _selectedLand!['size'] as double;
+    final double landSize = _effectiveLandSize;
+    if (landSize <= 0) return const SizedBox.shrink();
     final int maxF = AppValidators.maxFloors(landSize);
     final bool isOk = _floors <= maxF;
 
@@ -1284,7 +1663,7 @@ class _CreateProjectScreenState extends State<CreateProjectScreen> {
           Expanded(
             child: Text(
               isOk
-                  ? 'Tanah ${landSize.toStringAsFixed(0)} m2: maks $maxF lantai — Anda memilih $_floors lantai ✓'
+                  ? 'Tanah ${landSize.toStringAsFixed(0)} m²: maks $maxF lantai — Anda memilih $_floors lantai ✓'
                   : 'Peringatan: $_floors lantai melebihi batas $maxF lantai untuk tanah ini',
               style: TextStyle(
                 fontSize: 12,

@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -30,6 +31,33 @@ class _ChatListScreenState extends State<ChatListScreen> {
   void dispose() {
     _searchController.dispose();
     super.dispose();
+  }
+
+  String _formatLastMessage(String? content) {
+    if (content == null || content.isEmpty) return 'Belum ada pesan';
+
+    if (content.startsWith('{')) {
+      try {
+        final data = jsonDecode(content) as Map<String, dynamic>;
+        final type = data['type'] as String?;
+        if (type == 'offer') return '📋 Penawaran desain dikirim';
+        if (type == 'design') {
+          final rev = data['revision_number'] as int? ?? 1;
+          return '🎨 Desain revisi ke-$rev dikirimkan';
+        }
+      } catch (_) {}
+    }
+
+    if (content.startsWith('http://') || content.startsWith('https://')) {
+      final lower = content.toLowerCase();
+      final isImage = lower.contains('.png') || lower.contains('.jpg') ||
+          lower.contains('.jpeg') || lower.contains('.gif') ||
+          lower.contains('.webp');
+      if (isImage) return '🖼️ Gambar dilampirkan';
+      return '📎 File dilampirkan';
+    }
+
+    return content;
   }
 
   String _formatTime(DateTime? dt) {
@@ -268,7 +296,7 @@ class _ChatListScreenState extends State<ChatListScreen> {
                     children: [
                       Expanded(
                         child: Text(
-                          chat.lastMessage ?? 'Belum ada pesan',
+                          _formatLastMessage(chat.lastMessage),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: TextStyle(
