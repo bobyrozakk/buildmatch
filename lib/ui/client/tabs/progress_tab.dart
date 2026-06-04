@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../../data/providers/project_provider.dart';
@@ -5,6 +6,7 @@ import '../../../data/models/project_model.dart';
 import '../../../data/models/bid_model.dart';
 import '../screens/project_detail_screen.dart';
 import '../screens/create_project_screen.dart';
+import '../screens/architect_offer_detail_screen.dart';
 import '../../../core/constants/colors.dart';
 import '../../../core/utils/formatters.dart';
 
@@ -19,6 +21,7 @@ class _ProgressTabState extends State<ProgressTab> {
   late Future<List<ProjectModel>> _projectsFuture;
   late Future<List<ProjectModel>> _draftsFuture;
   late Future<List<BidModel>> _incomingBidsFuture;
+  late Future<List<BidModel>> _architectBidsFuture;
 
   @override
   void initState() {
@@ -32,6 +35,7 @@ class _ProgressTabState extends State<ProgressTab> {
       _projectsFuture = provider.fetchProjects();
       _draftsFuture = provider.fetchDraftProjects();
       _incomingBidsFuture = provider.fetchClientIncomingBids();
+      _architectBidsFuture = provider.fetchClientArchitectBids();
     });
   }
 
@@ -111,7 +115,7 @@ class _ProgressTabState extends State<ProgressTab> {
         child: ListView(
           padding: const EdgeInsets.all(20),
           children: [
-            // ── SECTION PENAWARAN MASUK (GROUPED PER PROYEK) ──
+            // ── SECTION PENAWARAN KONTRAKTOR MASUK (GROUPED PER PROYEK) ──
             FutureBuilder<List<BidModel>>(
               future: _incomingBidsFuture,
               builder: (context, snapshot) {
@@ -144,7 +148,7 @@ class _ProgressTabState extends State<ProgressTab> {
                         ),
                         const SizedBox(width: 8),
                         Text(
-                          'Penawaran Masuk (${grouped.length} proyek)',
+                          'Penawaran Kontraktor (${grouped.length} proyek)',
                           style: const TextStyle(
                             fontSize: 15,
                             fontWeight: FontWeight.bold,
@@ -165,6 +169,53 @@ class _ProgressTabState extends State<ProgressTab> {
                         project: project,
                       );
                     }),
+
+                    const SizedBox(height: 8),
+                    const Divider(height: 32),
+                  ],
+                );
+              },
+            ),
+
+            // ── SECTION KONSULTASI ARSITEK ──
+            FutureBuilder<List<BidModel>>(
+              future: _architectBidsFuture,
+              builder: (context, snapshot) {
+                if (snapshot.connectionState == ConnectionState.waiting) {
+                  return const SizedBox.shrink();
+                }
+
+                final architectBids = snapshot.data ?? [];
+                if (architectBids.isEmpty) return const SizedBox.shrink();
+
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(6),
+                          decoration: BoxDecoration(
+                            color: Colors.purple.withOpacity(0.1),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: const Icon(Icons.architecture_rounded,
+                              size: 16, color: Colors.purple),
+                        ),
+                        const SizedBox(width: 8),
+                        Text(
+                          'Konsultasi Arsitek (${architectBids.length})',
+                          style: const TextStyle(
+                            fontSize: 15,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.black87,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+
+                    ...architectBids.map((bid) => _buildArchitectBidCard(bid)),
 
                     const SizedBox(height: 8),
                     const Divider(height: 32),
@@ -287,7 +338,288 @@ class _ProgressTabState extends State<ProgressTab> {
     );
   }
 
-  // --- CARD GROUPED BID PER PROYEK ---
+  // --- CARD KONSULTASI ARSITEK ---
+  Widget _buildArchitectBidCard(BidModel bid) {
+    // Parse pesan arsitek (berisi title, description, revisions, duration_days)
+    String offerTitle = 'Penawaran Desain';
+    String offerDescription = '';
+    int revisions = 0;
+    int durationDays = 0;
+
+    if (bid.message != null && bid.message!.startsWith('{')) {
+      try {
+        final data = jsonDecode(bid.message!);
+        offerTitle = data['title'] ?? offerTitle;
+        offerDescription = data['description'] ?? '';
+        revisions = data['revisions'] ?? 0;
+        durationDays = data['duration_days'] ?? 0;
+      } catch (_) {}
+    }
+
+    final architectName = bid.vendorName ?? 'Arsitek';
+    final initial = architectName.isNotEmpty ? architectName[0].toUpperCase() : 'A';
+
+    Color statusColor;
+    String statusLabel;
+    IconData statusIcon;
+    switch (bid.status) {
+      case 'accepted':
+        statusColor = Colors.green;
+        statusLabel = 'Diterima';
+        statusIcon = Icons.check_circle_rounded;
+        break;
+      case 'rejected':
+        statusColor = Colors.red;
+        statusLabel = 'Ditolak';
+        statusIcon = Icons.cancel_rounded;
+        break;
+      case 'cancelled':
+        statusColor = Colors.grey;
+        statusLabel = 'Dibatalkan';
+        statusIcon = Icons.block_rounded;
+        break;
+      default:
+        statusColor = Colors.orange;
+        statusLabel = 'Menunggu';
+        statusIcon = Icons.hourglass_empty_rounded;
+    }
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 14),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(
+          color: Colors.purple.withOpacity(0.2),
+          width: 1,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.04),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(18),
+        onTap: () {
+          if (bid.id != null) {
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) => ArchitectOfferDetailScreen(
+                  bidId: bid.id!,
+                  title: offerTitle,
+                  price: bid.price,
+                  description: offerDescription,
+                  revisions: revisions,
+                  durationDays: durationDays,
+                  architectName: architectName,
+                ),
+              ),
+            ).then((_) => _refresh());
+          }
+        },
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  // Avatar arsitek
+                  CircleAvatar(
+                    radius: 22,
+                    backgroundColor: Colors.purple.withOpacity(0.1),
+                    child: Text(
+                      initial,
+                      style: const TextStyle(
+                        color: Colors.purple,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 16,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            const Icon(Icons.architecture_rounded,
+                                size: 13, color: Colors.purple),
+                            const SizedBox(width: 4),
+                            const Text(
+                              'Arsitek',
+                              style: TextStyle(
+                                fontSize: 10,
+                                color: Colors.purple,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ],
+                        ),
+                        Text(
+                          architectName,
+                          style: const TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 14,
+                            color: Colors.black87,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ],
+                    ),
+                  ),
+                  // Status badge
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: statusColor.withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(statusIcon, size: 11, color: statusColor),
+                        const SizedBox(width: 4),
+                        Text(
+                          statusLabel,
+                          style: TextStyle(
+                            color: statusColor,
+                            fontSize: 10,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              const Divider(height: 1),
+              const SizedBox(height: 12),
+
+              // Judul penawaran
+              Text(
+                offerTitle,
+                style: const TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.black87,
+                ),
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+              ),
+              const SizedBox(height: 8),
+
+              // Info chips
+              Wrap(
+                spacing: 8,
+                runSpacing: 6,
+                children: [
+                  _miniChip(
+                    Icons.payments_outlined,
+                    AppFormatters.formatRupiah(bid.price),
+                    Colors.purple,
+                  ),
+                  if (durationDays > 0)
+                    _miniChip(
+                      Icons.schedule_rounded,
+                      '$durationDays hari',
+                      Colors.blue,
+                    ),
+                  if (revisions > 0)
+                    _miniChip(
+                      Icons.loop_rounded,
+                      '$revisions revisi',
+                      Colors.teal,
+                    ),
+                ],
+              ),
+
+              // Tombol lihat detail
+              const SizedBox(height: 12),
+              SizedBox(
+                width: double.infinity,
+                child: OutlinedButton.icon(
+                  onPressed: () {
+                    if (bid.id != null) {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => ArchitectOfferDetailScreen(
+                            bidId: bid.id!,
+                            title: offerTitle,
+                            price: bid.price,
+                            description: offerDescription,
+                            revisions: revisions,
+                            durationDays: durationDays,
+                            architectName: architectName,
+                          ),
+                        ),
+                      ).then((_) => _refresh());
+                    }
+                  },
+                  icon: const Icon(
+                    Icons.open_in_new_rounded,
+                    size: 14,
+                    color: Colors.purple,
+                  ),
+                  label: const Text(
+                    'Lihat Detail Penawaran',
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      color: Colors.purple,
+                      fontSize: 12,
+                    ),
+                  ),
+                  style: OutlinedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(vertical: 9),
+                    side: BorderSide(
+                        color: Colors.purple.withOpacity(0.4), width: 1.5),
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12)),
+                    backgroundColor: Colors.purple.withOpacity(0.03),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _miniChip(IconData icon, String label, Color color) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.08),
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 11, color: color),
+          const SizedBox(width: 4),
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 11,
+              color: color,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // --- CARD GROUPED BID PER PROYEK (KONTRAKTOR) ---
   Widget _buildGroupedBidCard({
     required List<BidModel> projectBids,
     required ProjectModel? project,

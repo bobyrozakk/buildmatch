@@ -384,6 +384,7 @@ class ProjectProvider extends ChangeNotifier {
   // ─────────────────────────────────────────────
   // AMBIL PENAWARAN MASUK UNTUK CLIENT (SEMUA PROYEK OPEN)
   // ─────────────────────────────────────────────
+  // Ambil bid masuk dari KONTRAKTOR saja (bukan arsitek) untuk proyek open
   Future<List<BidModel>> fetchClientIncomingBids() async {
     try {
       final userId = _supabase.auth.currentUser?.id;
@@ -397,17 +398,24 @@ class ProjectProvider extends ChangeNotifier {
         projectsResponse,
       ).map((p) => p['id'] as String).toList();
       if (projectIds.isEmpty) return [];
+      // Join profiles untuk mendapatkan role, lalu filter hanya kontraktor
       final bidsResponse = await _supabase
           .from('bids')
           .select(
-            '*, profiles:vendor_id(name), projects:project_id(id, title, description, budget, land_size, building_size, floors, bedrooms, bathrooms, house_style, location, latitude, longitude, image_urls, reference_pdf_url, status, progress_percent, created_at, client_id)',
+            '*, profiles:vendor_id(name, role), projects:project_id(id, title, description, budget, land_size, building_size, floors, bedrooms, bathrooms, house_style, location, latitude, longitude, image_urls, reference_pdf_url, status, progress_percent, created_at, client_id)',
           )
           .inFilter('project_id', projectIds)
           .eq('status', 'pending')
           .order('created_at', ascending: false);
-      return List<Map<String, dynamic>>.from(
-        bidsResponse,
-      ).map((json) => BidModel.fromJson(json)).toList();
+      final allBids = List<Map<String, dynamic>>.from(bidsResponse);
+      // Filter: hanya tampilkan bid dari kontraktor (role='vendor'), bukan arsitek
+      final contractorBids = allBids.where((b) {
+        final profiles = b['profiles'] as Map<String, dynamic>?;
+        final role = profiles?['role'] as String?;
+        // Jika role null atau bukan 'architect', anggap kontraktor
+        return role != 'architect';
+      }).toList();
+      return contractorBids.map((json) => BidModel.fromJson(json)).toList();
     } catch (e) {
       debugPrint("Error fetch client incoming bids: $e");
       return [];
@@ -415,17 +423,64 @@ class ProjectProvider extends ChangeNotifier {
   }
 
   // ─────────────────────────────────────────────
+  // AMBIL BID ARSITEK (KONSULTASI DESAIN) UNTUK CLIENT
+  // ─────────────────────────────────────────────
+  Future<List<BidModel>> fetchClientArchitectBids() async {
+    try {
+      final userId = _supabase.auth.currentUser?.id;
+      if (userId == null) return [];
+      // Ambil semua proyek milik client (tidak hanya open)
+      final projectsResponse = await _supabase
+          .from('projects')
+          .select('id')
+          .eq('client_id', userId);
+      final projectIds = List<Map<String, dynamic>>.from(
+        projectsResponse,
+      ).map((p) => p['id'] as String).toList();
+      if (projectIds.isEmpty) return [];
+      // Ambil bid yang vendor-nya adalah arsitek
+      final bidsResponse = await _supabase
+          .from('bids')
+          .select(
+            '*, profiles:vendor_id(name, role, avatar_url), projects:project_id(id, title, description, budget, land_size, building_size, floors, bedrooms, bathrooms, house_style, location, latitude, longitude, image_urls, reference_pdf_url, status, progress_percent, created_at, client_id)',
+          )
+          .inFilter('project_id', projectIds)
+          .order('created_at', ascending: false);
+      final allBids = List<Map<String, dynamic>>.from(bidsResponse);
+      // Filter: hanya bid dari arsitek (role='architect')
+      final architectBids = allBids.where((b) {
+        final profiles = b['profiles'] as Map<String, dynamic>?;
+        final role = profiles?['role'] as String?;
+        return role == 'architect';
+      }).toList();
+      return architectBids.map((json) => BidModel.fromJson(json)).toList();
+    } catch (e) {
+      debugPrint("Error fetch client architect bids: $e");
+      return [];
+    }
+  }
+
+  // ─────────────────────────────────────────────
   // AMBIL SEMUA BID UNTUK SATU PROYEK (UNTUK CLIENT)
   // ─────────────────────────────────────────────
+  // Ambil semua bid untuk satu proyek - HANYA dari kontraktor (bukan arsitek)
   Future<List<BidModel>> fetchProjectBids(String projectId) async {
     try {
       if (projectId.isEmpty) return [];
+      // Sertakan field 'role' dari profiles untuk dapat memfilter arsitek
       final bidsResponse = await _supabase
           .from('bids')
-          .select('*, profiles:vendor_id(name, experience_years)')
+          .select('*, profiles:vendor_id(name, experience_years, role)')
           .eq('project_id', projectId)
           .order('created_at', ascending: false);
-      final bids = List<Map<String, dynamic>>.from(bidsResponse);
+      final allBids = List<Map<String, dynamic>>.from(bidsResponse);
+
+      // Filter: hanya kontraktor (role='vendor' atau role bukan 'architect')
+      final bids = allBids.where((b) {
+        final profiles = b['profiles'] as Map<String, dynamic>?;
+        final role = profiles?['role'] as String?;
+        return role != 'architect';
+      }).toList();
 
       final vendorIds = bids
           .map((b) => b['vendor_id'] as String?)
