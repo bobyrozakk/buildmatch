@@ -90,7 +90,12 @@ class _BerandaTabState extends State<BerandaTab> {
       Navigator.push(
         context,
         MaterialPageRoute(builder: (_) => const CreateProjectScreen()),
-      ).then((_) => _refresh());
+      ).then((val) {
+        _refresh();
+        if (val == 'route_to_consultation') {
+          widget.onSwitchTab?.call(2);
+        }
+      });
       return;
     }
 
@@ -202,12 +207,22 @@ class _BerandaTabState extends State<BerandaTab> {
         MaterialPageRoute(
           builder: (_) => CreateProjectScreen(draft: latestDraft),
         ),
-      ).then((_) => _refresh());
+      ).then((val) {
+        _refresh();
+        if (val == 'route_to_consultation') {
+          widget.onSwitchTab?.call(2);
+        }
+      });
     } else if (result == 'new') {
       Navigator.push(
         context,
         MaterialPageRoute(builder: (_) => const CreateProjectScreen()),
-      ).then((_) => _refresh());
+      ).then((val) {
+        _refresh();
+        if (val == 'route_to_consultation') {
+          widget.onSwitchTab?.call(2);
+        }
+      });
     }
   }
 

@@ -11,7 +11,8 @@ import '../../../core/constants/colors.dart';
 import '../../../core/utils/formatters.dart';
 
 class ProgressTab extends StatefulWidget {
-  const ProgressTab({super.key});
+  final ValueChanged<int>? onSwitchTab;
+  const ProgressTab({super.key, this.onSwitchTab});
 
   @override
   State<ProgressTab> createState() => _ProgressTabState();
@@ -271,13 +272,16 @@ class _ProgressTabState extends State<ProgressTab> {
                     // List card draft
                     ...drafts.map((draft) => GestureDetector(
                       onTap: () async {
-                        await Navigator.push(
+                        final val = await Navigator.push(
                           context,
                           MaterialPageRoute(
                             builder: (_) => CreateProjectScreen(draft: draft),
                           ),
                         );
                         _refresh();
+                        if (val == 'route_to_consultation') {
+                          widget.onSwitchTab?.call(2);
+                        }
                       },
                       child: _buildDraftCard(draft),
                     )),
@@ -961,11 +965,13 @@ class _ProgressTabState extends State<ProgressTab> {
 
   // --- CARD PROYEK AKTIF ---
   Widget _buildProjectCard(ProjectModel item) {
+    final canAct = item.status == 'open';
+
     return GestureDetector(
       onTap: () => Navigator.push(
         context,
         MaterialPageRoute(builder: (_) => ProjectDetailScreen(project: item)),
-      ),
+      ).then((_) => _refresh()),
       child: Container(
         margin: const EdgeInsets.only(bottom: 16),
         padding: const EdgeInsets.all(16),
@@ -996,7 +1002,16 @@ class _ProgressTabState extends State<ProgressTab> {
                     ),
                   ),
                 ),
-                _buildStatusTag(item.status),
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    _buildStatusTag(item.status),
+                    if (canAct) ...[
+                      const SizedBox(width: 4),
+                      _buildProjectActionMenu(item),
+                    ],
+                  ],
+                ),
               ],
             ),
             const SizedBox(height: 8),
@@ -1043,6 +1058,206 @@ class _ProgressTabState extends State<ProgressTab> {
         ),
       ),
     );
+  }
+
+  // ─── Menu aksi ⋮ pada card proyek open ───
+  Widget _buildProjectActionMenu(ProjectModel item) {
+    return PopupMenuButton<String>(
+      icon: const Icon(Icons.more_vert_rounded, size: 20, color: Colors.black54),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+      elevation: 4,
+      onSelected: (value) async {
+        if (value == 'edit') {
+          await _handleEditProject(item);
+        } else if (value == 'cancel') {
+          await _handleCancelProject(item);
+        }
+      },
+      itemBuilder: (_) {
+        return [
+          // Edit: hanya muncul jika belum ada bid sama sekali
+          PopupMenuItem<String>(
+            value: 'edit',
+            child: FutureBuilder<int>(
+              future: Provider.of<ProjectProvider>(context, listen: false)
+                  .fetchProjectBidCountAll(item.id ?? ''),
+              builder: (ctx, snap) {
+                final bidCount = snap.data ?? 0;
+                final canEdit = bidCount == 0;
+                return Row(
+                  children: [
+                    Icon(Icons.edit_outlined,
+                        size: 18,
+                        color: canEdit ? AppColors.primary : Colors.grey.shade400),
+                    const SizedBox(width: 10),
+                    Text(
+                      'Edit Proyek',
+                      style: TextStyle(
+                        color: canEdit ? Colors.black87 : Colors.grey.shade400,
+                        fontSize: 13,
+                      ),
+                    ),
+                    if (!canEdit) ...[
+                      const Spacer(),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 6, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: Colors.orange.withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: const Text(
+                          'Ada bid',
+                          style: TextStyle(
+                              fontSize: 9,
+                              color: Colors.orange,
+                              fontWeight: FontWeight.bold),
+                        ),
+                      ),
+                    ],
+                  ],
+                );
+              },
+            ),
+          ),
+          // Batalkan: selalu muncul untuk proyek open
+          const PopupMenuItem<String>(
+            value: 'cancel',
+            child: Row(
+              children: [
+                Icon(Icons.cancel_outlined, size: 18, color: Colors.red),
+                SizedBox(width: 10),
+                Text(
+                  'Batalkan Proyek',
+                  style: TextStyle(color: Colors.red, fontSize: 13),
+                ),
+              ],
+            ),
+          ),
+        ];
+      },
+    );
+  }
+
+  // ─── Buka form edit ─────────────────────────────
+  Future<void> _handleEditProject(ProjectModel item) async {
+    final provider = Provider.of<ProjectProvider>(context, listen: false);
+    final bidCount = await provider.fetchProjectBidCountAll(item.id ?? '');
+    if (!mounted) return;
+
+    if (bidCount > 0) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content:
+              Text('Proyek tidak bisa diedit karena sudah ada penawaran masuk.'),
+          backgroundColor: Colors.orange,
+        ),
+      );
+      return;
+    }
+
+    // Buka CreateProjectScreen dalam mode "edit proyek aktif"
+    // Kita buat ProjectModel dengan status 'draft' agar form bisa menggunakannya
+    // setelah disimpan, provider.updateProject dipanggil (bukan saveDraft).
+    await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => CreateProjectScreen(
+          draft: item.copyWith(status: 'open'),
+          isEditMode: true,
+        ),
+      ),
+    );
+    if (mounted) _refresh();
+  }
+
+  // ─── Dialog konfirmasi batalkan proyek ──────────
+  Future<void> _handleCancelProject(ProjectModel item) async {
+    final provider = Provider.of<ProjectProvider>(context, listen: false);
+
+    // Cek apakah ada bid yang sudah accepted
+    final hasAccepted = await provider.hasAcceptedBid(item.id ?? '');
+    if (!mounted) return;
+
+    if (hasAccepted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+              'Proyek tidak bisa dibatalkan karena penawaran sudah diterima.'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+
+    final bidCount =
+        await provider.fetchProjectBidCountAll(item.id ?? '');
+    if (!mounted) return;
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Row(
+          children: [
+            Icon(Icons.warning_amber_rounded, color: Colors.orange),
+            SizedBox(width: 10),
+            Text('Batalkan Proyek?',
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+          ],
+        ),
+        content: Text(
+          bidCount > 0
+              ? 'Proyek ini memiliki $bidCount penawaran masuk. Jika dibatalkan, semua kontraktor yang menawar akan melihat keterangan "Proyek Dibatalkan".\n\nLanjutkan?'
+              : 'Proyek "${item.title}" akan dibatalkan. Tindakan ini tidak bisa diurungkan.',
+          style: const TextStyle(fontSize: 13, color: Colors.black54, height: 1.5),
+        ),
+        actionsPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+        actions: [
+          OutlinedButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            style: OutlinedButton.styleFrom(
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12)),
+              side: BorderSide(color: Colors.grey.shade300),
+            ),
+            child:
+                const Text('Tidak', style: TextStyle(color: Colors.black54)),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.red.shade600,
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12)),
+            ),
+            child: const Text('Ya, Batalkan',
+                style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true && mounted) {
+      final success = await provider.cancelProject(item.id ?? '');
+      if (!mounted) return;
+      if (success) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('✅ Proyek berhasil dibatalkan.'),
+            backgroundColor: Colors.green,
+          ),
+        );
+        _refresh();
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Gagal membatalkan proyek. Coba lagi.'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
   }
 
   Widget _buildStatusTag(String? status) {

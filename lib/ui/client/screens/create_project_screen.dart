@@ -18,7 +18,11 @@ class CreateProjectScreen extends StatefulWidget {
   /// sehingga user bisa melanjutkan pengisian.
   final ProjectModel? draft;
 
-  const CreateProjectScreen({super.key, this.draft});
+  /// Jika true, form akan melakukan UPDATE proyek yang sudah ada (status='open')
+  /// bukan membuat proyek baru atau menyimpan sebagai draft.
+  final bool isEditMode;
+
+  const CreateProjectScreen({super.key, this.draft, this.isEditMode = false});
 
   @override
   State<CreateProjectScreen> createState() => _CreateProjectScreenState();
@@ -181,9 +185,19 @@ class _CreateProjectScreenState extends State<CreateProjectScreen> {
     final ls = _customLandSize;
     final int maxF = ls > 0 ? AppValidators.maxFloors(ls) : 5;
 
+    // Hitung max budget baru berdasarkan newMin
+    double newMax = 20_000_000_000.0;
+    if (newMin > 0) {
+      newMax = (newMin * 5.0).clamp(2_000_000_000.0, 20_000_000_000.0);
+    }
+
     setState(() {
       _minBudget = newMin;
-      if (_budget < newMin) _budget = newMin;
+      if (_budget < newMin) {
+        _budget = newMin;
+      } else if (_budget > newMax) {
+        _budget = newMax;
+      }
       if (_floors > maxF) {
         _floors = maxF;
         _clampRooms();
@@ -473,6 +487,72 @@ class _CreateProjectScreenState extends State<CreateProjectScreen> {
     }
   }
 
+  /// Simpan draf lalu kembalikan sinyal 'route_to_consultation' ke pemanggil
+  /// agar navigasi tab dapat langsung beralih ke tab Konsultasi.
+  Future<void> _saveDraftAndConsultArchitect() async {
+    final provider = Provider.of<ProjectProvider>(context, listen: false);
+
+    final success = await provider.saveDraft(
+      draftId: _editingDraftId,
+      title: _titleController.text.trim(),
+      description: _descController.text.trim(),
+      budget: _budget,
+      landSize: (_selectedLand?['size'] as double?) ?? 0,
+      buildingSize: double.tryParse(_buildingSizeController.text) ?? 0,
+      floors: _floors,
+      bedrooms: _bedrooms,
+      bathrooms: _bathrooms,
+      houseStyle: _selectedStyle ?? '',
+      location: _locationController.text.trim(),
+      latitude: _selectedLocation?.latitude,
+      longitude: _selectedLocation?.longitude,
+    );
+
+    if (!mounted) return;
+
+    if (success) {
+      await showDialog<void>(
+        context: context,
+        barrierDismissible: false,
+        builder: (ctx) => AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          title: const Row(
+            children: [
+              Icon(Icons.check_circle_outline, color: Colors.green),
+              SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  'Draft Tersimpan!',
+                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                ),
+              ),
+            ],
+          ),
+          content: const Text(
+            'Proyek kamu berhasil disimpan ke draft. Kamu akan diarahkan ke halaman Konsultasi Arsitek.',
+            style: TextStyle(fontSize: 13, color: Colors.black54, height: 1.5),
+          ),
+          actionsPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+          actions: [
+            ElevatedButton(
+              onPressed: () => Navigator.pop(ctx),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.primary,
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12)),
+              ),
+              child: const Text('Lanjutkan', style: TextStyle(color: Colors.white)),
+            ),
+          ],
+        ),
+      );
+      if (!mounted) return;
+      Navigator.pop(context, 'route_to_consultation');
+    } else {
+      _showError('Gagal menyimpan draft. Coba lagi.');
+    }
+  }
+
   // ════════════════════════════════════════════════════
   // NAVIGATION
   // ════════════════════════════════════════════════════
@@ -591,6 +671,41 @@ class _CreateProjectScreenState extends State<CreateProjectScreen> {
     }
 
     final provider = Provider.of<ProjectProvider>(context, listen: false);
+
+    // ── MODE EDIT PROYEK AKTIF ──
+    if (widget.isEditMode && _editingDraftId != null) {
+      final success = await provider.updateProject(
+        projectId: _editingDraftId!,
+        title: _titleController.text.trim(),
+        description: _descController.text.trim(),
+        budget: _budget,
+        landSize: _effectiveLandSize,
+        buildingSize: double.tryParse(_buildingSizeController.text) ?? 0.0,
+        floors: _floors,
+        bedrooms: _bedrooms,
+        bathrooms: _bathrooms,
+        houseStyle: _selectedStyle!,
+        location: _locationController.text.trim(),
+        latitude: _selectedLocation?.latitude,
+        longitude: _selectedLocation?.longitude,
+      );
+      if (!mounted) return;
+      if (success) {
+        showDialog(
+          context: context,
+          barrierDismissible: false,
+          builder: (context) => const AnimatedSuccessDialog(
+            message: 'Proyek berhasil diperbarui! ✅',
+          ),
+        );
+        Navigator.pop(context);
+      } else {
+        _showError('Gagal memperbarui proyek. Coba lagi.');
+      }
+      return;
+    }
+
+    // ── MODE BUAT PROYEK BARU ──
     bool success = await provider.createProject(
       title: _titleController.text.trim(),
       description: _descController.text.trim(),
@@ -679,31 +794,34 @@ class _CreateProjectScreenState extends State<CreateProjectScreen> {
                     ),
                     onPressed: isLoading ? null : _onExitPressed,
                   ),
-                  const Text(
-                    "Buat Proyek Baru",
-                    style: TextStyle(
+                  Text(
+                    widget.isEditMode ? "Edit Proyek" : "Buat Proyek Baru",
+                    style: const TextStyle(
                       fontSize: 18,
                       fontWeight: FontWeight.bold,
                       color: Colors.black87,
                     ),
                   ),
-                  // Icon bookmark → simpan draft langsung
-                  IconButton(
-                    tooltip: 'Simpan sebagai draft',
-                    icon: Container(
-                      padding: const EdgeInsets.all(8),
-                      decoration: const BoxDecoration(
-                        color: Colors.white,
-                        shape: BoxShape.circle,
+                  // Icon bookmark → hanya tampil di mode buat baru (bukan edit)
+                  if (!widget.isEditMode)
+                    IconButton(
+                      tooltip: 'Simpan sebagai draft',
+                      icon: Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: const BoxDecoration(
+                          color: Colors.white,
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Icon(
+                          Icons.bookmark_outline,
+                          color: AppColors.primary,
+                          size: 20,
+                        ),
                       ),
-                      child: const Icon(
-                        Icons.bookmark_outline,
-                        color: AppColors.primary,
-                        size: 20,
-                      ),
-                    ),
-                    onPressed: isLoading ? null : _saveDraftAndExit,
-                  ),
+                      onPressed: isLoading ? null : _saveDraftAndExit,
+                    )
+                  else
+                    const SizedBox(width: 48), // placeholder agar judul tetap center
                 ],
               ),
             ),
@@ -1274,6 +1392,26 @@ class _CreateProjectScreenState extends State<CreateProjectScreen> {
             isUploaded: _selectedPdfFile != null,
             onTap: _pickPdf,
           ),
+          const SizedBox(height: 20),
+          Center(
+            child: InkWell(
+              onTap: _saveDraftAndConsultArchitect,
+              borderRadius: BorderRadius.circular(8),
+              child: const Padding(
+                padding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                child: Text(
+                  "🏛️  Hubungi & Buat Design dengan Arsitek",
+                  style: TextStyle(
+                    color: AppColors.primary,
+                    fontWeight: FontWeight.w600,
+                    decoration: TextDecoration.underline,
+                    fontSize: 13,
+                    letterSpacing: 0.2,
+                  ),
+                ),
+              ),
+            ),
+          ),
           const SizedBox(height: 40),
         ],
       ),
@@ -1391,7 +1529,13 @@ class _CreateProjectScreenState extends State<CreateProjectScreen> {
   Widget _buildBudgetCard() {
     final effectiveMin = _isCustomLand ? _autoMinBudget : _minBudget;
     final bool canUse = _selectedLand != null && (!_isCustomLand || _customLandSize > 0);
-    final double sliderVal = _budget < effectiveMin ? effectiveMin : _budget;
+
+    final double actualMin = effectiveMin > 0 ? effectiveMin : 0.0;
+    final double maxB = _maxBudget;
+    final double actualMax = maxB > actualMin ? maxB : actualMin + 1_000_000.0;
+
+    // Clamp budget to make sure it's within range
+    final double sliderVal = _budget.clamp(actualMin, actualMax);
 
     return AnimatedOpacity(
       duration: const Duration(milliseconds: 300),
@@ -1410,11 +1554,11 @@ class _CreateProjectScreenState extends State<CreateProjectScreen> {
           children: [
             Center(
               child: Text(
-                canUse && _budget > 0 ? AppFormatters.formatRupiah(_budget) : 'Pilih ukuran tanah dulu',
+                canUse && sliderVal > 0 ? AppFormatters.formatRupiah(sliderVal) : 'Pilih ukuran tanah dulu',
                 style: TextStyle(
                   fontWeight: FontWeight.w900,
                   fontSize: 22,
-                  color: canUse && _budget > 0 ? AppColors.primary : Colors.black38,
+                  color: canUse && sliderVal > 0 ? AppColors.primary : Colors.black38,
                 ),
               ),
             ),
@@ -1428,11 +1572,11 @@ class _CreateProjectScreenState extends State<CreateProjectScreen> {
                 thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 12.0, elevation: 4),
               ),
               child: Slider(
-                value: canUse && effectiveMin > 0 ? sliderVal : 0,
-                min: effectiveMin > 0 ? effectiveMin : 0,
-                max: _maxBudget > effectiveMin ? _maxBudget : effectiveMin + 1_000_000,
+                value: canUse && actualMin > 0 ? sliderVal : 0.0,
+                min: canUse && actualMin > 0 ? actualMin : 0.0,
+                max: canUse && actualMin > 0 ? actualMax : 1_000_000.0,
                 divisions: 100,
-                onChanged: canUse ? (val) => setState(() => _budget = val) : null,
+                onChanged: canUse && actualMin > 0 ? (val) => setState(() => _budget = val) : null,
               ),
             ),
             if (canUse && effectiveMin > 0) ...[

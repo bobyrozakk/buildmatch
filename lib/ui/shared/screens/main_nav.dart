@@ -51,7 +51,9 @@ class _MainNavScreenState extends State<MainNavScreen> {
       ),
       const ContractorTab(),
       const ConsultasiTab(), // Konsultasi: Inbox + Arsitek dalam 1 tab
-      const ProgressTab(), 
+      ProgressTab(
+        onSwitchTab: (i) => setState(() => _currentIndex = i),
+      ),
       const ProfileTab(), 
     ];
 

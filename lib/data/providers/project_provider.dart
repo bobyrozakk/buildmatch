@@ -192,6 +192,111 @@ class ProjectProvider extends ChangeNotifier {
   }
 
   // ─────────────────────────────────────────────
+  // BATALKAN PROYEK (CLIENT) — set status = 'cancelled'
+  // Tidak dihapus agar kontraktor bisa melihat keterangan dibatalkan.
+  // ─────────────────────────────────────────────
+  Future<bool> cancelProject(String projectId) async {
+    _isLoading = true;
+    notifyListeners();
+    try {
+      await _supabase
+          .from('projects')
+          .update({'status': 'cancelled'})
+          .eq('id', projectId);
+      _isLoading = false;
+      notifyListeners();
+      return true;
+    } catch (e) {
+      debugPrint("Error cancel project: $e");
+      _isLoading = false;
+      notifyListeners();
+      return false;
+    }
+  }
+
+  // ─────────────────────────────────────────────
+  // UPDATE PROYEK (CLIENT EDIT) — hanya saat status masih 'open' & belum ada bid
+  // ─────────────────────────────────────────────
+  Future<bool> updateProject({
+    required String projectId,
+    required String title,
+    required String description,
+    required double budget,
+    required double landSize,
+    required double buildingSize,
+    required int floors,
+    required int bedrooms,
+    required int bathrooms,
+    required String houseStyle,
+    required String location,
+    double? latitude,
+    double? longitude,
+  }) async {
+    _isLoading = true;
+    notifyListeners();
+    try {
+      await _supabase.from('projects').update({
+        'title': title,
+        'description': description,
+        'budget': budget,
+        'land_size': landSize,
+        'building_size': buildingSize,
+        'floors': floors,
+        'bedrooms': bedrooms,
+        'bathrooms': bathrooms,
+        'house_style': houseStyle,
+        'location': location,
+        if (latitude != null) 'latitude': latitude,
+        if (longitude != null) 'longitude': longitude,
+      }).eq('id', projectId);
+      _isLoading = false;
+      notifyListeners();
+      return true;
+    } catch (e) {
+      debugPrint("Error update project: $e");
+      _isLoading = false;
+      notifyListeners();
+      return false;
+    }
+  }
+
+  // ─────────────────────────────────────────────
+  // HITUNG SEMUA BID (ANY STATUS) UNTUK SATU PROYEK
+  // ─────────────────────────────────────────────
+  Future<int> fetchProjectBidCountAll(String projectId) async {
+    try {
+      if (projectId.isEmpty) return 0;
+      final response = await _supabase
+          .from('bids')
+          .select('id, status')
+          .eq('project_id', projectId);
+      return (response as List).length;
+    } catch (e) {
+      debugPrint("Error fetch all bid count: $e");
+      return 0;
+    }
+  }
+
+  // ─────────────────────────────────────────────
+  // CEK APAKAH ADA BID ACCEPTED UNTUK PROYEK INI
+  // ─────────────────────────────────────────────
+  Future<bool> hasAcceptedBid(String projectId) async {
+    try {
+      if (projectId.isEmpty) return false;
+      final response = await _supabase
+          .from('bids')
+          .select('id')
+          .eq('project_id', projectId)
+          .eq('status', 'accepted')
+          .limit(1);
+      return (response as List).isNotEmpty;
+    } catch (e) {
+      debugPrint("Error check accepted bid: $e");
+      return false;
+    }
+  }
+
+  // ─────────────────────────────────────────────
   // AMBIL PROYEK KLIEN (TANPA DRAFT)
   // ─────────────────────────────────────────────
   Future<List<ProjectModel>> fetchProjects() async {
