@@ -4,7 +4,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 // --- IMPORT TAB KLIEN ---
 import '../../client/tabs/beranda_tab.dart';
 import '../../client/tabs/progress_tab.dart'; 
-import '../../client/tabs/contractor_tab.dart';
+import '../../client/tabs/mitra_tab.dart';
 import '../../client/tabs/consultasi_tab.dart';
 import '../../client/tabs/profile_tab.dart'; 
 
@@ -30,6 +30,19 @@ class MainNavScreen extends StatefulWidget {
 
 class _MainNavScreenState extends State<MainNavScreen> {
   int _currentIndex = 0;
+  int _mitraInitialTab = 0;
+
+  void _handleSwitchTab(int index) {
+    setState(() {
+      if (index == 99) {
+        _currentIndex = 1;      // Go to MitraTab (index 1)
+        _mitraInitialTab = 1;   // Select Arsitek tab inside MitraTab
+      } else {
+        _currentIndex = index;
+        _mitraInitialTab = 0;   // Reset to Contractor tab
+      }
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -47,12 +60,15 @@ class _MainNavScreenState extends State<MainNavScreen> {
     // 2. SETUP DAFTAR HALAMAN (TABS)
     final List<Widget> clientTabs = [
       BerandaTab(
-        onSwitchTab: (i) => setState(() => _currentIndex = i),
+        onSwitchTab: _handleSwitchTab,
       ),
-      const ContractorTab(),
+      MitraTab(
+        key: UniqueKey(),
+        initialTab: _mitraInitialTab,
+      ),
       const ConsultasiTab(), // Konsultasi: Inbox + Arsitek dalam 1 tab
       ProgressTab(
-        onSwitchTab: (i) => setState(() => _currentIndex = i),
+        onSwitchTab: _handleSwitchTab,
       ),
       const ProfileTab(), 
     ];
@@ -78,7 +94,7 @@ class _MainNavScreenState extends State<MainNavScreen> {
     // 3. SETUP MENU BAWAH (NAV BAR)
     final List<NavigationDestination> clientDestinations = const [
       NavigationDestination(icon: Icon(Icons.home_outlined), label: 'Beranda'),
-      NavigationDestination(icon: Icon(Icons.engineering_outlined), label: 'Kontraktor'),
+      NavigationDestination(icon: Icon(Icons.groups_outlined), label: 'Mitra'),
       NavigationDestination(icon: Icon(Icons.chat_bubble_outline), label: 'Konsultasi'),
       NavigationDestination(icon: Icon(Icons.timeline), label: 'Progress'),
       NavigationDestination(icon: Icon(Icons.person_outline), label: 'Profile'),

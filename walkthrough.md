@@ -1,52 +1,49 @@
-# Walkthrough: Fitur Chat Klien ↔ Kontraktor
+# Walkthrough: Fitur Chat & Reorganisasi Tab Mitra
 
-Fitur chat antara Klien dan Kontraktor telah selesai diimplementasikan secara menyeluruh tanpa mengubah skema tabel database utama Supabase (menggunakan kueri dinamis join profiles role).
+Seluruh pekerjaan untuk mengimplementasikan fitur chat Klien-Kontraktor, memperbaiki visibilitas label, serta melakukan restrukturisasi tab Mitra dan Konsultasi telah berhasil diselesaikan.
 
 ## Perubahan yang Dilakukan
 
-1. **Model Chat (`chat_model.dart`)**:
-   - Menambahkan field `clientRole` dan `vendorRole` pada [chat_model.dart](file:///c:/KuliahRifat/semester4/pbl/buildmatch/lib/data/models/chat_model.dart) untuk menyimpan peran pengguna dari tabel `profiles`.
-   - Mengupdate method `ChatModel.fromJson` agar mengambil nilai role dari objek join profil `client` dan `vendor`.
+### 1. Perbaikan Label Peran ("Arsitek" / "Kontraktor")
+- **Penyebab Masalah:** Row layout pada nama pengirim di list Inbox dibatasi secara ketat sehingga nama yang panjang mendominasi lebar card dan memotong (menyembunyikan) badge label peran di ujung kanan.
+- **Solusi:** 
+  - Mengubah struktur Row pada [consultasi_tab.dart](file:///c:/KuliahRifat/semester4/pbl/buildmatch/lib/ui/client/tabs/consultasi_tab.dart) dan [chat_list_screen.dart](file:///c:/KuliahRifat/semester4/pbl/buildmatch/lib/ui/shared/screens/chat_list_screen.dart). Nama dibungkus dengan `Flexible` dan diletakkan berdampingan dengan badge di dalam sub-Row `Expanded`. Ini memastikan nama yang sangat panjang akan dipotong dengan ellipsis (`TextOverflow.ellipsis`) tanpa menggeser atau menyembunyikan badge peran.
+  - Membatasi visibilitas badge peran agar **hanya muncul di sisi klien** (`isClientSide ? chat.vendorRole : null`) agar di sisi vendor/kontraktor tidak muncul badge yang membingungkan.
 
-2. **Provider Chat (`chat_provider.dart`)**:
-   - Memperbarui method `fetchChats` pada [chat_provider.dart](file:///c:/KuliahRifat/semester4/pbl/buildmatch/lib/data/providers/chat_provider.dart) untuk mengambil field `role` dari join profil client dan vendor di Supabase.
-   - Menambahkan parameter opsional `forceStatus` pada method `getOrCreateChat()` agar chat dapat diinisialisasi langsung dengan status `'accepted'` (sehingga chat room langsung aktif tanpa proses persetujuan arsitek).
+### 2. Penggabungan Tab Mitra (Kontraktor + Arsitek)
+- **File Baru:** [mitra_tab.dart](file:///c:/KuliahRifat/semester4/pbl/buildmatch/lib/ui/client/tabs/mitra_tab.dart)
+  - Menggabungkan daftar kontraktor (sebelumnya di `contractor_tab.dart`) dan daftar arsitek (sebelumnya di `consultasi_tab.dart`) ke dalam satu TabView dengan dua tab filter: **Kontraktor** dan **Arsitek**.
+  - Fitur pencarian, profil Hero tag, style chips, tombol "Lihat Profil", dan tombol "Konsultasi" semuanya dipertahankan dengan perilaku yang sama persis seperti sebelumnya.
+- **Backwards Compatibility:** Mengubah isi [contractor_tab.dart](file:///c:/KuliahRifat/semester4/pbl/buildmatch/lib/ui/client/tabs/contractor_tab.dart) menjadi `export 'mitra_tab.dart';` untuk mencegah error kompilasi dan memelihara kompatibilitas referensi.
 
-3. **Room Chat Kontraktor (`contractor_chat_detail_screen.dart`)**:
-   - Membuat screen baru [contractor_chat_detail_screen.dart](file:///c:/KuliahRifat/semester4/pbl/buildmatch/lib/ui/shared/screens/contractor_chat_detail_screen.dart) khusus untuk obrolan dengan kontraktor.
-   - Menyederhanakan UI dengan hanya menyisakan pesan teks, lampiran gambar, dan lampiran file PDF/dokumen.
-   - Menghapus fungsionalitas penawaran arsitek, pengiriman draf desain, term pembayaran, status nego, dan banner accept/reject permintaan obrolan.
-   - Mempertahankan visual design premium yang sama persis seperti room chat arsitek (warna gelembung, format waktu, tick read receipt, popup pemilihan berkas, limitasi ukuran berkas 5MB, dan kompresi gambar 70% quality).
+### 3. Penyederhanaan Tab Konsultasi (Inbox Saja)
+- **File:** [consultasi_tab.dart](file:///c:/KuliahRifat/semester4/pbl/buildmatch/lib/ui/client/tabs/consultasi_tab.dart)
+  - Menghapus komponen TabBar dan TabBarView dari halaman konsultasi. Halaman ini sekarang langsung memuat bilah pencarian dan daftar Inbox percakapan secara ringkas.
+  - Jika kotak masuk kosong, tombol "Cari Mitra" akan dialihkan untuk mengarahkan pengguna secara otomatis ke Tab Mitra.
 
-4. **Detail Penawaran Kontraktor (`bid_detail_screen.dart`)**:
-   - Memodifikasi [bid_detail_screen.dart](file:///c:/KuliahRifat/semester4/pbl/buildmatch/lib/ui/client/screens/bid_detail_screen.dart) untuk menampilkan tombol **Hubungi Kontraktor** di bagian paling bawah.
-   - Tombol ini diposisikan di dalam `bottomNavigationBar` sehingga selalu melayang (sticky) baik saat bid berstatus pending, diterima, maupun saat proyek sudah berjalan.
-   - Menambahkan method `_handleContactContractor` untuk menginisiasi chat menggunakan `getOrCreateChat` dengan `forceStatus: 'accepted'`, menampilkan dialog loading, dan menavigasi klien ke `ContractorChatDetailScreen`.
+### 4. Navigasi & Redirect Pintar
+- **File:** [main_nav.dart](file:///c:/KuliahRifat/semester4/pbl/buildmatch/lib/ui/shared/screens/main_nav.dart)
+  - Mengubah label tab bar klien index 1 dari `'Kontraktor'` menjadi `'Mitra'` dengan icon `Icons.groups_outlined`.
+  - Mengimplementasikan callback `_handleSwitchTab(int index)`. Jika navigasi menerima index `99` (penanda redirect ke arsitek), sistem akan memindahkan tab utama ke index 1 (Mitra) dan menginstruksikan `MitraTab` untuk langsung membuka sub-tab **Arsitek** (index 1).
+- **File:** [beranda_tab.dart](file:///c:/KuliahRifat/semester4/pbl/buildmatch/lib/ui/client/tabs/beranda_tab.dart) & [progress_tab.dart](file:///c:/KuliahRifat/semester4/pbl/buildmatch/lib/ui/client/tabs/progress_tab.dart)
+  - Mengubah pemanggilan `onSwitchTab` dari index `2` menjadi `99` ketika mendeteksi event `'route_to_consultation'` dari form Step 4/chip 4 "Hubungi Arsitek".
+  - Mengubah tautan klik "Cari Arsitek" di menu utama `beranda_tab.dart` agar mengarah ke index `99` (Mitra > Arsitek).
 
-5. **Visual Badge & Rute Navigasi Inbox (`consultasi_tab.dart` & `chat_list_screen.dart`)**:
-   - Memodifikasi [consultasi_tab.dart](file:///c:/KuliahRifat/semester4/pbl/buildmatch/lib/ui/client/tabs/consultasi_tab.dart) (Inbox sisi klien) dan [chat_list_screen.dart](file:///c:/KuliahRifat/semester4/pbl/buildmatch/lib/ui/shared/screens/chat_list_screen.dart) (Inbox sisi vendor).
-   - Menambahkan method pembantu `_buildRoleBadge` untuk menampilkan chip penanda berlabel **Arsitek** (warna biru lembut) atau **Kontraktor** (warna oranye lembut) di sebelah nama vendor pada card chat list.
-   - Memperbarui rute navigasi ketika card chat diklik: jika vendor teridentifikasi memiliki role `'vendor'` atau `'kontraktor'`, maka navigasi diarahkan ke `ContractorChatDetailScreen`. Jika tidak, akan diarahkan ke `ChatDetailScreen` arsitek.
+---
 
 ## Panduan Verifikasi Manual
 
-### 1. Memulai Chat dari Detail Penawaran Kontraktor
-- Masuk sebagai **Client**.
-- Buka detail proyek Anda yang telah diajukan penawaran (bidding) oleh kontraktor.
-- Masuk ke detail penawaran kontraktor tersebut dengan menekan **Lihat Detail**.
-- Scroll ke bawah dan tekan tombol **Hubungi Kontraktor**.
-- Pastikan loading indicator muncul sejenak dan Anda langsung dialihkan ke room chat dengan status obrolan aktif.
+1. **Uji Penamaan & Visibilitas Badge**:
+   - Buka tab **Konsultasi**.
+   - Perhatikan nama mitra. Nama yang panjang tetap menyisakan ruang yang cukup untuk badge **Arsitek** atau **Kontraktor** di ujung kanan.
+   - Masuk ke akun **Vendor / Kontraktor** dan buka inbox. Pastikan badge peran tidak muncul di samping nama klien (karena penerima adalah klien).
 
-### 2. Mengirim Pesan dan Lampiran
-- Di room chat kontraktor, coba kirim pesan teks.
-- Tekan tombol **+** (Lampiran) di sebelah kiri input text.
-- Pilih opsi **Foto / Galeri** (pastikan gambar dikirim dengan terkompresi) atau pilih **Dokumen / File** (pastikan file format PDF/dokumen terkirim dengan batasan ukuran 5MB).
-- Pastikan berkas terkirim dan tersimpan di bucket Supabase `documents`.
+2. **Uji Tab Mitra**:
+   - Buka tab **Mitra** di bilah navigasi bawah (menggantikan nama 'Kontraktor').
+   - Geser tab antara **Kontraktor** dan **Arsitek**. Pastikan daftar masing-masing mitra termuat dengan benar.
+   - Ketuk "Konsultasi" pada salah satu arsitek untuk memastikan fungsi chat/buka profil arsitek tetap berjalan normal.
 
-### 3. Membuka Kembali Lewat Tab Konsultasi > Inbox
-- Kembali ke beranda aplikasi.
-- Buka tab **Konsultasi** -> sub-tab **Inbox**.
-- Cari percakapan dengan kontraktor tersebut.
-- Pastikan ada badge chip berwarna oranye bertuliskan **Kontraktor** di ujung nama kontraktor tersebut.
-- Ketuk card chat tersebut dan pastikan Anda diarahkan kembali ke `ContractorChatDetailScreen` (room chat kontraktor sederhana).
-- Ketuk card chat arsitek lain dan pastikan Anda tetap diarahkan ke `ChatDetailScreen` (room chat arsitek lengkap dengan opsi pembayaran/penawaran).
+3. **Uji Redirect Step 4 (Hubungi Arsitek)**:
+   - Buat proyek baru sebagai Klien, isi data hingga Step 4.
+   - Ketuk tautan **"Hubungi arsitek dan buat design yang kamu inginkan"**.
+   - Setelah konfirmasi dialog sukses draft disimpan, pastikan tab otomatis berpindah ke tab **Mitra** dan langsung fokus pada daftar **Arsitek** (Tab ke-2), bukan Kontraktor.

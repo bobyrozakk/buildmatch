@@ -280,7 +280,7 @@ class _ProgressTabState extends State<ProgressTab> {
                         );
                         _refresh();
                         if (val == 'route_to_consultation') {
-                          widget.onSwitchTab?.call(2);
+                          widget.onSwitchTab?.call(99);
                         }
                       },
                       child: _buildDraftCard(draft),

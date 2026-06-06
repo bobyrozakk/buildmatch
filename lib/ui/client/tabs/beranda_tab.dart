@@ -93,7 +93,7 @@ class _BerandaTabState extends State<BerandaTab> {
       ).then((val) {
         _refresh();
         if (val == 'route_to_consultation') {
-          widget.onSwitchTab?.call(2);
+          widget.onSwitchTab?.call(99);
         }
       });
       return;
@@ -210,7 +210,7 @@ class _BerandaTabState extends State<BerandaTab> {
       ).then((val) {
         _refresh();
         if (val == 'route_to_consultation') {
-          widget.onSwitchTab?.call(2);
+          widget.onSwitchTab?.call(99);
         }
       });
     } else if (result == 'new') {
@@ -220,7 +220,7 @@ class _BerandaTabState extends State<BerandaTab> {
       ).then((val) {
         _refresh();
         if (val == 'route_to_consultation') {
-          widget.onSwitchTab?.call(2);
+          widget.onSwitchTab?.call(99);
         }
       });
     }
@@ -603,7 +603,7 @@ class _BerandaTabState extends State<BerandaTab> {
       _MenuItem(
         Icons.architecture_outlined,
         'Cari Arsitek',
-        () => widget.onSwitchTab?.call(2),
+        () => widget.onSwitchTab?.call(99),
       ),
       _MenuItem(Icons.timeline_rounded, 'Lihat Progress', _goToProgressTab),
     ];

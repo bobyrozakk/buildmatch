@@ -313,9 +313,8 @@ class _ChatListScreenState extends State<ChatListScreen> {
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      Flexible(
+                      Expanded(
                         child: Row(
-                          mainAxisSize: MainAxisSize.min,
                           children: [
                             Flexible(
                               child: Text(
@@ -330,11 +329,12 @@ class _ChatListScreenState extends State<ChatListScreen> {
                                 overflow: TextOverflow.ellipsis,
                               ),
                             ),
-                            const SizedBox(width: 6),
-                            _buildRoleBadge(chat.vendorRole),
+                            const SizedBox(width: 8),
+                            _buildRoleBadge(isClientSide ? chat.vendorRole : null),
                           ],
                         ),
                       ),
+                      const SizedBox(width: 8),
                       Text(
                         _formatTime(chat.updatedAt),
                         style: TextStyle(
