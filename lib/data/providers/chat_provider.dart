@@ -29,7 +29,7 @@ class ChatProvider extends ChangeNotifier {
       final response = await _supabase
           .from('chats')
           .select(
-            '*, client:client_id(name, avatar_url), vendor:vendor_id(name, avatar_url), messages(content, is_read, sender_id, created_at)',
+            '*, client:client_id(name, avatar_url, role), vendor:vendor_id(name, avatar_url, role), messages(content, is_read, sender_id, created_at)',
           )
           .or('client_id.eq.$userId,vendor_id.eq.$userId')
           .order('updated_at', ascending: false);
@@ -69,8 +69,10 @@ class ChatProvider extends ChangeNotifier {
           status: status,
           clientName: client['name'],
           clientAvatar: client['avatar_url'],
+          clientRole: client['role'],
           vendorName: vendor['name'],
           vendorAvatar: vendor['avatar_url'],
+          vendorRole: vendor['role'],
           lastMessage: lastMessage,
           unreadCount: unreadCount,
         );
@@ -93,9 +95,11 @@ class ChatProvider extends ChangeNotifier {
 
   /// Buat atau dapatkan chat yang sudah ada
   /// Client → status 'pending', arsitek/vendor harus terima dulu
+  /// Jika forceStatus diisi (misal 'accepted'), langsung diset status tersebut
   Future<String?> getOrCreateChat(
     String otherUserId, {
     String? projectId,
+    String? forceStatus,
   }) async {
     _isLoading = true;
     notifyListeners();
@@ -130,7 +134,7 @@ class ChatProvider extends ChangeNotifier {
 
       // Client memulai chat → status 'pending'
       // Arsitek/vendor yang memulai → langsung 'accepted'
-      final chatStatus = isVendorSide ? 'accepted' : 'pending';
+      final chatStatus = forceStatus ?? (isVendorSide ? 'accepted' : 'pending');
 
       final insertData = {
         'client_id': isVendorSide ? otherUserId : userId,

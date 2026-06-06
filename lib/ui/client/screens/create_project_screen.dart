@@ -79,17 +79,44 @@ class _CreateProjectScreenState extends State<CreateProjectScreen> {
       if (draft.latitude != null && draft.longitude != null) {
         _selectedLocation = LatLng(draft.latitude!, draft.longitude!);
       }
-      // Cari template tanah yang cocok berdasarkan size
+
+      // ── Restore pilihan luas tanah ──
       if (draft.landSize > 0) {
-        try {
-          _selectedLand = _landTemplates.firstWhere(
-            (t) => (t['size'] as double) == draft.landSize,
-          );
-          _minBudget = _selectedLand!['basePrice'] as double;
-        } catch (_) {
-          // Template tidak ditemukan — biarkan null
+        // Cek apakah ada dimensi custom yang tersimpan
+        if (draft.landCustomPanjang != null && draft.landCustomLebar != null) {
+          // Restore sebagai custom
+          _selectedLand = _customTemplate;
+          // Set controller setelah frame pertama agar listener tidak terpicu prematur
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            _customLandPanjangController.text =
+                draft.landCustomPanjang!.toStringAsFixed(
+                  draft.landCustomPanjang! % 1 == 0 ? 0 : 2,
+                );
+            _customLandLebarController.text =
+                draft.landCustomLebar!.toStringAsFixed(
+                  draft.landCustomLebar! % 1 == 0 ? 0 : 2,
+                );
+            // Hitung ulang budget minimum
+            final ls = draft.landCustomPanjang! * draft.landCustomLebar!;
+            setState(() {
+              _minBudget = ls * 0.6 * _hargaBoronganPerM2;
+              if (draft.budget > 0) _budget = draft.budget;
+            });
+          });
+        } else {
+          // Coba cocokkan dengan template standar
+          try {
+            _selectedLand = _landTemplates.firstWhere(
+              (t) => (t['size'] as double) == draft.landSize,
+            );
+            _minBudget = _selectedLand!['basePrice'] as double;
+          } catch (_) {
+            // Template tidak ditemukan — biarkan null
+          }
         }
       }
+
+      // Restore budget (harus setelah _minBudget di-set)
       if (draft.budget > 0) _budget = draft.budget;
     }
   }
@@ -460,7 +487,7 @@ class _CreateProjectScreenState extends State<CreateProjectScreen> {
       title: _titleController.text.trim(),
       description: _descController.text.trim(),
       budget: _budget,
-      landSize: (_selectedLand?['size'] as double?) ?? 0,
+      landSize: _effectiveLandSize,
       buildingSize: double.tryParse(_buildingSizeController.text) ?? 0,
       floors: _floors,
       bedrooms: _bedrooms,
@@ -469,6 +496,12 @@ class _CreateProjectScreenState extends State<CreateProjectScreen> {
       location: _locationController.text.trim(),
       latitude: _selectedLocation?.latitude,
       longitude: _selectedLocation?.longitude,
+      landCustomPanjang: _isCustomLand
+          ? (double.tryParse(_customLandPanjangController.text))
+          : null,
+      landCustomLebar: _isCustomLand
+          ? (double.tryParse(_customLandLebarController.text))
+          : null,
     );
 
     if (!mounted) return;
@@ -497,7 +530,7 @@ class _CreateProjectScreenState extends State<CreateProjectScreen> {
       title: _titleController.text.trim(),
       description: _descController.text.trim(),
       budget: _budget,
-      landSize: (_selectedLand?['size'] as double?) ?? 0,
+      landSize: _effectiveLandSize,
       buildingSize: double.tryParse(_buildingSizeController.text) ?? 0,
       floors: _floors,
       bedrooms: _bedrooms,
@@ -506,6 +539,12 @@ class _CreateProjectScreenState extends State<CreateProjectScreen> {
       location: _locationController.text.trim(),
       latitude: _selectedLocation?.latitude,
       longitude: _selectedLocation?.longitude,
+      landCustomPanjang: _isCustomLand
+          ? (double.tryParse(_customLandPanjangController.text))
+          : null,
+      landCustomLebar: _isCustomLand
+          ? (double.tryParse(_customLandLebarController.text))
+          : null,
     );
 
     if (!mounted) return;
@@ -634,10 +673,16 @@ class _CreateProjectScreenState extends State<CreateProjectScreen> {
   Future<void> _pickImage() async {
     final XFile? image = await _picker.pickImage(
       source: ImageSource.gallery,
-      imageQuality: 50,
+      imageQuality: 60,
     );
     if (image != null) {
-      setState(() => _selectedImageFile = File(image.path));
+      final file = File(image.path);
+      final sizeMB = file.lengthSync() / (1024 * 1024);
+      if (sizeMB > 5.0) {
+        if (mounted) _showError('Ukuran foto maksimal 5MB!');
+        return;
+      }
+      setState(() => _selectedImageFile = file);
     }
   }
 
@@ -1372,7 +1417,7 @@ class _CreateProjectScreenState extends State<CreateProjectScreen> {
           ),
           const SizedBox(height: 32),
           _buildSectionTitle(
-            "Foto Lokasi / Inspirasi (Terkompresi otomatis)",
+            "Foto Sampul Proyek (Maks 5MB, terkompresi otomatis)",
           ),
           _buildUploadBox(
             title: _selectedImageFile == null
@@ -1382,6 +1427,27 @@ class _CreateProjectScreenState extends State<CreateProjectScreen> {
             isUploaded: _selectedImageFile != null,
             onTap: _pickImage,
           ),
+          if (_selectedImageFile != null) ...[
+            const SizedBox(height: 8),
+            GestureDetector(
+              onTap: () => setState(() => _selectedImageFile = null),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.close_rounded, size: 14, color: Colors.red.shade400),
+                  const SizedBox(width: 4),
+                  Text(
+                    'Hapus foto',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: Colors.red.shade400,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
           const SizedBox(height: 16),
           _buildSectionTitle("Dokumen Pendukung / Denah (Max 2MB)"),
           _buildUploadBox(
@@ -1392,26 +1458,9 @@ class _CreateProjectScreenState extends State<CreateProjectScreen> {
             isUploaded: _selectedPdfFile != null,
             onTap: _pickPdf,
           ),
-          const SizedBox(height: 20),
-          Center(
-            child: InkWell(
-              onTap: _saveDraftAndConsultArchitect,
-              borderRadius: BorderRadius.circular(8),
-              child: const Padding(
-                padding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                child: Text(
-                  "🏛️  Hubungi & Buat Design dengan Arsitek",
-                  style: TextStyle(
-                    color: AppColors.primary,
-                    fontWeight: FontWeight.w600,
-                    decoration: TextDecoration.underline,
-                    fontSize: 13,
-                    letterSpacing: 0.2,
-                  ),
-                ),
-              ),
-            ),
-          ),
+          const SizedBox(height: 28),
+          // ── Tombol konsultasi arsitek — card premium ──
+          _buildArchitectConsultButton(),
           const SizedBox(height: 40),
         ],
       ),
@@ -2069,6 +2118,100 @@ class _CreateProjectScreenState extends State<CreateProjectScreen> {
               ),
             ),
           ],
+        ),
+      ),
+    );
+  }
+
+
+  /// Card premium untuk konsultasi arsitek
+  Widget _buildArchitectConsultButton() {
+    return Material(
+      color: Colors.transparent,
+      borderRadius: BorderRadius.circular(20),
+      child: InkWell(
+        onTap: _saveDraftAndConsultArchitect,
+        borderRadius: BorderRadius.circular(20),
+        splashColor: Colors.white.withOpacity(0.15),
+        child: Ink(
+          decoration: BoxDecoration(
+            gradient: const LinearGradient(
+              colors: [Color(0xFF8B2B0F), Color(0xFFC95E36)],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
+            borderRadius: BorderRadius.circular(20),
+            boxShadow: [
+              BoxShadow(
+                color: const Color(0xFF8B2B0F).withOpacity(0.35),
+                blurRadius: 14,
+                spreadRadius: 0,
+                offset: const Offset(0, 6),
+              ),
+            ],
+          ),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
+            child: Row(
+              children: [
+                // Icon arsitek dalam lingkaran putih semi-transparan
+                Container(
+                  width: 52,
+                  height: 52,
+                  decoration: BoxDecoration(
+                    color: Colors.white.withOpacity(0.18),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(
+                    Icons.architecture_rounded,
+                    size: 28,
+                    color: Colors.white,
+                  ),
+                ),
+                const SizedBox(width: 16),
+                // Teks judul + subjudul
+                const Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Konsultasi dengan Arsitek',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.w800,
+                          fontSize: 15,
+                          letterSpacing: 0.3,
+                        ),
+                      ),
+                      SizedBox(height: 4),
+                      Text(
+                        'Simpan draft & hubungi arsitek untuk desain profesional',
+                        style: TextStyle(
+                          color: Colors.white70,
+                          fontSize: 12,
+                          height: 1.4,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 8),
+                // Panah kanan
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withOpacity(0.15),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(
+                    Icons.arrow_forward_rounded,
+                    color: Colors.white,
+                    size: 18,
+                  ),
+                ),
+              ],
+            ),
+          ),
         ),
       ),
     );

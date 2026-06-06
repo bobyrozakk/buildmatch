@@ -44,7 +44,7 @@ class ProjectProvider extends ChangeNotifier {
       String? imageUrl;
       String? pdfUrl;
 
-      // 1. Upload gambar inspirasi jika ada
+      // 1. Upload foto sampul jika ada
       if (imageFile != null) {
         final imageExt = imageFile.path.split('.').last;
         final imageName =
@@ -114,6 +114,8 @@ class ProjectProvider extends ChangeNotifier {
     String location = '',
     double? latitude,
     double? longitude,
+    double? landCustomPanjang,
+    double? landCustomLebar,
   }) async {
     _isLoading = true;
     notifyListeners();
@@ -137,6 +139,8 @@ class ProjectProvider extends ChangeNotifier {
         'client_id': userId,
         'image_urls': [],
         'status': 'draft',
+        if (landCustomPanjang != null) 'land_custom_panjang': landCustomPanjang,
+        if (landCustomLebar != null) 'land_custom_lebar': landCustomLebar,
       };
 
       if (draftId != null && draftId.isNotEmpty) {

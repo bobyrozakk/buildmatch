@@ -5,6 +5,8 @@ import '../../../core/constants/colors.dart';
 import '../../../core/utils/formatters.dart';
 import '../../../data/models/bid_model.dart';
 import '../../../data/providers/project_provider.dart';
+import '../../../data/providers/chat_provider.dart';
+import '../../shared/screens/contractor_chat_detail_screen.dart';
 
 /// Screen client untuk melihat detail satu penawaran dari kontraktor.
 /// Menampilkan: harga vs budget, estimasi bulan, RAB, notes kontraktor,
@@ -153,6 +155,59 @@ class BidDetailScreen extends StatelessWidget {
     }
   }
 
+  Future<void> _handleContactContractor(BuildContext context) async {
+    final chatProvider = Provider.of<ChatProvider>(context, listen: false);
+    
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => const Center(
+        child: CircularProgressIndicator(color: AppColors.primary),
+      ),
+    );
+
+    try {
+      final chatId = await chatProvider.getOrCreateChat(
+        bid.vendorId,
+        projectId: bid.projectId,
+        forceStatus: 'accepted',
+      );
+
+      if (context.mounted) {
+        Navigator.pop(context); // Tutup loading
+        if (chatId != null) {
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) => ContractorChatDetailScreen(
+                chatId: chatId,
+                receiverName: bid.vendorName ?? 'Kontraktor',
+                receiverId: bid.vendorId,
+              ),
+            ),
+          );
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Gagal membuat ruang obrolan.'),
+              backgroundColor: Colors.redAccent,
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      if (context.mounted) {
+        Navigator.pop(context); // Tutup loading
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Terjadi kesalahan: $e'),
+            backgroundColor: Colors.redAccent,
+          ),
+        );
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final isPending = bid.status == 'pending';
@@ -180,20 +235,23 @@ class BidDetailScreen extends StatelessWidget {
         ],
       ),
 
-      // ── Tombol sticky di bawah (hanya jika pending DAN proyek belum in_progress) ──
-      bottomNavigationBar: isPending && !isProjectInProgress
-          ? Container(
-              padding: const EdgeInsets.fromLTRB(20, 12, 20, 28),
-              decoration: const BoxDecoration(
-                color: Colors.white,
-                boxShadow: [
-                  BoxShadow(
-                      color: Colors.black12,
-                      blurRadius: 12,
-                      offset: Offset(0, -4))
-                ],
-              ),
-              child: Row(
+      // ── Tombol sticky di bawah ──
+      bottomNavigationBar: Container(
+        padding: const EdgeInsets.fromLTRB(20, 12, 20, 28),
+        decoration: const BoxDecoration(
+          color: Colors.white,
+          boxShadow: [
+            BoxShadow(
+                color: Colors.black12,
+                blurRadius: 12,
+                offset: Offset(0, -4))
+          ],
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (isPending && !isProjectInProgress) ...[
+              Row(
                 children: [
                   Expanded(
                     child: OutlinedButton.icon(
@@ -237,8 +295,30 @@ class BidDetailScreen extends StatelessWidget {
                   ),
                 ],
               ),
-            )
-          : null,
+              const SizedBox(height: 12),
+            ],
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton.icon(
+                onPressed: () => _handleContactContractor(context),
+                icon: const Icon(Icons.chat_rounded, size: 18, color: Colors.white),
+                label: const Text(
+                  'Hubungi Kontraktor',
+                  style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white),
+                ),
+                style: ElevatedButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  backgroundColor: AppColors.primary,
+                  elevation: 0,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
 
       body: SingleChildScrollView(
         padding: const EdgeInsets.fromLTRB(20, 8, 20, 32),

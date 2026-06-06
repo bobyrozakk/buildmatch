@@ -20,6 +20,8 @@ class ProjectModel {
   final int progressPercent;
   final DateTime? createdAt;
   final String? clientName; // Joined from profiles table
+  final double? landCustomPanjang; // Dimensi custom tanah: panjang (meter)
+  final double? landCustomLebar;   // Dimensi custom tanah: lebar (meter)
 
   const ProjectModel({
     this.id,
@@ -42,6 +44,8 @@ class ProjectModel {
     this.progressPercent = 0,
     this.createdAt,
     this.clientName,
+    this.landCustomPanjang,
+    this.landCustomLebar,
   });
 
   // ────────────────────────────────────────────────────
@@ -80,6 +84,8 @@ class ProjectModel {
           ? DateTime.tryParse(json['created_at'] as String)
           : null,
       clientName: clientName,
+      landCustomPanjang: (json['land_custom_panjang'] as num?)?.toDouble(),
+      landCustomLebar: (json['land_custom_lebar'] as num?)?.toDouble(),
     );
   }
 
@@ -107,6 +113,8 @@ class ProjectModel {
       if (referencePdfUrl != null) 'reference_pdf_url': referencePdfUrl,
       if (status != null) 'status': status,
       'progress_percent': progressPercent,
+      if (landCustomPanjang != null) 'land_custom_panjang': landCustomPanjang,
+      if (landCustomLebar != null) 'land_custom_lebar': landCustomLebar,
     };
   }
 
@@ -136,6 +144,8 @@ class ProjectModel {
     int? progressPercent,
     DateTime? createdAt,
     String? clientName,
+    double? landCustomPanjang,
+    double? landCustomLebar,
   }) {
     return ProjectModel(
       id: id ?? this.id,
@@ -158,6 +168,8 @@ class ProjectModel {
       progressPercent: progressPercent ?? this.progressPercent,
       createdAt: createdAt ?? this.createdAt,
       clientName: clientName ?? this.clientName,
+      landCustomPanjang: landCustomPanjang ?? this.landCustomPanjang,
+      landCustomLebar: landCustomLebar ?? this.landCustomLebar,
     );
   }
 

@@ -14,6 +14,8 @@ class ChatModel {
   final String? vendorName;
   final String? clientAvatar;
   final String? vendorAvatar;
+  final String? clientRole;
+  final String? vendorRole;
   final String? lastMessage;
   final int unreadCount;
 
@@ -29,6 +31,8 @@ class ChatModel {
     this.vendorName,
     this.clientAvatar,
     this.vendorAvatar,
+    this.clientRole,
+    this.vendorRole,
     this.lastMessage,
     this.unreadCount = 0,
   });
@@ -46,6 +50,8 @@ class ChatModel {
       vendorName: json['vendor_name'] as String?,
       clientAvatar: json['client_avatar'] as String?,
       vendorAvatar: json['vendor_avatar'] as String?,
+      clientRole: json['client_role'] as String?,
+      vendorRole: json['vendor_role'] as String?,
       lastMessage: json['last_message'] as String?,
       unreadCount: json['unread_count'] as int? ?? 0,
     );

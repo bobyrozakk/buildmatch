@@ -1,25 +1,52 @@
-# Walkthrough: Perbaikan Slider & Redirect Draft ke Konsultasi Arsitek
+# Walkthrough: Fitur Chat Klien ↔ Kontraktor
 
-Pekerjaan untuk memperbaiki crash pada slider anggaran (budget) ketika melakukan spam input serta penambahan tautan redirect draf proyek ke konsultasi arsitek telah selesai.
+Fitur chat antara Klien dan Kontraktor telah selesai diimplementasikan secara menyeluruh tanpa mengubah skema tabel database utama Supabase (menggunakan kueri dinamis join profiles role).
 
 ## Perubahan yang Dilakukan
 
-1. **Perbaikan Crash Slider Anggaran (Reaktif & Aman):**
-   - **File:** [create_project_screen.dart](file:///c:/KuliahRifat/semester4/pbl/buildmatch/lib/ui/client/screens/create_project_screen.dart)
-   - **Penyebab Bug:** Ketika user memasukkan luas tanah custom yang sangat besar (panjang/lebar di atas 200m yang dipotong menjadi 200m), anggaran minimum (`effectiveMin`) melonjak hingga **Rp 96 Miliar** (atau **9.6 Miliar**). Hal ini memaksa nilai `_budget` ikut melonjak ke angka tersebut. Namun, saat input diperbaiki/dikecilkan, nilai `_budget` tetap berada di Rp 96 Miliar, padahal batas maximum budget baru (`_maxBudget`) ikut turun menjadi **Rp 20 Miliar**. Akibatnya, parameter Slider bernilai `value = 96 Miliar`, `min = 9.6 Miliar`, dan `max = 20 Miliar`, sehingga memicu Flutter assertion crash (`value <= max`).
-   - **Solusi:**
-     - Menambahkan validasi reaktif di dalam `_onCustomLandChanged()` untuk melakukan *clamping* otomatis jika nilai `_budget` yang lama melebihi batas maximum budget yang baru dihitung.
-     - Melakukan *guards clamping* secara langsung di dalam fungsi pembangun slider (`_buildBudgetCard()`) dengan memaksa nilai `value` selalu berada di antara `min` dan `max` yang valid, menjamin tidak akan terjadi red-screen assertion crash meskipun ada jeda waktu reaktif keyboard.
+1. **Model Chat (`chat_model.dart`)**:
+   - Menambahkan field `clientRole` dan `vendorRole` pada [chat_model.dart](file:///c:/KuliahRifat/semester4/pbl/buildmatch/lib/data/models/chat_model.dart) untuk menyimpan peran pengguna dari tabel `profiles`.
+   - Mengupdate method `ChatModel.fromJson` agar mengambil nilai role dari objek join profil `client` dan `vendor`.
 
-2. **Penambahan Link Hubungi Arsitek (Redirect Draft):**
-   - **File:** [create_project_screen.dart](file:///c:/KuliahRifat/semester4/pbl/buildmatch/lib/ui/client/screens/create_project_screen.dart)
-     - Menambahkan fungsi `_saveDraftAndConsultArchitect()` untuk memicu penyimpanan draf proyek ke Supabase.
-     - Menambahkan alert dialog sukses menggunakan `showDialog` yang menginformasikan bahwa proyek berhasil disimpan ke draft sebelum diarahkan.
-     - Menyediakan link berformat huruf href bergaris bawah `"Hubungi arsitek dan buat design yang kamu inginkan"` di Step 4 (di bawah upload PDF). Ketika ditekan, draf disimpan dan mengembalikan string rute `'route_to_consultation'`.
-   - **File:** [beranda_tab.dart](file:///c:/KuliahRifat/semester4/pbl/buildmatch/lib/ui/client/tabs/beranda_tab.dart) & [progress_tab.dart](file:///c:/KuliahRifat/semester4/pbl/buildmatch/lib/ui/client/tabs/progress_tab.dart)
-     - Menambahkan parameter `onSwitchTab` ke tab draf/progress untuk mendengarkan kembalian dari pembuatan draf. Jika menerima `'route_to_consultation'`, tab navigasi utama akan otomatis beralih ke tab Konsultasi (index 2).
-   - **File:** [main_nav.dart](file:///c:/KuliahRifat/semester4/pbl/buildmatch/lib/ui/shared/screens/main_nav.dart)
-     - Mengubah instansiasi `ProgressTab` untuk mengirimkan callback `onSwitchTab` agar dapat meredirect user secara global.
+2. **Provider Chat (`chat_provider.dart`)**:
+   - Memperbarui method `fetchChats` pada [chat_provider.dart](file:///c:/KuliahRifat/semester4/pbl/buildmatch/lib/data/providers/chat_provider.dart) untuk mengambil field `role` dari join profil client dan vendor di Supabase.
+   - Menambahkan parameter opsional `forceStatus` pada method `getOrCreateChat()` agar chat dapat diinisialisasi langsung dengan status `'accepted'` (sehingga chat room langsung aktif tanpa proses persetujuan arsitek).
 
-## Uji Coba & Hasil Verifikasi
-Analisis struktur kode statis memastikan penanganan state di Flutter berjalan aman tanpa kendala referensi. Penanganan bounds pada widget Slider dipastikan mathematically safe.
+3. **Room Chat Kontraktor (`contractor_chat_detail_screen.dart`)**:
+   - Membuat screen baru [contractor_chat_detail_screen.dart](file:///c:/KuliahRifat/semester4/pbl/buildmatch/lib/ui/shared/screens/contractor_chat_detail_screen.dart) khusus untuk obrolan dengan kontraktor.
+   - Menyederhanakan UI dengan hanya menyisakan pesan teks, lampiran gambar, dan lampiran file PDF/dokumen.
+   - Menghapus fungsionalitas penawaran arsitek, pengiriman draf desain, term pembayaran, status nego, dan banner accept/reject permintaan obrolan.
+   - Mempertahankan visual design premium yang sama persis seperti room chat arsitek (warna gelembung, format waktu, tick read receipt, popup pemilihan berkas, limitasi ukuran berkas 5MB, dan kompresi gambar 70% quality).
+
+4. **Detail Penawaran Kontraktor (`bid_detail_screen.dart`)**:
+   - Memodifikasi [bid_detail_screen.dart](file:///c:/KuliahRifat/semester4/pbl/buildmatch/lib/ui/client/screens/bid_detail_screen.dart) untuk menampilkan tombol **Hubungi Kontraktor** di bagian paling bawah.
+   - Tombol ini diposisikan di dalam `bottomNavigationBar` sehingga selalu melayang (sticky) baik saat bid berstatus pending, diterima, maupun saat proyek sudah berjalan.
+   - Menambahkan method `_handleContactContractor` untuk menginisiasi chat menggunakan `getOrCreateChat` dengan `forceStatus: 'accepted'`, menampilkan dialog loading, dan menavigasi klien ke `ContractorChatDetailScreen`.
+
+5. **Visual Badge & Rute Navigasi Inbox (`consultasi_tab.dart` & `chat_list_screen.dart`)**:
+   - Memodifikasi [consultasi_tab.dart](file:///c:/KuliahRifat/semester4/pbl/buildmatch/lib/ui/client/tabs/consultasi_tab.dart) (Inbox sisi klien) dan [chat_list_screen.dart](file:///c:/KuliahRifat/semester4/pbl/buildmatch/lib/ui/shared/screens/chat_list_screen.dart) (Inbox sisi vendor).
+   - Menambahkan method pembantu `_buildRoleBadge` untuk menampilkan chip penanda berlabel **Arsitek** (warna biru lembut) atau **Kontraktor** (warna oranye lembut) di sebelah nama vendor pada card chat list.
+   - Memperbarui rute navigasi ketika card chat diklik: jika vendor teridentifikasi memiliki role `'vendor'` atau `'kontraktor'`, maka navigasi diarahkan ke `ContractorChatDetailScreen`. Jika tidak, akan diarahkan ke `ChatDetailScreen` arsitek.
+
+## Panduan Verifikasi Manual
+
+### 1. Memulai Chat dari Detail Penawaran Kontraktor
+- Masuk sebagai **Client**.
+- Buka detail proyek Anda yang telah diajukan penawaran (bidding) oleh kontraktor.
+- Masuk ke detail penawaran kontraktor tersebut dengan menekan **Lihat Detail**.
+- Scroll ke bawah dan tekan tombol **Hubungi Kontraktor**.
+- Pastikan loading indicator muncul sejenak dan Anda langsung dialihkan ke room chat dengan status obrolan aktif.
+
+### 2. Mengirim Pesan dan Lampiran
+- Di room chat kontraktor, coba kirim pesan teks.
+- Tekan tombol **+** (Lampiran) di sebelah kiri input text.
+- Pilih opsi **Foto / Galeri** (pastikan gambar dikirim dengan terkompresi) atau pilih **Dokumen / File** (pastikan file format PDF/dokumen terkirim dengan batasan ukuran 5MB).
+- Pastikan berkas terkirim dan tersimpan di bucket Supabase `documents`.
+
+### 3. Membuka Kembali Lewat Tab Konsultasi > Inbox
+- Kembali ke beranda aplikasi.
+- Buka tab **Konsultasi** -> sub-tab **Inbox**.
+- Cari percakapan dengan kontraktor tersebut.
+- Pastikan ada badge chip berwarna oranye bertuliskan **Kontraktor** di ujung nama kontraktor tersebut.
+- Ketuk card chat tersebut dan pastikan Anda diarahkan kembali ke `ContractorChatDetailScreen` (room chat kontraktor sederhana).
+- Ketuk card chat arsitek lain dan pastikan Anda tetap diarahkan ke `ChatDetailScreen` (room chat arsitek lengkap dengan opsi pembayaran/penawaran).

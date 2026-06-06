@@ -1,9 +1,9 @@
-# Tasks
+# Tasks - Fitur Chat Klien ↔ Kontraktor
 
-- [x] Daftarkan folder assets tipe rumah di `pubspec.yaml`
-- [x] Ubah pilihan Tipe Rumah di Step 2 dari ChoiceChip ke Grid Card 2 Kolom dengan preview gambar
-- [x] Pindahkan input Luas Bangunan dari Step 2 ke Step 3 (setelah input luas tanah, sebelum budget)
-- [x] Implementasikan batas (limit) input luas tanah custom (maksimal 200m untuk panjang/lebar secara reaktif saat mengetik)
-- [x] Implementasikan batas (limit) input luas bangunan (maksimal min(90% luas tanah, 20.000m² secara reaktif saat mengetik))
-- [x] Perbarui validasi stepper (`_validateStep2` dan `_validateStep3`)
-- [x] Uji/verifikasi kode
+- [x] Modifikasi `ChatModel` di `lib/data/models/chat_model.dart` (tambah `clientRole` & `vendorRole`)
+- [x] Modifikasi `ChatProvider` di `lib/data/providers/chat_provider.dart` (fetch metadata role, status override)
+- [x] Buat screen `ContractorChatDetailScreen` di `lib/ui/shared/screens/contractor_chat_detail_screen.dart`
+- [x] Modifikasi `BidDetailScreen` di `lib/ui/client/screens/bid_detail_screen.dart` (tambah tombol Hubungi Kontraktor)
+- [x] Modifikasi `ConsultasiTab` di `lib/ui/client/tabs/consultasi_tab.dart` (tambah badge peran & percabangan navigasi)
+- [x] Modifikasi `ChatListScreen` di `lib/ui/shared/screens/chat_list_screen.dart` (tambah badge peran & percabangan navigasi)
+- [x] Verifikasi dan uji fungsionalitas chat (Selesai diimplementasikan secara statis, siap untuk diuji secara manual)

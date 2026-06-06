@@ -9,6 +9,7 @@ import '../../../data/models/chat_model.dart';
 import '../../../data/providers/chat_provider.dart';
 import '../../../data/providers/architect_provider.dart';
 import '../../shared/screens/chat_detail_screen.dart';
+import '../../shared/screens/contractor_chat_detail_screen.dart';
 import '../screens/architect_detail_screen.dart';
 
 class ConsultasiTab extends StatefulWidget {
@@ -233,6 +234,41 @@ class _ConsultasiTabState extends State<ConsultasiTab>
     );
   }
 
+  Widget _buildRoleBadge(String? role) {
+    if (role == null) return const SizedBox.shrink();
+    final isContractor = role == 'vendor' || role == 'kontraktor';
+    final isArchitect = role == 'architect' || role == 'arsitek';
+    if (!isContractor && !isArchitect) return const SizedBox.shrink();
+
+    final String label = isContractor ? 'Kontraktor' : 'Arsitek';
+    final Color bgColor = isContractor 
+        ? const Color(0xFFFDF2E9) // soft orange/brown
+        : const Color(0xFFEBF5FB); // soft blue
+    final Color textColor = isContractor 
+        ? const Color(0xFFD35400) // dark orange
+        : const Color(0xFF2980B9); // dark blue
+    final Color borderColor = isContractor
+        ? const Color(0xFFF5CBA7)
+        : const Color(0xFFAED6F1);
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1.5),
+      decoration: BoxDecoration(
+        color: bgColor,
+        borderRadius: BorderRadius.circular(6),
+        border: Border.all(color: borderColor, width: 0.5),
+      ),
+      child: Text(
+        label,
+        style: TextStyle(
+          color: textColor,
+          fontSize: 9,
+          fontWeight: FontWeight.bold,
+        ),
+      ),
+    );
+  }
+
   Widget _buildChatTile({
     required ChatModel chat,
     required String displayName,
@@ -245,16 +281,24 @@ class _ConsultasiTabState extends State<ConsultasiTab>
 
     return GestureDetector(
       onTap: () async {
+        final isContractor = chat.vendorRole == 'vendor' || chat.vendorRole == 'kontraktor';
         await Navigator.push(
           context,
           MaterialPageRoute(
-            builder: (_) => ChatDetailScreen(
-              chatId: chat.id,
-              receiverName: displayName,
-              receiverAvatar: displayAvatar,
-              receiverId: isClientSide ? chat.vendorId : chat.clientId,
-              chatStatus: chat.status,
-            ),
+            builder: (_) => isContractor
+                ? ContractorChatDetailScreen(
+                    chatId: chat.id,
+                    receiverName: displayName,
+                    receiverAvatar: displayAvatar,
+                    receiverId: isClientSide ? chat.vendorId : chat.clientId,
+                  )
+                : ChatDetailScreen(
+                    chatId: chat.id,
+                    receiverName: displayName,
+                    receiverAvatar: displayAvatar,
+                    receiverId: isClientSide ? chat.vendorId : chat.clientId,
+                    chatStatus: chat.status,
+                  ),
           ),
         );
         chatProv.fetchChats();
@@ -297,17 +341,26 @@ class _ConsultasiTabState extends State<ConsultasiTab>
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       Flexible(
-                        child: Text(
-                          displayName,
-                          style: TextStyle(
-                            fontWeight: hasUnread
-                                ? FontWeight.bold
-                                : FontWeight.w600,
-                            fontSize: 15,
-                            color: Colors.black87,
-                          ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Flexible(
+                              child: Text(
+                                displayName,
+                                style: TextStyle(
+                                  fontWeight: hasUnread
+                                      ? FontWeight.bold
+                                      : FontWeight.w600,
+                                  fontSize: 15,
+                                  color: Colors.black87,
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                            const SizedBox(width: 6),
+                            _buildRoleBadge(chat.vendorRole),
+                          ],
                         ),
                       ),
                       Text(
