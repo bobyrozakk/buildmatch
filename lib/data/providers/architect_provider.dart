@@ -699,25 +699,44 @@ class ArchitectProvider extends ChangeNotifier {
     required String description,
     required int revisions,
     required int durationDays,
+    bool isSplitPayment = false,
+    int dpPercentage = 50,
+    String? chatId,
   }) async {
     try {
       final userId = _supabase.auth.currentUser?.id;
       if (userId == null) return null;
 
-      // 1. Create a dummy/active project if no project exists in the chat.
-      // In a real flow, a chat has a project_id. If not, we find one or create one.
+      // 1. Dapatkan project_id dari chat jika sudah ada.
+      // Jika belum ada, buat project konsultasi khusus baru dan asosiasikan ke chat tersebut.
       String projectId = "";
-      final activeProjects = await _supabase
-          .from('projects')
-          .select('id')
-          .eq('client_id', clientId)
-          .neq('status', 'draft')
-          .limit(1);
+      if (chatId != null) {
+        final chatRow = await _supabase
+            .from('chats')
+            .select('project_id')
+            .eq('id', chatId)
+            .maybeSingle();
+        if (chatRow != null && chatRow['project_id'] != null) {
+          projectId = chatRow['project_id'] as String;
+        }
+      }
 
-      if (activeProjects.isNotEmpty) {
-        projectId = activeProjects.first['id'] as String;
-      } else {
-        // Create an automated project placeholder
+      if (projectId.isNotEmpty) {
+        final projRow = await _supabase
+            .from('projects')
+            .select('status')
+            .eq('id', projectId)
+            .maybeSingle();
+        if (projRow != null) {
+          final projStatus = projRow['status'] as String? ?? 'open';
+          if (projStatus == 'completed' || projStatus == 'cancelled') {
+            projectId = "";
+          }
+        }
+      }
+
+      if (projectId.isEmpty) {
+        // Buat project placeholder konsultasi baru
         final response = await _supabase.from('projects').insert({
           'title': 'Konsultasi Desain dengan Arsitek',
           'description': 'Proyek konsultasi dan desain perumahan',
@@ -729,6 +748,13 @@ class ArchitectProvider extends ChangeNotifier {
           'longitude': 106.8456,
         }).select('id').single();
         projectId = response['id'] as String;
+
+        // Hubungkan chat dengan project konsultasi baru ini
+        if (chatId != null) {
+          await _supabase.from('chats').update({
+            'project_id': projectId,
+          }).eq('id', chatId);
+        }
       }
 
       // 2. Pack title, revisions count and description into bid's message as JSON
@@ -737,6 +763,8 @@ class ArchitectProvider extends ChangeNotifier {
         'description': description,
         'revisions': revisions,
         'duration_days': durationDays,
+        'is_split_payment': isSplitPayment,
+        'dp_percentage': dpPercentage,
       });
 
       // 3. Insert into bids table
@@ -751,19 +779,49 @@ class ArchitectProvider extends ChangeNotifier {
 
       final bidId = bidResponse['id'] as String;
 
-      // 4. Automatically create the 100% payment term from the arsitek side!
+      // 4. Automatically create payment term(s) from the arsitek side!
       // This bypasses client-side RLS insert constraints.
-      await _supabase.from('payment_terms').insert({
-        'project_id': projectId,
-        'bid_id': bidId,
-        'vendor_id': userId,
-        'name': 'Pembayaran Desain',
-        'percentage': 100.0,
-        'amount': price,
-        'status': 'pending',
-        'order_index': 1,
-        'notes': 'Pembayaran penuh untuk jasa desain arsitektur',
-      });
+      if (isSplitPayment) {
+        final dpAmount = price * dpPercentage / 100;
+        final pelunasanAmount = price - dpAmount;
+
+        await _supabase.from('payment_terms').insert([
+          {
+            'project_id': projectId,
+            'bid_id': bidId,
+            'vendor_id': userId,
+            'name': 'DP ($dpPercentage%)',
+            'percentage': dpPercentage.toDouble(),
+            'amount': dpAmount,
+            'status': 'pending',
+            'order_index': 1,
+            'notes': 'DP awal sebelum pengerjaan proyek dimulai',
+          },
+          {
+            'project_id': projectId,
+            'bid_id': bidId,
+            'vendor_id': userId,
+            'name': 'Pelunasan',
+            'percentage': (100 - dpPercentage).toDouble(),
+            'amount': pelunasanAmount,
+            'status': 'pending',
+            'order_index': 2,
+            'notes': 'Pelunasan sisa pembayaran setelah desain disetujui',
+          }
+        ]);
+      } else {
+        await _supabase.from('payment_terms').insert({
+          'project_id': projectId,
+          'bid_id': bidId,
+          'vendor_id': userId,
+          'name': 'Pembayaran Desain',
+          'percentage': 100.0,
+          'amount': price,
+          'status': 'pending',
+          'order_index': 1,
+          'notes': 'Pembayaran penuh untuk jasa desain arsitektur',
+        });
+      }
 
       return bidId;
     } catch (e) {
@@ -834,6 +892,8 @@ class ArchitectProvider extends ChangeNotifier {
     required String description,
     required int revisions,
     required int durationDays,
+    bool isSplitPayment = false,
+    int dpPercentage = 50,
   }) async {
     try {
       final packedMessage = jsonEncode({
@@ -841,26 +901,80 @@ class ArchitectProvider extends ChangeNotifier {
         'description': description,
         'revisions': revisions,
         'duration_days': durationDays,
+        'is_split_payment': isSplitPayment,
+        'dp_percentage': dpPercentage,
       });
+
+      // 1. Ambil detail bid yang ada untuk mendapatkan project_id dan vendor_id
+      final bidData = await _supabase
+          .from('bids')
+          .select('project_id, vendor_id')
+          .eq('id', bidId)
+          .single();
+      final projectId = bidData['project_id'] as String;
+      final vendorId = bidData['vendor_id'] as String;
+
+      // 2. Update data bid
       await _supabase.from('bids').update({
         'price': price,
         'message': packedMessage,
       }).eq('id', bidId);
 
-      // Sync the price with payment term amount
-      await _supabase.from('payment_terms').update({
-        'amount': price,
-      }).eq('bid_id', bidId);
+      // 3. Hapus dan buat kembali payment terms
+      await _supabase.from('payment_terms').delete().eq('bid_id', bidId);
 
-      // Update the chat message content in messages table
+      if (isSplitPayment) {
+        final dpAmount = price * dpPercentage / 100;
+        final pelunasanAmount = price - dpAmount;
+
+        await _supabase.from('payment_terms').insert([
+          {
+            'project_id': projectId,
+            'bid_id': bidId,
+            'vendor_id': vendorId,
+            'name': 'DP ($dpPercentage%)',
+            'percentage': dpPercentage.toDouble(),
+            'amount': dpAmount,
+            'status': 'pending',
+            'order_index': 1,
+            'notes': 'DP awal sebelum pengerjaan proyek dimulai',
+          },
+          {
+            'project_id': projectId,
+            'bid_id': bidId,
+            'vendor_id': vendorId,
+            'name': 'Pelunasan',
+            'percentage': (100 - dpPercentage).toDouble(),
+            'amount': pelunasanAmount,
+            'status': 'pending',
+            'order_index': 2,
+            'notes': 'Pelunasan sisa pembayaran setelah desain disetujui',
+          }
+        ]);
+      } else {
+        await _supabase.from('payment_terms').insert({
+          'project_id': projectId,
+          'bid_id': bidId,
+          'vendor_id': vendorId,
+          'name': 'Pembayaran Desain',
+          'percentage': 100.0,
+          'amount': price,
+          'status': 'pending',
+          'order_index': 1,
+          'notes': 'Pembayaran penuh untuk jasa desain arsitektur',
+        });
+      }
+
+      // 4. Update the chat message content in messages table
       final newContent = jsonEncode({
         'type': 'offer',
         'bid_id': bidId,
         'title': title,
         'price': price,
         'revisions': revisions,
-        'description': description,
         'duration_days': durationDays,
+        'is_split_payment': isSplitPayment,
+        'dp_percentage': dpPercentage,
         'status': 'pending',
       });
 

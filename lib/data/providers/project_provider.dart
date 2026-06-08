@@ -971,13 +971,14 @@ class ProjectProvider extends ChangeNotifier {
     _isLoading = true;
     notifyListeners();
     try {
-      // 1. Ambil project_id dari payment_term
+      // 1. Ambil project_id dan bid_id dari payment_term
       final termData = await _supabase
           .from('payment_terms')
-          .select('project_id')
+          .select('project_id, bid_id')
           .eq('id', termId)
           .single();
       final projectId = termData['project_id'] as String;
+      final bidId = termData['bid_id'] as String?;
 
       // 2. Update status termin tersebut menjadi 'completed'
       await _supabase
@@ -988,11 +989,17 @@ class ProjectProvider extends ChangeNotifier {
           })
           .eq('id', termId);
 
-      // 3. Ambil semua termin proyek untuk menghitung akumulasi persentase yang selesai (completed)
-      final termsList = await _supabase
+      // 3. Ambil termin proyek milik bid ini untuk menghitung akumulasi persentase yang selesai (completed)
+      var query = _supabase
           .from('payment_terms')
           .select('status, percentage')
           .eq('project_id', projectId);
+
+      if (bidId != null) {
+        query = query.eq('bid_id', bidId);
+      }
+
+      final termsList = await query;
 
       double completedPct = 0.0;
       for (final t in termsList) {
@@ -1003,11 +1010,14 @@ class ProjectProvider extends ChangeNotifier {
         }
       }
 
-      // 4. Update progress_percent pada proyek di database
+      // 4. Update progress_percent pada proyek di database dengan clamping maksimal 100%
+      final int progressToUpdate = completedPct.round().clamp(0, 100);
+      final bool isProjectFinished = progressToUpdate >= 100;
       await _supabase
           .from('projects')
           .update({
-            'progress_percent': completedPct.round(),
+            'progress_percent': progressToUpdate,
+            if (isProjectFinished) 'status': 'completed',
           })
           .eq('id', projectId);
 
@@ -1186,9 +1196,18 @@ class ProjectProvider extends ChangeNotifier {
           .from('payment_terms')
           .select('*')
           .eq('bid_id', bidId)
-          .maybeSingle();
-      if (response == null) return null;
-      return PaymentTermModel.fromJson(response);
+          .order('order_index', ascending: true);
+      
+      if (response == null || (response as List).isEmpty) return null;
+      final terms = List<Map<String, dynamic>>.from(response)
+          .map((e) => PaymentTermModel.fromJson(e))
+          .toList();
+      
+      // Kembalikan termin pertama yang belum selesai (bukan completed)
+      return terms.firstWhere(
+        (t) => !t.isCompleted,
+        orElse: () => terms.last,
+      );
     } catch (e) {
       debugPrint('Error fetch payment term by bid: $e');
       return null;
@@ -1247,17 +1266,51 @@ class ProjectProvider extends ChangeNotifier {
     _isLoading = true;
     notifyListeners();
     try {
-      // 1. Konfirmasi payment term
-      await _supabase.from('payment_terms').update({
-        'status': 'confirmed',
-        'confirmed_at': DateTime.now().toIso8601String(),
-      }).eq('id', termId);
+      // Ambil seluruh payment terms untuk bid ini
+      final termsResponse = await _supabase
+          .from('payment_terms')
+          .select('*')
+          .eq('bid_id', bidId)
+          .order('order_index', ascending: true);
+      
+      final List<Map<String, dynamic>> terms = List<Map<String, dynamic>>.from(termsResponse);
+      final currentTerm = terms.firstWhere((t) => t['id'] == termId);
+      final int orderIndex = currentTerm['order_index'] as int? ?? 1;
+      
+      // Cek apakah termin ini merupakan termin terakhir
+      final bool isLastTerm = terms.every((t) => (t['order_index'] as int? ?? 1) <= orderIndex);
 
-      // 2. Update bid status ke accepted
-      await _supabase.from('bids').update({'status': 'accepted'}).eq('id', bidId);
+      if (isLastTerm && terms.length > 1) {
+        // Ini termin Pelunasan (terakhir dalam split payment)
+        // 1. Konfirmasi dan langsung selesaikan termin ini
+        await _supabase.from('payment_terms').update({
+          'status': 'completed',
+          'confirmed_at': DateTime.now().toIso8601String(),
+          'progress_reviewed_at': DateTime.now().toIso8601String(),
+        }).eq('id', termId);
 
-      // 3. Update project status ke in_progress
-      await _supabase.from('projects').update({'status': 'in_progress'}).eq('id', projectId);
+        // 2. Update bid status ke accepted
+        await _supabase.from('bids').update({'status': 'accepted'}).eq('id', bidId);
+
+        // 3. Update status project ke completed
+        await _supabase.from('projects').update({
+          'status': 'completed',
+          'progress_percent': 100,
+        }).eq('id', projectId);
+      } else {
+        // Ini DP awal atau termin tunggal biasa
+        // 1. Konfirmasi payment term
+        await _supabase.from('payment_terms').update({
+          'status': 'confirmed',
+          'confirmed_at': DateTime.now().toIso8601String(),
+        }).eq('id', termId);
+
+        // 2. Update bid status ke accepted
+        await _supabase.from('bids').update({'status': 'accepted'}).eq('id', bidId);
+
+        // 3. Update project status ke in_progress
+        await _supabase.from('projects').update({'status': 'in_progress'}).eq('id', projectId);
+      }
 
       _isLoading = false;
       notifyListeners();

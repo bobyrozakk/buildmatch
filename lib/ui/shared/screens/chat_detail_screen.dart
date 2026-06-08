@@ -1,7 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:intl/intl.dart';
@@ -49,7 +48,14 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
   String? _activeBidId;       // bidId dari penawaran aktif di chat ini
   String? _activeTermId;      // termId dari payment term aktif
   String? _activeProjectId;   // projectId dari penawaran aktif
+
   String _offerPaymentStatus = 'none'; // 'none' | 'pending' | 'paid' | 'confirmed' | 'submitted' | 'revision_requested' | 'completed'
+  dynamic _existingReview;    // Holds ReviewModel? or similar json map (dynamic to avoid direct ReviewModel cast if needed)
+  bool _loadingReview = false;
+  bool _hideRatingReview = false;
+  bool _isSplitPayment = false;
+  bool _isDesignApproved = false;
+  bool _projectFinishedConfirmed = false;
 
   // Track status per bid id to keep cards independent
   final Map<String, String> _bidStatuses = {}; // bidId -> status ('pending', 'paid', etc.)
@@ -57,9 +63,10 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
   final Map<String, String> _bidProjectIds = {}; // bidId -> projectId
   final Map<String, String> _bidActualStatuses = {}; // bidId -> bid actual status ('pending', 'accepted', 'rejected', 'cancelled', etc.)
   final Map<String, DateTime> _bidCreatedAts = {}; // bidId -> bid created_at
+  final Map<String, int> _bidActiveTermOrderIndexes = {}; // bidId -> active term order index
 
   // Track the highest revision number across all design messages in this chat
-  int _maxDesignRevision = 0;
+  int _maxDesignRevision = -1;
 
   Future<void> _loadBidsStatuses(List<String> bidIds) async {
     if (bidIds.isEmpty) return;
@@ -75,7 +82,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
       // Query payment terms
       final termsResponse = await supabase
           .from('payment_terms')
-          .select('id, bid_id, status, project_id, paid_at, confirmed_at, progress_submitted_at, progress_reviewed_at, revision_requested_at')
+          .select('id, bid_id, status, project_id, paid_at, confirmed_at, progress_submitted_at, progress_reviewed_at, revision_requested_at, order_index')
           .inFilter('bid_id', bidIds);
           
       if (!mounted) return;
@@ -98,20 +105,40 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
           }
         }
         
+        // Group payment terms by bid_id
+        final Map<String, List<Map<String, dynamic>>> termsByBid = {};
         for (final term in termsResponse) {
           final bidId = term['bid_id'] as String;
-          final termId = term['id'] as String;
+          termsByBid.putIfAbsent(bidId, () => []).add(term);
+        }
+        
+        // Map active status for each bid
+        for (final bidId in bidIds) {
+          final bidTerms = termsByBid[bidId] ?? [];
+          if (bidTerms.isEmpty) continue;
+          
+          // Sort terms by order_index ascending
+          bidTerms.sort((a, b) => (a['order_index'] as int? ?? 1).compareTo(b['order_index'] as int? ?? 1));
+          
+          // Find the active term: first non-completed term, or last term if all completed
+          final activeTerm = bidTerms.firstWhere(
+            (t) => t['status'] != 'completed',
+            orElse: () => bidTerms.last,
+          );
+          
+          final termId = activeTerm['id'] as String;
           _bidTermIds[bidId] = termId;
-          if (term['project_id'] != null) {
-            _bidProjectIds[bidId] = term['project_id'] as String;
+          _bidActiveTermOrderIndexes[bidId] = activeTerm['order_index'] as int? ?? 1;
+          if (activeTerm['project_id'] != null) {
+            _bidProjectIds[bidId] = activeTerm['project_id'] as String;
           }
           
-          final termStatus = term['status'] as String? ?? 'pending';
+          final termStatus = activeTerm['status'] as String? ?? 'pending';
           final isCompleted = termStatus == 'completed';
-          final isProgressSubmitted = term['progress_submitted_at'] != null;
-          final isRevisionRequested = term['revision_requested_at'] != null && term['progress_reviewed_at'] == null;
-          final isConfirmed = term['confirmed_at'] != null;
-          final isWaitingConfirmation = term['paid_at'] != null && term['confirmed_at'] == null;
+          final isProgressSubmitted = activeTerm['progress_submitted_at'] != null;
+          final isRevisionRequested = activeTerm['revision_requested_at'] != null && activeTerm['progress_reviewed_at'] == null;
+          final isConfirmed = activeTerm['confirmed_at'] != null;
+          final isWaitingConfirmation = activeTerm['paid_at'] != null && activeTerm['confirmed_at'] == null;
           
           if (isCompleted) {
             _bidStatuses[bidId] = 'completed';
@@ -135,7 +162,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
 
   void _checkAndLoadBidStatuses(List<Map<String, dynamic>> messages) {
     final List<String> newBidIds = [];
-    int maxRev = 0;
+    int maxRev = -1;
     for (final m in messages) {
       final content = m['content'] as String? ?? '';
       if (content.startsWith('{')) {
@@ -147,8 +174,11 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
               newBidIds.add(bidId);
             }
           } else if (data['type'] == 'design') {
-            final rev = data['revision_number'] as int? ?? 1;
-            if (rev > maxRev) maxRev = rev;
+            final bidId = data['bid_id'] as String?;
+            if (bidId == _activeBidId) {
+              final rev = data['revision_number'] as int? ?? 0;
+              if (rev > maxRev) maxRev = rev;
+            }
           }
         } catch (_) {}
       }
@@ -183,9 +213,30 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
     });
   }
 
+  Future<void> _loadExistingReview() async {
+    if (_activeProjectId == null || _loadingReview) return;
+    setState(() => _loadingReview = true);
+    try {
+      final review = await Provider.of<ProjectProvider>(context, listen: false)
+          .fetchProjectReview(_activeProjectId!);
+      if (mounted) {
+        setState(() {
+          _existingReview = review;
+          _loadingReview = false;
+        });
+      }
+    } catch (e) {
+      debugPrint('Error loading existing review: $e');
+      if (mounted) {
+        setState(() => _loadingReview = false);
+      }
+    }
+  }
+
   /// Scan messages for the latest offer and check its payment status
   Future<void> _loadActiveBidStatus() async {
     try {
+      final projectProvider = Provider.of<ProjectProvider>(context, listen: false);
       final supabase = Supabase.instance.client;
       final msgs = await supabase
           .from('messages')
@@ -202,12 +253,46 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
             if (data['type'] == 'offer') {
               final bidId = data['bid_id'] as String?;
               if (bidId != null && mounted) {
-                final term = await Provider.of<ProjectProvider>(context, listen: false)
-                    .fetchPaymentTermByBidId(bidId);
+                // Fetch actual status of the bid to see if it is rejected/cancelled/expired
+                final bidRes = await supabase
+                    .from('bids')
+                    .select('status')
+                    .eq('id', bidId)
+                    .maybeSingle();
+
+                final bidActualStatus = bidRes?['status'] as String? ?? 'pending';
+                if (bidActualStatus == 'rejected' || bidActualStatus == 'cancelled' || bidActualStatus == 'expired') {
+                  continue; // Skip this offer, look for another one
+                }
+
+                final term = await projectProvider.fetchPaymentTermByBidId(bidId);
+                final allTermsRes = await supabase
+                    .from('payment_terms')
+                    .select('*')
+                    .eq('bid_id', bidId)
+                    .order('order_index', ascending: true);
+                
+                final List<Map<String, dynamic>> termsList = List<Map<String, dynamic>>.from(allTermsRes);
+                
+                bool isDesignApproved = false;
+                bool isSplitPayment = false;
+                if (termsList.isNotEmpty) {
+                  isSplitPayment = termsList.length > 1;
+                  if (isSplitPayment) {
+                    final dpTerm = termsList.firstWhere((t) => t['order_index'] == 1, orElse: () => termsList.first);
+                    isDesignApproved = dpTerm['status'] == 'completed';
+                  } else {
+                    isDesignApproved = termsList.first['status'] == 'completed';
+                  }
+                }
+
                 setState(() {
                   _activeBidId = bidId;
                   _activeTermId = term?.id;
                   _activeProjectId = term?.projectId;
+                  _isDesignApproved = isDesignApproved;
+                  _isSplitPayment = isSplitPayment;
+                  _maxDesignRevision = -1;
                   
                   if (term == null) {
                     _offerPaymentStatus = 'pending';
@@ -225,12 +310,28 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
                     _offerPaymentStatus = 'pending';
                   }
                 });
+
+                if (_offerPaymentStatus == 'completed' && _activeProjectId != null) {
+                  _loadExistingReview();
+                }
                 return;
               }
             }
           } catch (_) {}
         }
       }
+
+      // If no active offer is found, reset the state
+      setState(() {
+        _activeBidId = null;
+        _activeTermId = null;
+        _activeProjectId = null;
+        _offerPaymentStatus = 'none';
+        _maxDesignRevision = -1;
+        _isSplitPayment = false;
+        _isDesignApproved = false;
+        _projectFinishedConfirmed = false;
+      });
     } catch (_) {}
   }
 
@@ -281,7 +382,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
         children: [
           // Pending status banner
           Consumer<ChatProvider>(
-            builder: (_, chatProv, __) {
+            builder: (context, chatProv, child) {
               // Check if this chat is still pending
               final isPending = chatProv.pendingChats.any((c) => c.id == widget.chatId) ||
                   (widget.chatStatus == 'pending' && !chatProv.chats.any((c) => c.id == widget.chatId));
@@ -628,6 +729,8 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
     final revisions = data['revisions'] as int? ?? 2;
     final description = data['description'] as String? ?? '';
     final durationDays = data['duration_days'] as int? ?? 14;
+    final isSplitPayment = data['is_split_payment'] as bool? ?? false;
+    final dpPercentage = data['dp_percentage'] as int? ?? 50;
     final fmt = NumberFormat.currency(locale: 'id', symbol: 'Rp ', decimalDigits: 0);
 
     return Padding(
@@ -686,13 +789,31 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
                   Expanded(child: _buildOfferStat(Icons.schedule_outlined, 'Estimasi', '$durationDays hari', Colors.orange.shade700)),
                 ],
               ),
+              if (isSplitPayment) ...[
+                const SizedBox(height: 10),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: Colors.teal.withOpacity(0.04),
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: Colors.teal.withOpacity(0.1)),
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text('DP ($dpPercentage%): ${fmt.format(price * dpPercentage / 100)}', style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.teal)),
+                      Text('Pelunasan: ${fmt.format(price * (100 - dpPercentage) / 100)}', style: const TextStyle(fontSize: 10, color: Colors.black54)),
+                    ],
+                  ),
+                ),
+              ],
               if (description.isNotEmpty) ...[
                 const SizedBox(height: 10),
                 Text(description, style: const TextStyle(color: Colors.black54, fontSize: 12, height: 1.4), maxLines: 3, overflow: TextOverflow.ellipsis),
               ],
               const SizedBox(height: 14),
               // Action buttons
-              _buildOfferActions(bidId, isMe, price, title, description, revisions, durationDays),
+              _buildOfferActions(bidId, isMe, price, title, description, revisions, durationDays, isSplitPayment, dpPercentage),
             ],
           ),
         ),
@@ -711,12 +832,13 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
       ],
     );
   }
-  Widget _buildOfferActions(String bidId, bool isMe, double price, String title, String description, int revisions, int durationDays) {
+  Widget _buildOfferActions(String bidId, bool isMe, double price, String title, String description, int revisions, int durationDays, bool isSplitPayment, int dpPercentage) {
     final status = _bidStatuses[bidId] ?? 'pending';
     final actualStatus = _bidActualStatuses[bidId] ?? 'pending';
     final createdAt = _bidCreatedAts[bidId];
     final termId = _bidTermIds[bidId];
     final projectId = _bidProjectIds[bidId];
+    final activeTermOrderIndex = _bidActiveTermOrderIndexes[bidId] ?? 1;
 
     final isCancelled = actualStatus == 'cancelled';
     final isExpired = actualStatus == 'expired' ||
@@ -727,6 +849,8 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
 
     final isPaid = status == 'paid' || status == 'confirmed' ||
         status == 'submitted' || status == 'revision_requested' || status == 'completed';
+
+    final isPaidOrInProgress = isPaid || activeTermOrderIndex > 1 || actualStatus == 'accepted';
 
     if (isCancelled) {
       return Column(
@@ -819,8 +943,8 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
     }
 
     if (isMe && _isArchitect) {
-      // Arsitek: edit atau batalkan (hanya jika belum dibayar)
-      if (isPaid) {
+      // Arsitek: edit atau batalkan (hanya jika belum dibayar/proyek belum jalan)
+      if (isPaidOrInProgress) {
         if (status == 'paid') {
           return Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -852,20 +976,28 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
                 child: ElevatedButton.icon(
                   onPressed: () async {
                     if (termId == null || projectId == null) return;
+                    final projectProvider = Provider.of<ProjectProvider>(context, listen: false);
+                    final chatProvider = Provider.of<ChatProvider>(context, listen: false);
                     setState(() => _isSending = true);
-                    final ok = await Provider.of<ProjectProvider>(context, listen: false)
-                        .architectConfirmClientPayment(
+                    final ok = await projectProvider.architectConfirmClientPayment(
                           termId: termId,
                           bidId: bidId,
                           projectId: projectId,
                         );
                     if (ok) {
-                      await Provider.of<ChatProvider>(context, listen: false)
-                          .sendMessage(widget.chatId, '✅ Arsitek telah mengonfirmasi pembayaran! Proyek pembuatan denah/desain resmi dimulai.');
-                      _loadBidsStatuses([bidId]);
-                      _loadActiveBidStatus();
+                      if (activeTermOrderIndex > 1) {
+                        await chatProvider.sendMessage(widget.chatId, '✅ Arsitek telah mengonfirmasi pelunasan pembayaran! Proyek konsultasi selesai secara keseluruhan.');
+                      } else {
+                        await chatProvider.sendMessage(widget.chatId, '✅ Arsitek telah mengonfirmasi pembayaran! Proyek pembuatan denah/desain resmi dimulai.');
+                      }
+                      if (mounted) {
+                        _loadBidsStatuses([bidId]);
+                        _loadActiveBidStatus();
+                      }
                     }
-                    setState(() => _isSending = false);
+                    if (mounted) {
+                      setState(() => _isSending = false);
+                    }
                   },
                   icon: const Icon(Icons.check_circle_outline, size: 16, color: Colors.white),
                   label: const Text('Konfirmasi Pembayaran', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white, fontSize: 13)),
@@ -880,7 +1012,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
           );
         }
 
-        // States: confirmed, submitted, revision_requested, completed
+        // States: confirmed, submitted, revision_requested, completed, or pending (sisa pembayaran)
         String statusLabel = '';
         Color boxColor = Colors.green.shade50;
         Color borderAndTextColor = Colors.green.shade700;
@@ -896,10 +1028,15 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
           borderAndTextColor = Colors.orange.shade700;
           icon = Icons.edit_note_rounded;
         } else if (status == 'completed') {
-          statusLabel = 'Proyek selesai ✓';
+          statusLabel = 'Proyek selesai & Lunas ✓';
           boxColor = Colors.blue.shade50;
           borderAndTextColor = Colors.blue.shade700;
           icon = Icons.verified_rounded;
+        } else if (status == 'pending' && activeTermOrderIndex > 1) {
+          statusLabel = 'Menunggu pelunasan sisa pembayaran oleh client';
+          boxColor = Colors.orange.shade50;
+          borderAndTextColor = Colors.orange.shade700;
+          icon = Icons.hourglass_top_rounded;
         }
 
         return Container(
@@ -914,9 +1051,11 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
             children: [
               Icon(icon, color: borderAndTextColor, size: 16),
               const SizedBox(width: 6),
-              Text(
-                statusLabel,
-                style: TextStyle(color: borderAndTextColor, fontSize: 11, fontWeight: FontWeight.w600),
+              Expanded(
+                child: Text(
+                  statusLabel,
+                  style: TextStyle(color: borderAndTextColor, fontSize: 11, fontWeight: FontWeight.w600),
+                ),
               ),
             ],
           ),
@@ -926,7 +1065,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
         children: [
           Expanded(
             child: OutlinedButton.icon(
-              onPressed: () => _showEditOfferSheet(bidId, price, title, description, revisions, durationDays),
+              onPressed: () => _showEditOfferSheet(bidId, price, title, description, revisions, durationDays, isSplitPayment, dpPercentage),
               icon: const Icon(Icons.edit_outlined, size: 14),
               label: const Text('Edit', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
               style: OutlinedButton.styleFrom(
@@ -966,7 +1105,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
         } else if (status == 'revision_requested') {
           clientStatusLabel = 'Menunggu arsitek mengirim revisi...';
         } else if (status == 'completed') {
-          clientStatusLabel = 'Proyek selesai ✓';
+          clientStatusLabel = 'Proyek selesai & Lunas ✓';
         }
 
         return Container(
@@ -1023,12 +1162,15 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
     return const SizedBox.shrink();
   }
 
-  void _showEditOfferSheet(String bidId, double price, String title, String description, int revisions, int durationDays) {
+  void _showEditOfferSheet(String bidId, double price, String title, String description, int revisions, int durationDays, bool initialSplit, int initialDp) {
     final titleCtrl = TextEditingController(text: title);
     final descCtrl = TextEditingController(text: description);
-    final priceCtrl = TextEditingController(text: price.toStringAsFixed(0));
+    final formatter = NumberFormat.decimalPattern('id');
+    final priceCtrl = TextEditingController(text: formatter.format(price));
     final durationCtrl = TextEditingController(text: durationDays.toString());
     int editRevisions = revisions;
+    bool editSplit = initialSplit;
+    int editDp = initialDp;
 
     showModalBottomSheet(
       context: context,
@@ -1069,29 +1211,303 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
                   const SizedBox(height: 14),
                   const Text('Harga (Rp)', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
                   const SizedBox(height: 6),
-                  TextField(controller: priceCtrl, keyboardType: TextInputType.number, decoration: _inputDeco('Harga')),
+                  TextField(
+                    controller: priceCtrl,
+                    keyboardType: TextInputType.number,
+                    onChanged: (val) {
+                      if (val.isEmpty) {
+                        setS(() {});
+                        return;
+                      }
+                      String cleanString = val.replaceAll(RegExp(r'\D'), '');
+                      if (cleanString.isEmpty) {
+                        priceCtrl.value = const TextEditingValue(
+                          text: '',
+                          selection: TextSelection.collapsed(offset: 0),
+                        );
+                        setS(() {});
+                        return;
+                      }
+                      double value = double.parse(cleanString);
+                      if (value > 500000000) {
+                        value = 500000000;
+                      }
+                      String formatted = formatter.format(value);
+                      priceCtrl.value = TextEditingValue(
+                        text: formatted,
+                        selection: TextSelection.collapsed(offset: formatted.length),
+                      );
+                      setS(() {});
+                    },
+                    decoration: _inputDeco('Harga'),
+                  ),
+                  const SizedBox(height: 6),
+                  Builder(
+                    builder: (context) {
+                      final valStr = priceCtrl.text.replaceAll('.', '').replaceAll(',', '');
+                      final val = double.tryParse(valStr) ?? 0.0;
+                      final isOver = val >= 500000000;
+                      return Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+                        decoration: BoxDecoration(
+                          color: isOver ? Colors.red.shade50 : Colors.teal.shade50,
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(
+                            color: isOver ? Colors.red.shade200 : Colors.teal.shade100,
+                          ),
+                        ),
+                        child: Row(
+                          children: [
+                            Icon(
+                              isOver ? Icons.warning_amber_rounded : Icons.info_outline_rounded,
+                              size: 14,
+                              color: isOver ? Colors.red.shade700 : Colors.teal.shade700,
+                            ),
+                            const SizedBox(width: 6),
+                            Expanded(
+                              child: Text(
+                                isOver
+                                    ? 'Harga maksimal Rp 500.000.000 (jumlah maksimal tercapai)'
+                                    : 'Batas harga: Maksimal Rp 500.000.000',
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.bold,
+                                  color: isOver ? Colors.red.shade700 : Colors.teal.shade700,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      );
+                    }
+                  ),
                   const SizedBox(height: 14),
                   const Text('Estimasi (hari)', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
                   const SizedBox(height: 6),
-                  TextField(controller: durationCtrl, keyboardType: TextInputType.number, decoration: _inputDeco('Jumlah hari')),
+                  TextField(
+                    controller: durationCtrl,
+                    keyboardType: TextInputType.number,
+                    onChanged: (val) {
+                      if (val.isEmpty) {
+                        setS(() {});
+                        return;
+                      }
+                      int value = int.tryParse(val) ?? 0;
+                      if (value > 365) {
+                        durationCtrl.value = const TextEditingValue(
+                          text: '365',
+                          selection: TextSelection.collapsed(offset: 3),
+                        );
+                      }
+                      setS(() {});
+                    },
+                    decoration: _inputDeco('Jumlah hari'),
+                  ),
+                  const SizedBox(height: 6),
+                  Builder(
+                    builder: (context) {
+                      final durStr = durationCtrl.text;
+                      final val = int.tryParse(durStr) ?? 0;
+                      final isOver = val >= 365;
+                      return Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+                        decoration: BoxDecoration(
+                          color: isOver ? Colors.red.shade50 : Colors.teal.shade50,
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(
+                            color: isOver ? Colors.red.shade200 : Colors.teal.shade100,
+                          ),
+                        ),
+                        child: Row(
+                          children: [
+                            Icon(
+                              isOver ? Icons.warning_amber_rounded : Icons.info_outline_rounded,
+                              size: 14,
+                              color: isOver ? Colors.red.shade700 : Colors.teal.shade700,
+                            ),
+                            const SizedBox(width: 6),
+                            Expanded(
+                              child: Text(
+                                isOver
+                                    ? 'Estimasi waktu maksimal 365 hari (jumlah maksimal tercapai)'
+                                    : 'Batas estimasi waktu: Maksimal 365 hari',
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.bold,
+                                  color: isOver ? Colors.red.shade700 : Colors.teal.shade700,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      );
+                    }
+                  ),
                   const SizedBox(height: 14),
                   const Text('Jumlah Revisi', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
                   const SizedBox(height: 6),
                   Row(
                     children: [
-                      IconButton(icon: const Icon(Icons.remove_circle_outline), onPressed: () { if (editRevisions > 0) setS(() => editRevisions--); }),
+                      IconButton(
+                        icon: const Icon(Icons.remove_circle_outline),
+                        onPressed: () {
+                          if (editRevisions > 0) {
+                            setS(() => editRevisions--);
+                          }
+                        },
+                      ),
                       Text('$editRevisions ×', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                      IconButton(icon: const Icon(Icons.add_circle_outline, color: AppColors.primary), onPressed: () => setS(() => editRevisions++)),
+                      IconButton(
+                        icon: Icon(
+                          Icons.add_circle_outline,
+                          color: editRevisions == 5 ? Colors.grey.shade400 : AppColors.primary,
+                        ),
+                        onPressed: editRevisions == 5
+                            ? null
+                            : () {
+                                if (editRevisions < 5) {
+                                  setS(() => editRevisions++);
+                                }
+                              },
+                      ),
                     ],
                   ),
-                  const SizedBox(height: 20),
+                  if (editRevisions == 5) ...[
+                    const SizedBox(height: 6),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+                      decoration: BoxDecoration(
+                        color: Colors.red.shade50,
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(color: Colors.red.shade200),
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(Icons.warning_amber_rounded, size: 14, color: Colors.red.shade700),
+                          const SizedBox(width: 6),
+                          Expanded(
+                            child: Text(
+                              'jumlah revisi maksimal',
+                              style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.red.shade700),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                  const SizedBox(height: 14),
+                  const Text('Termin Pembayaran', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
+                  const SizedBox(height: 6),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: ChoiceChip(
+                          label: const Center(child: Text('Penuh (100%)', style: TextStyle(fontSize: 12))),
+                          selected: !editSplit,
+                          onSelected: (val) {
+                            setS(() {
+                              editSplit = false;
+                            });
+                          },
+                          selectedColor: AppColors.primary.withOpacity(0.15),
+                          checkmarkColor: AppColors.primary,
+                          labelStyle: TextStyle(
+                            color: !editSplit ? AppColors.primary : Colors.black87,
+                            fontWeight: !editSplit ? FontWeight.bold : FontWeight.normal,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: ChoiceChip(
+                          label: const Center(child: Text('DP & Pelunasan', style: TextStyle(fontSize: 12))),
+                          selected: editSplit,
+                          onSelected: (val) {
+                            setS(() {
+                              editSplit = true;
+                            });
+                          },
+                          selectedColor: AppColors.primary.withOpacity(0.15),
+                          checkmarkColor: AppColors.primary,
+                          labelStyle: TextStyle(
+                            color: editSplit ? AppColors.primary : Colors.black87,
+                            fontWeight: editSplit ? FontWeight.bold : FontWeight.normal,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  if (editSplit) ...[
+                    const SizedBox(height: 14),
+                    const Text('Persentase DP (%)', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
+                    const SizedBox(height: 6),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(color: Colors.grey.shade200),
+                      ),
+                      child: DropdownButtonHideUnderline(
+                        child: DropdownButton<int>(
+                          value: editDp,
+                          isExpanded: true,
+                          icon: const Icon(Icons.keyboard_arrow_down, color: Colors.black45, size: 16),
+                          items: [20, 30, 40, 50, 60, 70].map((pct) => DropdownMenuItem(
+                            value: pct,
+                            child: Text('$pct% DP - ${100 - pct}% Pelunasan', style: const TextStyle(fontSize: 12, color: Colors.black87)),
+                          )).toList(),
+                          onChanged: (val) => setS(() => editDp = val!),
+                        ),
+                      ),
+                    ),
+                  ],
+                  const SizedBox(height: 24),
                   SizedBox(
                     width: double.infinity,
                     height: 50,
                     child: ElevatedButton(
                       onPressed: () async {
                         final newPrice = double.tryParse(priceCtrl.text.replaceAll('.', '').replaceAll(',', '')) ?? price;
-                        final newDays = int.tryParse(durationCtrl.text) ?? durationDays;
+                        if (newPrice <= 0) {
+                          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+                            content: Text('Harga penawaran harus lebih dari Rp 0!'),
+                            backgroundColor: Colors.red,
+                          ));
+                          return;
+                        }
+                        if (newPrice > 500000000.0) {
+                          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+                            content: Text('Harga tidak boleh melebihi Rp 500.000.000 (standar tertinggi)!'),
+                            backgroundColor: Colors.red,
+                          ));
+                          return;
+                        }
+
+                        final newDays = int.tryParse(durationCtrl.text) ?? 0;
+                        if (newDays <= 0) {
+                          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+                            content: Text('Estimasi waktu pengerjaan harus lebih dari 0 hari!'),
+                            backgroundColor: Colors.red,
+                          ));
+                          return;
+                        }
+                        if (newDays > 365) {
+                          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+                            content: Text('Estimasi waktu tidak boleh melebihi 365 hari!'),
+                            backgroundColor: Colors.red,
+                          ));
+                          return;
+                        }
+
+                        if (editRevisions > 5) {
+                          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+                            content: Text('Jumlah revisi tidak boleh melebihi 5 kali!'),
+                            backgroundColor: Colors.red,
+                          ));
+                          return;
+                        }
+
                         final ok = await Provider.of<ArchitectProvider>(context, listen: false).editArchitectOffer(
                           bidId: bidId,
                           price: newPrice,
@@ -1099,6 +1515,8 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
                           description: descCtrl.text.trim(),
                           revisions: editRevisions,
                           durationDays: newDays,
+                          isSplitPayment: editSplit,
+                          dpPercentage: editDp,
                         );
                         if (ctx.mounted) Navigator.pop(ctx);
                         if (mounted) {
@@ -1247,7 +1665,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
   Widget _buildDesignCard(Map<String, dynamic> data, bool isMe, DateTime? time) {
     final bidId = data['bid_id'] as String? ?? '';
     final notes = data['notes'] as String? ?? '';
-    final revisionNumber = data['revision_number'] as int? ?? 1;
+    final revisionNumber = data['revision_number'] as int? ?? 0;
     final filesRaw = data['files'] as List<dynamic>? ?? [];
     final files = filesRaw.map((f) => Map<String, String>.from(f as Map)).toList();
 
@@ -1290,7 +1708,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         const Text('PENGIRIMAN DESAIN', style: TextStyle(fontSize: 9, fontWeight: FontWeight.bold, color: Colors.teal, letterSpacing: 0.5)),
-                        Text('Revisi ke-$revisionNumber', style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.black87)),
+                        Text(revisionNumber == 0 ? 'Desain Awal' : 'Revisi ke-$revisionNumber', style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.black87)),
                       ],
                     ),
                   ),
@@ -1394,6 +1812,55 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
 
     if (!_isArchitect) {
       // Client
+      if (_isDesignApproved && _isSplitPayment) {
+        String statusLabel = '';
+        Color boxColor = Colors.green.shade50;
+        Color textColor = Colors.green.shade700;
+        IconData icon = Icons.check_circle_outline;
+
+        if (effectiveStatus == 'completed') {
+          statusLabel = 'Desain Telah Selesai & Lunas ✓';
+          boxColor = Colors.blue.shade50;
+          textColor = Colors.blue.shade700;
+          icon = Icons.verified_rounded;
+        } else if (effectiveStatus == 'paid') {
+          statusLabel = 'Pelunasan Dibayar – Menunggu Konfirmasi Arsitek';
+          boxColor = Colors.orange.shade50;
+          textColor = Colors.orange.shade700;
+          icon = Icons.hourglass_top_rounded;
+        } else {
+          statusLabel = 'Desain Disetujui – Menunggu Pelunasan Pembayaran';
+          boxColor = Colors.teal.shade50;
+          textColor = Colors.teal.shade700;
+          icon = Icons.hourglass_bottom_rounded;
+        }
+
+        return Container(
+          width: double.infinity,
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          decoration: BoxDecoration(
+            color: boxColor,
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(
+              color: boxColor == Colors.green.shade50 ? Colors.green.shade100 :
+                     boxColor == Colors.blue.shade50 ? Colors.blue.shade100 :
+                     boxColor == Colors.orange.shade50 ? Colors.orange.shade100 : Colors.teal.shade100,
+            ),
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(icon, color: textColor, size: 16),
+              const SizedBox(width: 6),
+              Text(
+                statusLabel,
+                style: TextStyle(color: textColor, fontSize: 12, fontWeight: FontWeight.bold),
+              ),
+            ],
+          ),
+        );
+      }
+
       if (effectiveStatus == 'completed') {
         return Container(
           width: double.infinity,
@@ -1452,6 +1919,55 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
       }
     } else {
       // Arsitek
+      if (_isDesignApproved && _isSplitPayment) {
+        String statusLabel = '';
+        Color boxColor = Colors.green.shade50;
+        Color borderAndTextColor = Colors.green.shade700;
+        IconData icon = Icons.check_circle_outline;
+
+        if (effectiveStatus == 'completed') {
+          statusLabel = 'Desain Telah Selesai & Lunas ✓';
+          boxColor = Colors.blue.shade50;
+          borderAndTextColor = Colors.blue.shade700;
+          icon = Icons.verified_rounded;
+        } else if (effectiveStatus == 'paid') {
+          statusLabel = 'Pelunasan Dibayar – Menunggu Konfirmasi Anda';
+          boxColor = Colors.orange.shade50;
+          borderAndTextColor = Colors.orange.shade700;
+          icon = Icons.hourglass_empty_rounded;
+        } else {
+          statusLabel = 'Desain Disetujui – Menunggu Pelunasan oleh Client';
+          boxColor = Colors.teal.shade50;
+          borderAndTextColor = Colors.teal.shade700;
+          icon = Icons.hourglass_bottom_rounded;
+        }
+
+        return Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          decoration: BoxDecoration(
+            color: boxColor,
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(
+              color: boxColor == Colors.green.shade50 ? Colors.green.shade100 :
+                     boxColor == Colors.blue.shade50 ? Colors.blue.shade100 :
+                     boxColor == Colors.orange.shade50 ? Colors.orange.shade100 : Colors.teal.shade100,
+            ),
+          ),
+          child: Row(
+            children: [
+              Icon(icon, color: borderAndTextColor, size: 14),
+              const SizedBox(width: 6),
+              Expanded(
+                child: Text(
+                  statusLabel,
+                  style: TextStyle(color: borderAndTextColor, fontSize: 11, fontWeight: FontWeight.w600),
+                ),
+              ),
+            ],
+          ),
+        );
+      }
+
       if (effectiveStatus == 'completed') {
         return Container(
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
@@ -1627,9 +2143,233 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
     );
   }
 
+  void _showProjectCompletedDialog() {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: Colors.white,
+        surfaceTintColor: Colors.transparent,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Row(
+          children: [
+            Icon(Icons.celebration_rounded, color: Colors.teal, size: 24),
+            SizedBox(width: 8),
+            Text('Proyek Selesai!', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+          ],
+        ),
+        content: const Text(
+          'Selamat! Proyek desain konsultasi Anda telah selesai secara keseluruhan. Terima kasih telah mempercayakan proyek Anda pada platform kami.',
+          style: TextStyle(fontSize: 13, height: 1.4, color: Colors.black87),
+        ),
+        actions: [
+          ElevatedButton(
+            onPressed: () {
+              Navigator.pop(ctx);
+              setState(() {
+                _projectFinishedConfirmed = true;
+              });
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.teal,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+              elevation: 0,
+            ),
+            child: const Text('OK', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSelesaikanProyekSection() {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: const BoxDecoration(
+        color: Color(0xFFF9F5F1),
+        border: Border(top: BorderSide(color: Color(0xFFE5DCD3), width: 1)),
+      ),
+      child: SafeArea(
+        top: false,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                const Icon(Icons.check_circle_outline_rounded, color: AppColors.primary, size: 20),
+                const SizedBox(width: 8),
+                const Text('Pelunasan Pembayaran Diterima 🎉', style: TextStyle(fontWeight: FontWeight.bold, color: AppColors.primary, fontSize: 13)),
+                const Spacer(),
+                TextButton(
+                  onPressed: () {
+                    setState(() {
+                      _hideRatingReview = true;
+                    });
+                  },
+                  child: const Text('Tulis Pesan', style: TextStyle(color: AppColors.primary, fontSize: 11, fontWeight: FontWeight.bold)),
+                ),
+              ],
+            ),
+            const SizedBox(height: 6),
+            const Text(
+              'Pembayaran pelunasan telah terkonfirmasi oleh arsitek. Silakan selesaikan proyek ini.',
+              style: TextStyle(color: Colors.black54, fontSize: 12),
+            ),
+            const SizedBox(height: 12),
+            SizedBox(
+              width: double.infinity,
+              height: 44,
+              child: ElevatedButton.icon(
+                onPressed: () {
+                  _showProjectCompletedDialog();
+                },
+                icon: const Icon(Icons.verified_rounded, color: Colors.white, size: 18),
+                label: const Text(
+                  'Selesaikan Desain Proyek',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 13,
+                  ),
+                ),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.teal,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  elevation: 0,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildRatingInputSection() {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: const BoxDecoration(
+        color: Color(0xFFF9F5F1), // Cream background matching the theme
+        border: Border(top: BorderSide(color: Color(0xFFE5DCD3), width: 1)),
+      ),
+      child: SafeArea(
+        top: false,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                const Icon(Icons.celebration_rounded, color: AppColors.primary, size: 20),
+                const SizedBox(width: 8),
+                const Text('Proyek Konsultasi Selesai! 🎉', style: TextStyle(fontWeight: FontWeight.bold, color: AppColors.primary, fontSize: 13)),
+                const Spacer(),
+                TextButton(
+                  onPressed: () {
+                    setState(() {
+                      _hideRatingReview = true;
+                    });
+                  },
+                  child: const Text('Tulis Pesan', style: TextStyle(color: AppColors.primary, fontSize: 11, fontWeight: FontWeight.bold)),
+                ),
+              ],
+            ),
+            const SizedBox(height: 4),
+            const Text('Berikan penilaian dan ulasan Anda untuk arsitek:', style: TextStyle(color: Colors.black54, fontSize: 11)),
+            const SizedBox(height: 8),
+            _RatingInputWidget(
+              onSubmitted: (rating, comment) async {
+                if (_activeProjectId == null) return;
+                final architectProv = Provider.of<ArchitectProvider>(context, listen: false);
+                final projectProv = Provider.of<ProjectProvider>(context, listen: false);
+                
+                // Fetch bid to get vendor_id
+                final bid = await architectProv.fetchBidById(_activeBidId!);
+                final vendorId = bid?['vendor_id'] as String?;
+                if (vendorId == null) return;
+
+                final ok = await projectProv.addReview(
+                  projectId: _activeProjectId!,
+                  vendorId: vendorId,
+                  rating: rating,
+                  comment: comment,
+                );
+
+                if (ok && mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('✅ Ulasan berhasil dikirim!'), backgroundColor: Colors.green),
+                  );
+                  _loadActiveBidStatus();
+                } else if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Gagal mengirim ulasan.'), backgroundColor: Colors.red),
+                  );
+                }
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildRatingCompletedSection() {
+    final ratingVal = _existingReview != null ? (_existingReview is Map ? _existingReview['rating'] : _existingReview.rating) as int? ?? 5 : 5;
+    final commentVal = _existingReview != null ? (_existingReview is Map ? _existingReview['comment'] : _existingReview.comment) as String? ?? '' : '';
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: const BoxDecoration(
+        color: Color(0xFFF9F5F1),
+        border: Border(top: BorderSide(color: Color(0xFFE5DCD3), width: 1)),
+      ),
+      child: SafeArea(
+        top: false,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                const Icon(Icons.verified_rounded, color: Colors.teal, size: 20),
+                const SizedBox(width: 8),
+                const Text('Ulasan Anda Telah Dikirim', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.teal, fontSize: 13)),
+                const Spacer(),
+                TextButton(
+                  onPressed: () {
+                    setState(() {
+                      _hideRatingReview = true;
+                    });
+                  },
+                  child: const Text('Tulis Pesan', style: TextStyle(color: AppColors.primary, fontSize: 11, fontWeight: FontWeight.bold)),
+                ),
+              ],
+            ),
+            const SizedBox(height: 6),
+            Row(
+              children: List.generate(5, (index) => Icon(
+                index < ratingVal ? Icons.star_rounded : Icons.star_border_rounded,
+                color: Colors.amber,
+                size: 20,
+              )),
+            ),
+            if (commentVal.isNotEmpty) ...[
+              const SizedBox(height: 6),
+              Text('"$commentVal"', style: const TextStyle(fontStyle: FontStyle.italic, color: Colors.black54, fontSize: 12)),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _buildInputArea() {
     return Consumer<ChatProvider>(
-      builder: (_, chatProv, __) {
+      builder: (context, chatProv, child) {
         final isPending = chatProv.pendingChats.any((c) => c.id == widget.chatId) ||
             (widget.chatStatus == 'pending' && !chatProv.chats.any((c) => c.id == widget.chatId));
 
@@ -1666,7 +2406,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
                         );
                         if (ok == true) {
                           final rejected = await chatProv.rejectChat(widget.chatId);
-                          if (rejected && mounted) {
+                          if (rejected && context.mounted) {
                             Navigator.pop(context);
                           }
                         }
@@ -1686,7 +2426,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
                     child: ElevatedButton.icon(
                       onPressed: () async {
                         final ok = await chatProv.acceptChat(widget.chatId);
-                        if (ok && mounted) {
+                        if (ok && context.mounted) {
                           ScaffoldMessenger.of(context).showSnackBar(
                             const SnackBar(content: Text('Permintaan konsultasi diterima')),
                           );
@@ -1705,6 +2445,24 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
               ),
             ),
           );
+        }
+
+        // Tampilkan ulasan rating jika client dan proyek selesai konsultasi
+        if (!_isArchitect && _offerPaymentStatus == 'completed' && !_hideRatingReview) {
+          if (_loadingReview) {
+            return const Padding(
+              padding: EdgeInsets.all(16.0),
+              child: Center(child: CircularProgressIndicator(color: AppColors.primary)),
+            );
+          }
+          if (_existingReview == null) {
+            if (_isSplitPayment && !_projectFinishedConfirmed) {
+              return _buildSelesaikanProyekSection();
+            }
+            return _buildRatingInputSection();
+          } else {
+            return _buildRatingCompletedSection();
+          }
         }
 
         return _buildRegularInputArea();
@@ -1733,29 +2491,34 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
               if (_isArchitect) ...[
               Row(
                 children: [
-                  Expanded(child: _buildAttachmentPill(Icons.assignment_outlined, 'Penawaran', () {
-                    if (widget.receiverId == null) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('Tidak dapat menemukan ID client.')),
+                  Expanded(child: _buildAttachmentPill(
+                    Icons.assignment_outlined,
+                    'Penawaran',
+                    (_offerPaymentStatus == 'none' || _offerPaymentStatus == 'completed') ? () {
+                      if (widget.receiverId == null) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('Tidak dapat menemukan ID client.')),
+                        );
+                        return;
+                      }
+                      showModalBottomSheet(
+                        context: context,
+                        isScrollControlled: true,
+                        backgroundColor: Colors.transparent,
+                        builder: (_) => BuatPenawaranSheet(
+                          clientId: widget.receiverId!,
+                          chatId: widget.chatId,
+                          onOfferSent: (bidId) {
+                            setState(() {
+                              _activeBidId = bidId;
+                              _offerPaymentStatus = 'pending';
+                            });
+                          },
+                        ),
                       );
-                      return;
-                    }
-                    showModalBottomSheet(
-                      context: context,
-                      isScrollControlled: true,
-                      backgroundColor: Colors.transparent,
-                      builder: (_) => BuatPenawaranSheet(
-                        clientId: widget.receiverId!,
-                        chatId: widget.chatId,
-                        onOfferSent: (bidId) {
-                          setState(() {
-                            _activeBidId = bidId;
-                            _offerPaymentStatus = 'pending';
-                          });
-                        },
-                      ),
-                    );
-                  })),
+                    } : null,
+                    disabled: _offerPaymentStatus != 'none' && _offerPaymentStatus != 'completed',
+                  )),
                   const SizedBox(width: 8),
                   Expanded(child: _buildAttachmentPill(
                     Icons.send_outlined,
@@ -1986,6 +2749,8 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
   }
 
   Future<void> _uploadAndSendAttachment(File file, String fileExtension) async {
+    final chatProvider = Provider.of<ChatProvider>(context, listen: false);
+    final messenger = ScaffoldMessenger.of(context);
     setState(() => _isSending = true);
     
     try {
@@ -1997,17 +2762,20 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
       final publicUrl = supabase.storage.from('documents').getPublicUrl(fileName);
       
       // Send message with the public URL as content
-      await Provider.of<ChatProvider>(context, listen: false)
-          .sendMessage(widget.chatId, publicUrl);
+      await chatProvider.sendMessage(widget.chatId, publicUrl);
           
-      _scrollToBottom();
+      if (mounted) {
+        _scrollToBottom();
+      }
     } catch (e) {
       debugPrint('Error uploading attachment: $e');
-      ScaffoldMessenger.of(context).showSnackBar(
+      messenger.showSnackBar(
         SnackBar(content: Text('Gagal mengunggah file: $e'), backgroundColor: Colors.redAccent),
       );
     } finally {
-      setState(() => _isSending = false);
+      if (mounted) {
+        setState(() => _isSending = false);
+      }
     }
   }
 
@@ -2050,5 +2818,128 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
 
   bool _isSameDay(DateTime a, DateTime b) {
     return a.year == b.year && a.month == b.month && a.day == b.day;
+  }
+}
+
+class _RatingInputWidget extends StatefulWidget {
+  final Function(int rating, String comment) onSubmitted;
+
+  const _RatingInputWidget({required this.onSubmitted});
+
+  @override
+  State<_RatingInputWidget> createState() => _RatingInputWidgetState();
+}
+
+class _RatingInputWidgetState extends State<_RatingInputWidget> {
+  int _selectedRating = 5;
+  final _commentCtrl = TextEditingController();
+  bool _submitting = false;
+
+  @override
+  void dispose() {
+    _commentCtrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: List.generate(5, (index) {
+            final starVal = index + 1;
+            return IconButton(
+              onPressed: _submitting
+                  ? null
+                  : () {
+                      setState(() {
+                        _selectedRating = starVal;
+                      });
+                    },
+              icon: Icon(
+                starVal <= _selectedRating
+                    ? Icons.star_rounded
+                    : Icons.star_border_rounded,
+                color: Colors.amber,
+                size: 28,
+              ),
+              padding: EdgeInsets.zero,
+              constraints: const BoxConstraints(),
+            );
+          }),
+        ),
+        const SizedBox(height: 8),
+        TextField(
+          controller: _commentCtrl,
+          maxLines: 2,
+          enabled: !_submitting,
+          style: const TextStyle(fontSize: 12),
+          decoration: InputDecoration(
+            hintText: 'Tulis ulasan Anda untuk arsitek...',
+            hintStyle: const TextStyle(fontSize: 11),
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(10),
+              borderSide: BorderSide(color: Colors.teal.shade200),
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(10),
+              borderSide: const BorderSide(color: Colors.teal),
+            ),
+            filled: true,
+            fillColor: Colors.white,
+            contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          ),
+        ),
+        const SizedBox(height: 8),
+        SizedBox(
+          width: double.infinity,
+          height: 38,
+          child: ElevatedButton(
+            onPressed: _submitting
+                ? null
+                : () async {
+                    setState(() {
+                      _submitting = true;
+                    });
+                    await widget.onSubmitted(
+                      _selectedRating,
+                      _commentCtrl.text,
+                    );
+                    if (mounted) {
+                      setState(() {
+                        _submitting = false;
+                      });
+                    }
+                  },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.teal,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(10),
+              ),
+              elevation: 0,
+            ),
+            child: _submitting
+                ? const SizedBox(
+                    width: 16,
+                    height: 16,
+                    child: CircularProgressIndicator(
+                      color: Colors.white,
+                      strokeWidth: 2,
+                    ),
+                  )
+                : const Text(
+                    'Kirim Ulasan',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 12,
+                    ),
+                  ),
+          ),
+        ),
+      ],
+    );
   }
 }

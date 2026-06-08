@@ -322,6 +322,8 @@ class ChatProvider extends ChangeNotifier {
     required int revisions,
     required String description,
     required int durationDays,
+    bool isSplitPayment = false,
+    int dpPercentage = 50,
   }) async {
     final content = jsonEncode({
       'type': 'offer',
@@ -331,6 +333,8 @@ class ChatProvider extends ChangeNotifier {
       'revisions': revisions,
       'description': description,
       'duration_days': durationDays,
+      'is_split_payment': isSplitPayment,
+      'dp_percentage': dpPercentage,
       'status': 'pending',
     });
     return sendMessage(chatId, content, bidId: bidId);

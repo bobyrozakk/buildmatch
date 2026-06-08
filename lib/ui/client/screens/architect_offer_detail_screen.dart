@@ -311,6 +311,14 @@ class _ArchitectOfferDetailScreenState extends State<ArchitectOfferDetailScreen>
           const Divider(height: 1),
           const SizedBox(height: 16),
           _buildDetailRow(Icons.payments_outlined, 'Total Harga', currencyFmt.format(widget.price), isPrice: true),
+          if (_paymentTerm != null) ...[
+            const SizedBox(height: 10),
+            _buildDetailRow(
+              Icons.info_outline,
+              'Termin Pembayaran Aktif',
+              '${_paymentTerm!.name} (${_paymentTerm!.percentage.round()}%): ${currencyFmt.format(_paymentTerm!.amount)}',
+            ),
+          ],
           const SizedBox(height: 10),
           _buildDetailRow(Icons.loop_rounded, 'Batas Maksimal Revisi', '${widget.revisions} kali revisi'),
           const SizedBox(height: 10),
@@ -446,7 +454,7 @@ class _ArchitectOfferDetailScreenState extends State<ArchitectOfferDetailScreen>
           ),
           const SizedBox(height: 10),
           Text(
-            'Silakan transfer sebesar ${currencyFmt.format(widget.price)} ke nomor VA diatas. Setelah pembayaran berhasil, klik tombol "Saya Sudah Membayar" di bawah ini.',
+            'Silakan transfer sebesar ${currencyFmt.format(_paymentTerm?.amount ?? widget.price)} ke nomor VA diatas. Setelah pembayaran berhasil, klik tombol "Saya Sudah Membayar" di bawah ini.',
             style: const TextStyle(fontSize: 11, color: Colors.black45, height: 1.4),
           ),
         ],

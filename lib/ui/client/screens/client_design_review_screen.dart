@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../../../data/providers/project_provider.dart';
 import '../../../../data/providers/architect_provider.dart';
@@ -94,26 +95,43 @@ class _ClientDesignReviewScreenState extends State<ClientDesignReviewScreen> {
     setState(() => _isLoading = true);
     final projectProv = Provider.of<ProjectProvider>(context, listen: false);
     final chatProv = Provider.of<ChatProvider>(context, listen: false);
+    final messenger = ScaffoldMessenger.of(context);
+    final navigator = Navigator.of(context);
 
     try {
       final success = await projectProv.clientReviewProgress(_paymentTerm!.id!);
       if (success) {
-        // Send chat message
-        await chatProv.sendMessage(widget.chatId, '✅ Client menyetujui desain! Proyek konsultasi selesai ✓');
+        // Cek apakah ini termin pembayaran terakhir
+        final termsRes = await Supabase.instance.client
+            .from('payment_terms')
+            .select('id, order_index')
+            .eq('bid_id', widget.bidId)
+            .order('order_index', ascending: true);
+        
+        final List<dynamic> terms = termsRes;
+        final currentTerm = terms.firstWhere((t) => t['id'] == _paymentTerm!.id);
+        final int orderIndex = currentTerm['order_index'] as int? ?? 1;
+        final bool isLastTerm = terms.every((t) => (t['order_index'] as int? ?? 1) <= orderIndex);
+
+        if (isLastTerm) {
+          await chatProv.sendMessage(widget.chatId, '✅ Client menyetujui desain! Proyek konsultasi selesai ✓');
+        } else {
+          await chatProv.sendMessage(widget.chatId, '✅ Client menyetujui draf desain! Silakan lakukan Pelunasan Pembayaran untuk menyelesaikan proyek.');
+        }
         widget.onReviewed();
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('✅ Desain disetujui secara formal!'), backgroundColor: Colors.green),
-          );
-          Navigator.pop(context);
+        messenger.showSnackBar(
+          const SnackBar(content: Text('✅ Desain disetujui secara formal!'), backgroundColor: Colors.green),
+        );
+        if (context.mounted) {
+          navigator.pop();
         }
       } else {
-        ScaffoldMessenger.of(context).showSnackBar(
+        messenger.showSnackBar(
           const SnackBar(content: Text('Gagal menyetujui desain.'), backgroundColor: Colors.red),
         );
       }
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
+      messenger.showSnackBar(
         SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
       );
     } finally {
@@ -215,12 +233,12 @@ class _ClientDesignReviewScreenState extends State<ClientDesignReviewScreen> {
   @override
   Widget build(BuildContext context) {
     final notes = widget.designData['notes'] as String? ?? '';
-    final revisionNumber = widget.designData['revision_number'] as int? ?? 1;
+    final revisionNumber = widget.designData['revision_number'] as int? ?? 0;
     final filesRaw = widget.designData['files'] as List<dynamic>? ?? [];
     final files = filesRaw.map((f) => Map<String, String>.from(f as Map)).toList();
 
     int maxRevisions = _bidDetails?['revisions'] ?? 0;
-    int remainingRevisions = maxRevisions - revisionNumber + 1;
+    int remainingRevisions = maxRevisions - revisionNumber;
     if (remainingRevisions < 0) remainingRevisions = 0;
 
     return Scaffold(
@@ -246,7 +264,7 @@ class _ClientDesignReviewScreenState extends State<ClientDesignReviewScreen> {
                 children: [
                   const Text('Draf Desain Masuk', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 20, color: Colors.black87)),
                   const SizedBox(height: 4),
-                  Text('Revisi ke-$revisionNumber', style: const TextStyle(color: Colors.black54, fontSize: 13)),
+                  Text(revisionNumber == 0 ? 'Desain Awal' : 'Revisi ke-$revisionNumber', style: const TextStyle(color: Colors.black54, fontSize: 13)),
                   const SizedBox(height: 20),
 
                   // Info Panel Revisions

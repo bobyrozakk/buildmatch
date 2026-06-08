@@ -60,14 +60,14 @@ class _KirimDesainScreenState extends State<KirimDesainScreen> {
         if (content.startsWith('{')) {
           try {
             final data = jsonDecode(content);
-            if (data['type'] == 'design') {
+            if (data['type'] == 'design' && data['bid_id'] == widget.bidId) {
               designCount++;
             }
           } catch (_) {}
         }
       }
       setState(() {
-        _revisionNumber = designCount + 1;
+        _revisionNumber = designCount;
         _isLoadingRevision = false;
       });
     } catch (e) {
@@ -262,7 +262,9 @@ class _KirimDesainScreenState extends State<KirimDesainScreen> {
                   ),
                   const SizedBox(height: 8),
                   Text(
-                    'Kirim hasil rancangan denah/desain ke client. Ini merupakan pengiriman revisi ke-$_revisionNumber.',
+                    _revisionNumber == 0
+                        ? 'Kirim hasil rancangan denah/desain ke client. Ini merupakan pengiriman Desain Awal.'
+                        : 'Kirim hasil rancangan denah/desain ke client. Ini merupakan pengiriman revisi ke-$_revisionNumber.',
                     style: const TextStyle(color: Colors.black54, fontSize: 12, height: 1.4),
                   ),
                   const SizedBox(height: 24),

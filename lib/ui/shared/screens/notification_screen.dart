@@ -269,6 +269,7 @@ class _NotificationScreenState extends State<NotificationScreen> {
 
   Future<bool> _openChatFromProjectOrBidNotification(NotificationModel notif) async {
     try {
+      final chatProvider = context.read<ChatProvider>();
       final userId = _supabase.auth.currentUser?.id;
       if (userId == null) return false;
 
@@ -336,7 +337,6 @@ class _NotificationScreenState extends State<NotificationScreen> {
       }
 
       if (otherUserId != null && otherUserId.isNotEmpty) {
-        final chatProvider = context.read<ChatProvider>();
         final chatId = await chatProvider.getOrCreateChat(
           otherUserId,
           projectId: projectId,
