@@ -42,10 +42,10 @@ class _ConsultasiTabState extends State<ConsultasiTab> {
         final data = jsonDecode(content) as Map<String, dynamic>;
         final type = data['type'] as String?;
         if (type == 'offer') {
-          return '📋 Penawaran desain dikirim';
+          return '📋 Penawaran telah dikirim';
         } else if (type == 'design') {
           final rev = data['revision_number'] as int? ?? 1;
-          return '🎨 Desain revisi ke-$rev dikirimkan';
+          return '🎨 Revisi ke-$rev telah diberikan';
         }
       } catch (_) {}
     }

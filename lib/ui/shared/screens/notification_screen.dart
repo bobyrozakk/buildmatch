@@ -1,12 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'dart:convert';
 import '../../../core/constants/colors.dart';
 import '../../../data/models/notification_model.dart';
 import '../../../data/providers/notification_provider.dart';
 import '../../../data/providers/project_provider.dart';
+import '../../../data/providers/chat_provider.dart';
 import '../../client/screens/project_detail_screen.dart';
 import 'chat_detail_screen.dart';
+import 'contractor_chat_detail_screen.dart';
 
 class NotificationScreen extends StatefulWidget {
   const NotificationScreen({super.key});
@@ -99,19 +102,69 @@ class _NotificationScreenState extends State<NotificationScreen> {
       await notifProvider.markAsRead(notif.id);
     }
 
+    bool opened = false;
+
     if (notif.type == 'chat') {
-      final opened = await _openChatNotification(notif);
-      if (!opened) _showNavigationUnavailable();
-      return;
+      opened = await _openChatNotification(notif);
+    } else if (notif.type == 'bid' || notif.type == 'project_update') {
+      // Coba buka room chat terkait terlebih dahulu
+      opened = await _openChatFromProjectOrBidNotification(notif);
+      // Jika gagal/belum ada chat, arahkan ke detail proyek
+      if (!opened) {
+        opened = await _openProjectNotification(notif);
+      }
     }
 
-    if (notif.type == 'bid' || notif.type == 'project_update') {
-      final opened = await _openProjectNotification(notif);
-      if (!opened) _showNavigationUnavailable();
-      return;
+    if (!opened) {
+      _showNavigationUnavailable();
     }
+  }
 
-    _showNavigationUnavailable();
+  Future<bool> _navigateToChatRoom(String chatId, Map<String, dynamic> chatRow) async {
+    if (!mounted) return false;
+    final currentUserId = _supabase.auth.currentUser?.id;
+    final isClientSide = currentUserId == chatRow['client_id'];
+
+    final client = Map<String, dynamic>.from(
+      (chatRow['client'] as Map?) ?? {},
+    );
+    final vendor = Map<String, dynamic>.from(
+      (chatRow['vendor'] as Map?) ?? {},
+    );
+
+    final receiverName = isClientSide
+        ? (vendor['name'] as String? ?? 'Pengguna')
+        : (client['name'] as String? ?? 'Pengguna');
+    final receiverAvatar = isClientSide
+        ? vendor['avatar_url'] as String?
+        : client['avatar_url'] as String?;
+    final receiverId = isClientSide
+        ? chatRow['vendor_id'] as String?
+        : chatRow['client_id'] as String?;
+
+    final vendorRole = vendor['role'] as String?;
+    final isContractor = vendorRole == 'vendor' || vendorRole == 'kontraktor';
+
+    await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => isContractor
+            ? ContractorChatDetailScreen(
+                chatId: chatId,
+                receiverName: receiverName,
+                receiverAvatar: receiverAvatar,
+                receiverId: receiverId,
+              )
+            : ChatDetailScreen(
+                chatId: chatId,
+                receiverName: receiverName,
+                receiverAvatar: receiverAvatar,
+                receiverId: receiverId,
+                chatStatus: chatRow['status'] as String? ?? 'accepted',
+              ),
+      ),
+    );
+    return true;
   }
 
   Future<bool> _openChatNotification(NotificationModel notif) async {
@@ -119,40 +172,9 @@ class _NotificationScreenState extends State<NotificationScreen> {
       final chatRow = notif.chatId != null
           ? await _fetchChatById(notif.chatId!)
           : await _findChatFromNotificationContent(notif);
-      if (chatRow == null || !mounted) return false;
+      if (chatRow == null) return false;
 
-      final currentUserId = _supabase.auth.currentUser?.id;
-      final isClientSide = currentUserId == chatRow['client_id'];
-      final client = Map<String, dynamic>.from(
-        (chatRow['client'] as Map?) ?? {},
-      );
-      final vendor = Map<String, dynamic>.from(
-        (chatRow['vendor'] as Map?) ?? {},
-      );
-
-      final receiverName = isClientSide
-          ? (vendor['name'] as String? ?? 'Pengguna')
-          : (client['name'] as String? ?? 'Pengguna');
-      final receiverAvatar = isClientSide
-          ? vendor['avatar_url'] as String?
-          : client['avatar_url'] as String?;
-      final receiverId = isClientSide
-          ? chatRow['vendor_id'] as String?
-          : chatRow['client_id'] as String?;
-
-      await Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (_) => ChatDetailScreen(
-            chatId: chatRow['id'] as String,
-            receiverName: receiverName,
-            receiverAvatar: receiverAvatar,
-            receiverId: receiverId,
-            chatStatus: chatRow['status'] as String? ?? 'accepted',
-          ),
-        ),
-      );
-      return true;
+      return await _navigateToChatRoom(chatRow['id'] as String, chatRow);
     } catch (e) {
       debugPrint('Error open chat notification: $e');
       return false;
@@ -163,7 +185,7 @@ class _NotificationScreenState extends State<NotificationScreen> {
     final response = await _supabase
         .from('chats')
         .select(
-          'id, client_id, vendor_id, status, client:client_id(name, avatar_url), vendor:vendor_id(name, avatar_url)',
+          'id, client_id, vendor_id, status, client:client_id(name, avatar_url, role), vendor:vendor_id(name, avatar_url, role)',
         )
         .eq('id', chatId)
         .maybeSingle();
@@ -184,7 +206,7 @@ class _NotificationScreenState extends State<NotificationScreen> {
     final response = await _supabase
         .from('chats')
         .select(
-          'id, client_id, vendor_id, status, updated_at, client:client_id(name, avatar_url), vendor:vendor_id(name, avatar_url), messages(content, created_at, sender_id)',
+          'id, client_id, vendor_id, status, updated_at, client:client_id(name, avatar_url, role), vendor:vendor_id(name, avatar_url, role), messages(content, created_at, sender_id)',
         )
         .or('client_id.eq.$userId,vendor_id.eq.$userId')
         .order('updated_at', ascending: false)
@@ -195,13 +217,145 @@ class _NotificationScreenState extends State<NotificationScreen> {
       final messages = List<Map<String, dynamic>>.from(
         (chat['messages'] as List?) ?? [],
       );
-      final hasMatchingMessage = messages.any(
-        (message) => (message['content'] as String? ?? '') == messagePart,
-      );
+      final hasMatchingMessage = messages.any((message) {
+        final content = message['content'] as String? ?? '';
+
+        // Exact match
+        if (content == messagePart) return true;
+
+        // Image match
+        if ((messagePart == '[Gambar dilampirkan]' || messagePart == 'Gambar dilampirkan') &&
+            (content.startsWith('http://') || content.startsWith('https://')) &&
+            (content.toLowerCase().contains('.png') ||
+             content.toLowerCase().contains('.jpg') ||
+             content.toLowerCase().contains('.jpeg') ||
+             content.toLowerCase().contains('.gif') ||
+             content.toLowerCase().contains('.webp'))) {
+          return true;
+        }
+
+        // File match
+        if ((messagePart == '[File dilampirkan]' || messagePart == 'File dilampirkan') &&
+            (content.startsWith('http://') || content.startsWith('https://')) &&
+            !(content.toLowerCase().contains('.png') ||
+              content.toLowerCase().contains('.jpg') ||
+              content.toLowerCase().contains('.jpeg') ||
+              content.toLowerCase().contains('.gif') ||
+              content.toLowerCase().contains('.webp'))) {
+          return true;
+        }
+
+        // Offer match
+        if ((messagePart.contains('penawaran') || messagePart.contains('Penawaran')) &&
+            content.startsWith('{') &&
+            content.contains('"type":"offer"')) {
+          return true;
+        }
+
+        // Design match
+        if ((messagePart.contains('desain') || messagePart.contains('Desain') || messagePart.contains('revisi') || messagePart.contains('Revisi')) &&
+            content.startsWith('{') &&
+            content.contains('"type":"design"')) {
+          return true;
+        }
+
+        return false;
+      });
       if (hasMatchingMessage) return chat;
     }
 
     return null;
+  }
+
+  Future<bool> _openChatFromProjectOrBidNotification(NotificationModel notif) async {
+    try {
+      final userId = _supabase.auth.currentUser?.id;
+      if (userId == null) return false;
+
+      String? projectId = notif.projectId;
+      String? vendorId;
+      String? clientId;
+
+      // 1. Jika ada bidId, ambil detail bid untuk mendapatkan vendorId dan projectId
+      if (notif.bidId != null && notif.bidId!.isNotEmpty) {
+        final bidRow = await _supabase
+            .from('bids')
+            .select('project_id, vendor_id, projects:project_id(client_id)')
+            .eq('id', notif.bidId!)
+            .maybeSingle();
+
+        if (bidRow != null) {
+          projectId = bidRow['project_id'] as String?;
+          vendorId = bidRow['vendor_id'] as String?;
+          if (bidRow['projects'] is Map) {
+            clientId = bidRow['projects']['client_id'] as String?;
+          }
+        }
+      }
+
+      // 2. Jika clientId kosong tetapi projectId ada, ambil detail project
+      if ((clientId == null || clientId.isEmpty) && projectId != null && projectId.isNotEmpty) {
+        final projectRow = await _supabase
+            .from('projects')
+            .select('client_id')
+            .eq('id', projectId)
+            .maybeSingle();
+        if (projectRow != null) {
+          clientId = projectRow['client_id'] as String?;
+        }
+      }
+
+      // 3. Cari jika sudah ada chat untuk project ini dan user saat ini
+      if (projectId != null && projectId.isNotEmpty) {
+        final existingChats = await _supabase
+            .from('chats')
+            .select(
+              'id, client_id, vendor_id, status, client:client_id(name, avatar_url, role), vendor:vendor_id(name, avatar_url, role)',
+            )
+            .eq('project_id', projectId)
+            .or('client_id.eq.$userId,vendor_id.eq.$userId')
+            .order('updated_at', ascending: false)
+            .limit(1);
+
+        if (existingChats.isNotEmpty) {
+          final chatRow = Map<String, dynamic>.from(existingChats[0]);
+          return await _navigateToChatRoom(chatRow['id'] as String, chatRow);
+        }
+      }
+
+      // 4. Jika belum ada chat, tetapi info lengkap untuk buat chat tersedia
+      String? otherUserId;
+      if (userId == clientId) {
+        otherUserId = vendorId;
+      } else if (userId == vendorId) {
+        otherUserId = clientId;
+      } else {
+        if (clientId != null && userId != clientId) {
+          otherUserId = clientId;
+        }
+      }
+
+      if (otherUserId != null && otherUserId.isNotEmpty) {
+        final chatProvider = context.read<ChatProvider>();
+        final chatId = await chatProvider.getOrCreateChat(
+          otherUserId,
+          projectId: projectId,
+          forceStatus: 'accepted',
+        );
+
+        if (chatId != null) {
+          final chatRow = await _fetchChatById(chatId);
+          if (chatRow != null) {
+            return await _navigateToChatRoom(chatId, chatRow);
+          }
+        }
+      }
+
+      return false;
+    } catch (e) {
+      debugPrint('Error open chat from project/bid notification: $e');
+      return false;
+    }
   }
 
   Future<bool> _openProjectNotification(NotificationModel notif) async {
@@ -385,7 +539,7 @@ class _NotificationScreenState extends State<NotificationScreen> {
                     children: [
                       const SizedBox(height: 4),
                       Text(
-                        notif.message,
+                        _formatMessagePreview(notif.message),
                         style: TextStyle(
                           color: notif.isRead ? Colors.grey : Colors.black87,
                           fontSize: 13,
@@ -409,6 +563,48 @@ class _NotificationScreenState extends State<NotificationScreen> {
         },
       ),
     );
+  }
+
+  String _formatMessagePreview(String message) {
+    String sender = '';
+    String body = message;
+
+    if (message.contains(':')) {
+      final colonIndex = message.indexOf(':');
+      sender = message.substring(0, colonIndex).trim();
+      body = message.substring(colonIndex + 1).trim();
+    }
+
+    if (body.isEmpty) return message;
+
+    String formattedBody = body;
+
+    if (body.startsWith('{')) {
+      try {
+        final data = jsonDecode(body) as Map<String, dynamic>;
+        final type = data['type'] as String?;
+        if (type == 'offer') {
+          formattedBody = '📋 Penawaran telah dikirim';
+        } else if (type == 'design') {
+          final rev = data['revision_number'] as int? ?? 1;
+          formattedBody = '🎨 Revisi ke-$rev telah diberikan';
+        }
+      } catch (_) {}
+    } else if (body.startsWith('http://') || body.startsWith('https://')) {
+      final lower = body.toLowerCase();
+      final isImage = lower.contains('.png') ||
+          lower.contains('.jpg') ||
+          lower.contains('.jpeg') ||
+          lower.contains('.gif') ||
+          lower.contains('.webp');
+      if (isImage) {
+        formattedBody = '🖼️ Gambar dilampirkan';
+      } else {
+        formattedBody = '📎 File dilampirkan';
+      }
+    }
+
+    return sender.isNotEmpty ? '$sender: $formattedBody' : formattedBody;
   }
 
   String _timeAgo(DateTime date) {

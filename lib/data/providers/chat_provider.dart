@@ -229,10 +229,11 @@ class ChatProvider extends ChangeNotifier {
         final senderName =
             _supabase.auth.currentUser?.userMetadata?['name'] ?? 'User';
 
+        final previewContent = _formatNotificationMessage(content);
         final notificationData = {
           'user_id': receiverId,
           'title': 'Pesan Baru',
-          'message': '$senderName: $content',
+          'message': '$senderName: $previewContent',
           'type': 'chat',
           'chat_id': chatId,
         };
@@ -243,7 +244,7 @@ class ChatProvider extends ChangeNotifier {
           await _supabase.from('notifications').insert({
             'user_id': receiverId,
             'title': 'Pesan Baru',
-            'message': '$senderName: $content',
+            'message': '$senderName: $previewContent',
             'type': 'chat',
           });
         }
@@ -254,6 +255,34 @@ class ChatProvider extends ChangeNotifier {
       debugPrint('Error send message: $e');
       return false;
     }
+  }
+
+  String _formatNotificationMessage(String content) {
+    if (content.startsWith('{')) {
+      try {
+        final data = jsonDecode(content) as Map<String, dynamic>;
+        final type = data['type'] as String?;
+        if (type == 'offer') {
+          return '📋 Penawaran telah dikirim';
+        } else if (type == 'design') {
+          final rev = data['revision_number'] as int? ?? 1;
+          return '🎨 Revisi ke-$rev telah diberikan';
+        }
+      } catch (_) {}
+    }
+
+    if (content.startsWith('http://') || content.startsWith('https://')) {
+      final lower = content.toLowerCase();
+      final isImage = lower.contains('.png') ||
+          lower.contains('.jpg') ||
+          lower.contains('.jpeg') ||
+          lower.contains('.gif') ||
+          lower.contains('.webp');
+      if (isImage) return '🖼️ Gambar dilampirkan';
+      return '📎 File dilampirkan';
+    }
+
+    return content;
   }
 
   /// Tandai pesan sebagai sudah dibaca

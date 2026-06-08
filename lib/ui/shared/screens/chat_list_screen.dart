@@ -41,10 +41,10 @@ class _ChatListScreenState extends State<ChatListScreen> {
       try {
         final data = jsonDecode(content) as Map<String, dynamic>;
         final type = data['type'] as String?;
-        if (type == 'offer') return '📋 Penawaran desain dikirim';
+        if (type == 'offer') return '📋 Penawaran telah dikirim';
         if (type == 'design') {
           final rev = data['revision_number'] as int? ?? 1;
-          return '🎨 Desain revisi ke-$rev dikirimkan';
+          return '🎨 Revisi ke-$rev telah diberikan';
         }
       } catch (_) {}
     }

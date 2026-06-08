@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'dart:convert';
 import '../../../core/constants/colors.dart';
 import '../../../data/providers/chat_provider.dart';
 import '../../../data/models/chat_model.dart';
@@ -47,6 +48,33 @@ class _ArsitekInboxTabState extends State<ArsitekInboxTab>
     if (diff.inDays < 1) return DateFormat('HH:mm').format(dt.toLocal());
     if (diff.inDays == 1) return 'Kemarin';
     return DateFormat('d MMM', 'id').format(dt.toLocal());
+  }
+
+  String _formatLastMessage(String? content) {
+    if (content == null || content.isEmpty) return 'Belum ada pesan';
+
+    if (content.startsWith('{')) {
+      try {
+        final data = jsonDecode(content) as Map<String, dynamic>;
+        final type = data['type'] as String?;
+        if (type == 'offer') return '📋 Penawaran telah dikirim';
+        if (type == 'design') {
+          final rev = data['revision_number'] as int? ?? 1;
+          return '🎨 Revisi ke-$rev telah diberikan';
+        }
+      } catch (_) {}
+    }
+
+    if (content.startsWith('http://') || content.startsWith('https://')) {
+      final lower = content.toLowerCase();
+      final isImage = lower.contains('.png') || lower.contains('.jpg') ||
+          lower.contains('.jpeg') || lower.contains('.gif') ||
+          lower.contains('.webp');
+      if (isImage) return '🖼️ Gambar dilampirkan';
+      return '📎 File dilampirkan';
+    }
+
+    return content;
   }
 
   @override
@@ -394,7 +422,7 @@ class _ArsitekInboxTabState extends State<ArsitekInboxTab>
                               children: [
                                 Expanded(
                                   child: Text(
-                                    chat.lastMessage ?? 'Belum ada pesan',
+                                    _formatLastMessage(chat.lastMessage),
                                     style: TextStyle(
                                       color: isActive
                                           ? Colors.black87
@@ -500,7 +528,9 @@ class _ArsitekInboxTabState extends State<ArsitekInboxTab>
   Widget _buildPermintaanCard(ChatModel chat, ChatProvider chatProv) {
     final clientName = chat.clientName ?? 'Klien';
     final clientAvatar = chat.clientAvatar;
-    final lastMsg = chat.lastMessage ?? 'Ingin berkonsultasi dengan Anda';
+    final lastMsg = chat.lastMessage != null && chat.lastMessage!.isNotEmpty
+        ? _formatLastMessage(chat.lastMessage)
+        : 'Ingin berkonsultasi dengan Anda';
 
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
