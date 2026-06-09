@@ -1,10 +1,11 @@
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:supabase_flutter/supabase_flutter.dart' hide AuthState;
 import 'package:buildmatch/core/constants/colors.dart';
 import 'package:buildmatch/data/models/project_model.dart';
-import 'package:buildmatch/data/providers/auth_provider.dart';
-import 'package:buildmatch/data/providers/project_provider.dart';
+import 'package:buildmatch/modules/client/logic/auth/auth_cubit.dart';
+import 'package:buildmatch/modules/client/logic/auth/auth_state.dart';
+import 'package:buildmatch/modules/client/logic/project/project_cubit.dart';
 import 'package:buildmatch/ui/auth/login_screen.dart';
 import 'widgets/profile_header.dart';
 import 'widgets/profile_stats_row.dart';
@@ -33,13 +34,13 @@ class _ProfileTabState extends State<ProfileTab> {
   }
 
   void _load() async {
-    final prov = Provider.of<ProjectProvider>(context, listen: false);
+    final cubit = context.read<ProjectCubit>();
     if (!mounted) return;
     setState(() {
       _isLoading = true;
     });
     try {
-      final list = await prov.fetchClientProjectsWithContractor();
+      final list = await cubit.fetchClientProjectsWithContractor();
       
       int activeCount = 0;
       int completedCount = 0;
@@ -125,8 +126,8 @@ class _ProfileTabState extends State<ProfileTab> {
     );
 
     if (confirm == true && mounted) {
-      final provider = Provider.of<AuthProvider>(context, listen: false);
-      await provider.logout();
+      final authCubit = context.read<AuthCubit>();
+      await authCubit.logout();
       if (!mounted) return;
       Navigator.pushAndRemoveUntil(
         context,
@@ -174,23 +175,18 @@ class _ProfileTabState extends State<ProfileTab> {
               Navigator.pop(ctx);
               if (!mounted) return;
               setState(() => _isLoading = true);
-              try {
-                await _supabase.auth.updateUser(UserAttributes(data: {'name': newName, 'phone': newPhone}));
-                if (user != null) {
-                  await _supabase.from('profiles').update({'name': newName, 'phone': newPhone}).eq('id', user.id);
-                }
-                if (!mounted) return;
+              final success = await context.read<AuthCubit>().updateProfile(name: newName, phone: newPhone);
+              if (!mounted) return;
+              if (success) {
                 ScaffoldMessenger.of(context).showSnackBar(
                   const SnackBar(content: Text('Profil berhasil diperbarui!'), backgroundColor: Colors.green),
                 );
-              } catch (_) {
-                if (!mounted) return;
+              } else {
                 ScaffoldMessenger.of(context).showSnackBar(
                   const SnackBar(content: Text('Gagal update profil.'), backgroundColor: Colors.red),
                 );
-              } finally {
-                if (mounted) setState(() => _isLoading = false);
               }
+              if (mounted) setState(() => _isLoading = false);
             },
             style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary),
             child: const Text("Simpan", style: TextStyle(color: Colors.white)),
@@ -238,20 +234,18 @@ class _ProfileTabState extends State<ProfileTab> {
               Navigator.pop(ctx);
               if (!mounted) return;
               setState(() => _isLoading = true);
-              try {
-                await _supabase.auth.updateUser(UserAttributes(password: newPassword));
-                if (!mounted) return;
+              final success = await context.read<AuthCubit>().updatePassword(newPassword: newPassword);
+              if (!mounted) return;
+              if (success) {
                 ScaffoldMessenger.of(context).showSnackBar(
                   const SnackBar(content: Text('Password berhasil diubah!'), backgroundColor: Colors.green),
                 );
-              } catch (_) {
-                if (!mounted) return;
+              } else {
                 ScaffoldMessenger.of(context).showSnackBar(
                   const SnackBar(content: Text('Gagal ubah password.'), backgroundColor: Colors.red),
                 );
-              } finally {
-                if (mounted) setState(() => _isLoading = false);
               }
+              if (mounted) setState(() => _isLoading = false);
             },
             style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary),
             child: const Text("Simpan", style: TextStyle(color: Colors.white)),
@@ -279,69 +273,73 @@ class _ProfileTabState extends State<ProfileTab> {
       );
     }
 
-    final user = _supabase.auth.currentUser;
-    final userName = user?.userMetadata?['name'] ?? 'Klien';
-    final userEmail = user?.email ?? '';
+    return BlocBuilder<AuthCubit, AuthState>(
+      builder: (context, authState) {
+        final user = authState is AuthAuthenticated ? authState.user : _supabase.auth.currentUser;
+        final userName = user?.userMetadata?['name'] ?? 'Klien';
+        final userEmail = user?.email ?? '';
 
-    return Scaffold(
-      backgroundColor: AppColors.backgroundCream,
-      body: CustomScrollView(
-        physics: const BouncingScrollPhysics(),
-        slivers: [
-          SliverToBoxAdapter(
-            child: ProfileHeader(
-              name: userName,
-              email: userEmail,
-              onEditPressed: _showEditProfileDialog,
-            ),
-          ),
-          SliverPadding(
-            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
-            sliver: SliverToBoxAdapter(
-              child: ProfileStatsRow(
-                activeProjectsCount: _activeProjectsCount,
-                completedProjectsCount: _completedProjectsCount,
-                reviewsCount: _reviewsCount,
+        return Scaffold(
+          backgroundColor: AppColors.backgroundCream,
+          body: CustomScrollView(
+            physics: const BouncingScrollPhysics(),
+            slivers: [
+              SliverToBoxAdapter(
+                child: ProfileHeader(
+                  name: userName,
+                  email: userEmail,
+                  onEditPressed: _showEditProfileDialog,
+                ),
               ),
-            ),
-          ),
-          _buildSectionTitle("Proyek Saya"),
-          SliverPadding(
-            padding: const EdgeInsets.symmetric(horizontal: 24),
-            sliver: SliverToBoxAdapter(
-              child: ProfileProjectsList(
-                projects: _projects,
-                onRefresh: _refresh,
+              SliverPadding(
+                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
+                sliver: SliverToBoxAdapter(
+                  child: ProfileStatsRow(
+                    activeProjectsCount: _activeProjectsCount,
+                    completedProjectsCount: _completedProjectsCount,
+                    reviewsCount: _reviewsCount,
+                  ),
+                ),
               ),
-            ),
-          ),
-          _buildSectionTitle("Pengaturan Akun"),
-          SliverPadding(
-            padding: const EdgeInsets.symmetric(horizontal: 24),
-            sliver: SliverToBoxAdapter(
-              child: ProfileSettingsCard(
-                onEditPassword: _showEditPasswordDialog,
-                onNotification: () {},
-                onHelp: () {
-                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Menghubungi Customer Service...')));
-                },
-                onTerms: () {},
+              _buildSectionTitle("Proyek Saya"),
+              SliverPadding(
+                padding: const EdgeInsets.symmetric(horizontal: 24),
+                sliver: SliverToBoxAdapter(
+                  child: ProfileProjectsList(
+                    projects: _projects,
+                    onRefresh: _refresh,
+                  ),
+                ),
               ),
-            ),
-          ),
-          SliverPadding(
-            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
-            sliver: SliverToBoxAdapter(
-              child: TextButton.icon(
-                onPressed: _handleLogout,
-                icon: const Icon(Icons.logout_rounded, color: Colors.red),
-                label: const Text('Keluar', style: TextStyle(color: Colors.red, fontWeight: FontWeight.w600)),
+              _buildSectionTitle("Pengaturan Akun"),
+              SliverPadding(
+                padding: const EdgeInsets.symmetric(horizontal: 24),
+                sliver: SliverToBoxAdapter(
+                  child: ProfileSettingsCard(
+                    onEditPassword: _showEditPasswordDialog,
+                    onNotification: () {},
+                    onHelp: () {
+                      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Menghubungi Customer Service...')));
+                    },
+                    onTerms: () {},
+                  ),
+                ),
               ),
-            ),
+              SliverPadding(
+                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
+                sliver: SliverToBoxAdapter(
+                  child: TextButton.icon(
+                    onPressed: _handleLogout,
+                    icon: const Icon(Icons.logout_rounded, color: Colors.red),
+                    label: const Text('Keluar', style: TextStyle(color: Colors.red, fontWeight: FontWeight.w600)),
+                  ),
+                ),
+              ),
+              const SliverToBoxAdapter(child: SizedBox(height: 60)),
+            ],
           ),
-          const SliverToBoxAdapter(child: SizedBox(height: 60)),
-        ],
-      ),
+        );
+      },
     );
   }
 }

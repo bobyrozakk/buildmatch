@@ -14,7 +14,7 @@ class CreateProjectHouseStyleCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final String imagePath = 'lib/ui/client/assets/images/house_styles/${style.toLowerCase()}.jpg';
+    final String imagePath = 'assets/images/house_styles/${style.toLowerCase()}.jpg';
 
     return GestureDetector(
       onTap: onTap,

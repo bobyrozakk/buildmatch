@@ -14,6 +14,7 @@ import 'modules/client/logic/project/project_cubit.dart';
 import 'modules/client/logic/vendor/vendor_cubit.dart';
 import 'modules/client/logic/architect/architect_cubit.dart';
 import 'modules/client/logic/chat/chat_cubit.dart';
+import 'modules/client/logic/auth/auth_cubit.dart';
 
 // --- IMPORT SCREENS ---
 import 'ui/shared/screens/main_nav.dart';
@@ -50,6 +51,7 @@ void main() async {
         BlocProvider<VendorCubit>(create: (_) => VendorCubit()),
         BlocProvider<ArchitectCubit>(create: (_) => ArchitectCubit()),
         BlocProvider<ChatCubit>(create: (_) => ChatCubit()),
+        BlocProvider<AuthCubit>(create: (_) => AuthCubit()),
       ],
       child: MultiProvider(
         providers: [

@@ -1,19 +1,13 @@
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:buildmatch/core/constants/colors.dart';
 import 'package:buildmatch/data/models/profile_model.dart';
-import 'package:buildmatch/data/providers/vendor_provider.dart';
+import 'package:buildmatch/modules/client/logic/vendor/vendor_cubit.dart';
+import 'package:buildmatch/modules/client/logic/vendor/vendor_state.dart';
 import 'package:buildmatch/ui/shared/widgets/glass_card.dart';
 
 class ContractorTabContent extends StatefulWidget {
-  final Future<List<ProfileModel>> vendorsFuture;
-  final Future<void> Function() onRefresh;
-
-  const ContractorTabContent({
-    super.key,
-    required this.vendorsFuture,
-    required this.onRefresh,
-  });
+  const ContractorTabContent({super.key});
 
   @override
   State<ContractorTabContent> createState() => _ContractorTabContentState();
@@ -54,36 +48,52 @@ class _ContractorTabContentState extends State<ContractorTabContent> {
 
         // List
         Expanded(
-          child: FutureBuilder<List<ProfileModel>>(
-            future: widget.vendorsFuture,
-            builder: (context, snapshot) {
-              if (snapshot.connectionState == ConnectionState.waiting) {
+          child: BlocBuilder<VendorCubit, VendorState>(
+            builder: (context, state) {
+              if (state is VendorInitial || state is VendorLoading) {
                 return const Center(child: CircularProgressIndicator(color: AppColors.primaryDark));
               }
 
-              final all = snapshot.data ?? [];
-              final filtered = _searchContractor.isEmpty
-                  ? all
-                  : all.where((v) => v.name.toLowerCase().contains(_searchContractor.toLowerCase())).toList();
-
-              if (filtered.isEmpty) {
-                return _buildEmptyContractors();
+              if (state is VendorError) {
+                return Center(
+                  child: Padding(
+                    padding: const EdgeInsets.all(24.0),
+                    child: Text(
+                      'Gagal memuat data: ${state.message}',
+                      style: const TextStyle(color: Colors.red),
+                      textAlign: TextAlign.center,
+                    ),
+                  ),
+                );
               }
 
-              return RefreshIndicator(
-                color: AppColors.primaryDark,
-                onRefresh: widget.onRefresh,
-                child: ListView.separated(
-                  physics: const BouncingScrollPhysics(),
-                  padding: const EdgeInsets.fromLTRB(20, 10, 20, 100),
-                  itemCount: filtered.length,
-                  separatorBuilder: (_, __) => const SizedBox(height: 16),
-                  itemBuilder: (context, index) {
-                    final vendor = filtered[index];
-                    return _buildVendorCard(vendor);
-                  },
-                ),
-              );
+              if (state is VendorLoaded) {
+                final all = state.vendors;
+                final filtered = _searchContractor.isEmpty
+                    ? all
+                    : all.where((v) => v.name.toLowerCase().contains(_searchContractor.toLowerCase())).toList();
+
+                if (filtered.isEmpty) {
+                  return _buildEmptyContractors();
+                }
+
+                return RefreshIndicator(
+                  color: AppColors.primaryDark,
+                  onRefresh: () async => context.read<VendorCubit>().fetchVendors(),
+                  child: ListView.separated(
+                    physics: const BouncingScrollPhysics(),
+                    padding: const EdgeInsets.fromLTRB(20, 10, 20, 100),
+                    itemCount: filtered.length,
+                    separatorBuilder: (_, __) => const SizedBox(height: 16),
+                    itemBuilder: (context, index) {
+                      final vendor = filtered[index];
+                      return _buildVendorCard(vendor);
+                    },
+                  ),
+                );
+              }
+
+              return const SizedBox.shrink();
             },
           ),
         ),

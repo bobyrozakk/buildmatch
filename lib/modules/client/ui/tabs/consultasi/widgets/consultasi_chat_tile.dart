@@ -1,10 +1,11 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:intl/intl.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:buildmatch/core/constants/colors.dart';
 import 'package:buildmatch/data/models/chat_model.dart';
-import 'package:buildmatch/data/providers/chat_provider.dart';
+import 'package:buildmatch/modules/client/logic/chat/chat_cubit.dart';
 import 'package:buildmatch/ui/shared/screens/chat_detail_screen.dart';
 import 'package:buildmatch/ui/shared/screens/contractor_chat_detail_screen.dart';
 import 'consultasi_role_badge.dart';
@@ -13,14 +14,12 @@ class ConsultasiChatTile extends StatelessWidget {
   final ChatModel chat;
   final String displayName;
   final String? displayAvatar;
-  final ChatProvider chatProv;
 
   const ConsultasiChatTile({
     super.key,
     required this.chat,
     required this.displayName,
     this.displayAvatar,
-    required this.chatProv,
   });
 
   String _formatLastMessage(String? content) {
@@ -72,6 +71,7 @@ class ConsultasiChatTile extends StatelessWidget {
 
     return GestureDetector(
       onTap: () async {
+        final cubit = context.read<ChatCubit>();
         final isContractor = chat.vendorRole == 'vendor' || chat.vendorRole == 'kontraktor';
         await Navigator.push(
           context,
@@ -92,7 +92,7 @@ class ConsultasiChatTile extends StatelessWidget {
                   ),
           ),
         );
-        chatProv.fetchChats();
+        cubit.fetchChats();
       },
       child: Container(
         margin: const EdgeInsets.only(bottom: 10),

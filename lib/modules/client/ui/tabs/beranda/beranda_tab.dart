@@ -1,18 +1,21 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 
 import 'package:buildmatch/modules/client/ui/screens/create_project/create_project_screen.dart';
 import 'package:buildmatch/modules/client/ui/screens/project_detail/project_detail_screen.dart';
-import 'package:buildmatch/data/providers/project_provider.dart';
-import 'package:buildmatch/data/providers/vendor_provider.dart';
 import 'package:buildmatch/data/models/project_model.dart';
 import 'package:buildmatch/data/models/profile_model.dart';
-import 'package:buildmatch/data/models/bid_model.dart';
 import 'package:buildmatch/core/constants/colors.dart';
 import 'package:buildmatch/core/utils/formatters.dart';
-import 'package:buildmatch/data/providers/chat_provider.dart';
 import 'package:buildmatch/data/providers/notification_provider.dart';
+
+// Bloc/Cubit logic
+import 'package:buildmatch/modules/client/logic/project/project_cubit.dart';
+import 'package:buildmatch/modules/client/logic/vendor/vendor_cubit.dart';
+import 'package:buildmatch/modules/client/logic/chat/chat_cubit.dart';
+import 'package:buildmatch/modules/client/ui/tabs/beranda/logic/beranda_cubit.dart';
+import 'package:buildmatch/modules/client/ui/tabs/beranda/logic/beranda_state.dart';
 
 // Extracted Widgets
 import 'widgets/beranda_app_bar.dart';
@@ -29,64 +32,29 @@ class BerandaTab extends StatefulWidget {
 }
 
 class _BerandaTabState extends State<BerandaTab> {
-  late Future<List<dynamic>> _dataFuture;
 
   @override
   void initState() {
     super.initState();
-    _loadData();
-  }
-
-  void _loadData() {
-    final project = Provider.of<ProjectProvider>(context, listen: false);
-    final vendor = Provider.of<VendorProvider>(context, listen: false);
-
-    // Fetch notifications and chats in background after initial build frame
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
         Provider.of<NotificationProvider>(
           context,
           listen: false,
         ).fetchNotifications();
-        Provider.of<ChatProvider>(context, listen: false).fetchChats();
+        context.read<ChatCubit>().fetchChats();
       }
     });
-
-    _dataFuture = Future.wait([
-      project.fetchProjects(), // 0: client projects (non-draft)
-      vendor.fetchTopVendors(), // 1: top rated vendors
-      project.fetchClientIncomingBids(), // 2: incoming bids
-      _fetchCurrentProfile(), // 3: current client profile
-    ]);
   }
 
-  Future<ProfileModel?> _fetchCurrentProfile() async {
-    final userId = Supabase.instance.client.auth.currentUser?.id;
-    if (userId == null) return null;
-
-    try {
-      final response = await Supabase.instance.client
-          .from('profiles')
-          .select()
-          .eq('id', userId)
-          .maybeSingle();
-
-      return response == null ? null : ProfileModel.fromJson(response);
-    } catch (e) {
-      debugPrint('Error fetch current client profile: $e');
-      return null;
-    }
-  }
-
-  Future<void> _refresh() async {
-    setState(_loadData);
-    await _dataFuture;
+  Future<void> _refresh(BuildContext context) async {
+    await context.read<BerandaCubit>().loadBerandaData();
   }
 
   // --- ACTIONS ---
 
-  Future<void> _onMulaiProyek() async {
-    final provider = Provider.of<ProjectProvider>(context, listen: false);
+  Future<void> _onMulaiProyek(BuildContext context) async {
+    final provider = context.read<ProjectCubit>();
     final drafts = await provider.fetchDraftProjects();
 
     if (!mounted) return;
@@ -96,7 +64,7 @@ class _BerandaTabState extends State<BerandaTab> {
         context,
         MaterialPageRoute(builder: (_) => const CreateProjectScreen()),
       ).then((val) {
-        _refresh();
+        _refresh(context);
         if (val == 'route_to_consultation') {
           widget.onSwitchTab?.call(99);
         }
@@ -213,7 +181,7 @@ class _BerandaTabState extends State<BerandaTab> {
           builder: (_) => CreateProjectScreen(draft: latestDraft),
         ),
       ).then((val) {
-        _refresh();
+        _refresh(context);
         if (val == 'route_to_consultation') {
           widget.onSwitchTab?.call(99);
         }
@@ -223,7 +191,7 @@ class _BerandaTabState extends State<BerandaTab> {
         context,
         MaterialPageRoute(builder: (_) => const CreateProjectScreen()),
       ).then((val) {
-        _refresh();
+        _refresh(context);
         if (val == 'route_to_consultation') {
           widget.onSwitchTab?.call(99);
         }
@@ -231,11 +199,11 @@ class _BerandaTabState extends State<BerandaTab> {
     }
   }
 
-  void _openProjectDetail(ProjectModel p) {
+  void _openProjectDetail(ProjectModel p, BuildContext context) {
     Navigator.push(
       context,
       MaterialPageRoute(builder: (_) => ProjectDetailScreen(project: p)),
-    ).then((_) => _refresh());
+    ).then((_) => _refresh(context));
   }
 
   void _goToContractorTab() => widget.onSwitchTab?.call(1);
@@ -245,87 +213,111 @@ class _BerandaTabState extends State<BerandaTab> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: AppColors.backgroundCream,
-      body: SafeArea(
-        child: RefreshIndicator(
-          color: AppColors.primary,
-          onRefresh: _refresh,
-          child: FutureBuilder<List<dynamic>>(
-            future: _dataFuture,
-            builder: (context, snapshot) {
-              if (snapshot.connectionState == ConnectionState.waiting) {
-                return const Center(
-                  child: CircularProgressIndicator(color: AppColors.primary),
-                );
-              }
+    return BlocProvider<BerandaCubit>(
+      create: (context) => BerandaCubit(
+        projectCubit: context.read<ProjectCubit>(),
+        vendorCubit: context.read<VendorCubit>(),
+      )..loadBerandaData(),
+      child: Builder(
+        builder: (scaffoldContext) {
+          return Scaffold(
+            backgroundColor: AppColors.backgroundCream,
+            body: SafeArea(
+              child: RefreshIndicator(
+                color: AppColors.primary,
+                onRefresh: () => _refresh(scaffoldContext),
+                child: BlocBuilder<BerandaCubit, BerandaState>(
+                  builder: (context, state) {
+                    if (state is BerandaInitial || state is BerandaLoading) {
+                      return const Center(
+                        child: CircularProgressIndicator(color: AppColors.primary),
+                      );
+                    }
 
-              final projects = (snapshot.data?[0] as List<ProjectModel>? ?? []);
-              final topVendors =
-                  (snapshot.data?[1] as List<Map<String, dynamic>>? ?? []);
-              final incomingBids = (snapshot.data?[2] as List<BidModel>? ?? []);
-              final profile = snapshot.data?[3] as ProfileModel?;
+                    if (state is BerandaError) {
+                      return Center(
+                        child: Text(
+                          'Gagal memuat data: ${state.message}',
+                          style: const TextStyle(color: Colors.red),
+                        ),
+                      );
+                    }
 
-              final activeProjects = projects
-                  .where((p) => p.status == 'in_progress')
-                  .toList();
-              final openProjects = projects
-                  .where((p) => p.status == 'open')
-                  .toList();
+                    if (state is BerandaLoaded) {
+                      final projects = state.projects;
+                      final topVendors = state.topVendors;
+                      final incomingBids = state.incomingBids;
+                      final profile = state.profile;
 
-              return SingleChildScrollView(
-                physics: const AlwaysScrollableScrollPhysics(
-                  parent: BouncingScrollPhysics(),
+                      final activeProjects = projects
+                          .where((p) => p.status == 'in_progress')
+                          .toList();
+                      final openProjects = projects
+                          .where((p) => p.status == 'open')
+                          .toList();
+
+                      return SingleChildScrollView(
+                        physics: const AlwaysScrollableScrollPhysics(
+                          parent: BouncingScrollPhysics(),
+                        ),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 20,
+                          vertical: 16,
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            BerandaAppBar(
+                              profile: profile,
+                              onSwitchTab: widget.onSwitchTab,
+                            ),
+                            const SizedBox(height: 20),
+                            BerandaHeroCard(
+                              profile: profile,
+                              onMulaiProyek: () => _onMulaiProyek(scaffoldContext),
+                            ),
+                            const SizedBox(height: 24),
+                            BerandaStatsRow(
+                              activeCount: activeProjects.length,
+                              openCount: openProjects.length,
+                              bidsCount: incomingBids.length,
+                            ),
+                            const SizedBox(height: 28),
+                            _buildSectionHeader('Menu Utama'),
+                            const SizedBox(height: 12),
+                            BerandaMenuGrid(
+                              onMulaiProyek: () => _onMulaiProyek(scaffoldContext),
+                              onCariKontraktor: _goToContractorTab,
+                              onCariArsitek: () => widget.onSwitchTab?.call(99),
+                              onLihatProgress: _goToProgressTab,
+                            ),
+                            const SizedBox(height: 28),
+                            _buildSectionHeader(
+                              'Kontraktor Terpopuler',
+                              onTap: _goToContractorTab,
+                            ),
+                            const SizedBox(height: 12),
+                            _buildKontraktorList(topVendors),
+                            const SizedBox(height: 28),
+                            _buildSectionHeader('Proyek Saya', onTap: _goToProgressTab),
+                            const SizedBox(height: 12),
+                            _buildProyekSaya(
+                              [...activeProjects, ...openProjects],
+                              scaffoldContext,
+                            ),
+                            const SizedBox(height: 100),
+                          ],
+                        ),
+                      );
+                    }
+
+                    return const SizedBox.shrink();
+                  },
                 ),
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 20,
-                  vertical: 16,
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    BerandaAppBar(
-                      profile: profile,
-                      onSwitchTab: widget.onSwitchTab,
-                    ),
-                    const SizedBox(height: 20),
-                    BerandaHeroCard(
-                      profile: profile,
-                      onMulaiProyek: _onMulaiProyek,
-                    ),
-                    const SizedBox(height: 24),
-                    BerandaStatsRow(
-                      activeCount: activeProjects.length,
-                      openCount: openProjects.length,
-                      bidsCount: incomingBids.length,
-                    ),
-                    const SizedBox(height: 28),
-                    _buildSectionHeader('Menu Utama'),
-                    const SizedBox(height: 12),
-                    BerandaMenuGrid(
-                      onMulaiProyek: _onMulaiProyek,
-                      onCariKontraktor: _goToContractorTab,
-                      onCariArsitek: () => widget.onSwitchTab?.call(99),
-                      onLihatProgress: _goToProgressTab,
-                    ),
-                    const SizedBox(height: 28),
-                    _buildSectionHeader(
-                      'Kontraktor Terpopuler',
-                      onTap: _goToContractorTab,
-                    ),
-                    const SizedBox(height: 12),
-                    _buildKontraktorList(topVendors),
-                    const SizedBox(height: 28),
-                    _buildSectionHeader('Proyek Saya', onTap: _goToProgressTab),
-                    const SizedBox(height: 12),
-                    _buildProyekSaya([...activeProjects, ...openProjects]),
-                    const SizedBox(height: 100),
-                  ],
-                ),
-              );
-            },
-          ),
-        ),
+              ),
+            ),
+          );
+        },
       ),
     );
   }
@@ -495,7 +487,7 @@ class _BerandaTabState extends State<BerandaTab> {
 
   // --- PROYEK SAYA (open + in_progress) ---
 
-  Widget _buildProyekSaya(List<ProjectModel> projects) {
+  Widget _buildProyekSaya(List<ProjectModel> projects, BuildContext context) {
     if (projects.isEmpty) {
       return Container(
         width: double.infinity,
@@ -533,7 +525,7 @@ class _BerandaTabState extends State<BerandaTab> {
             ),
             const SizedBox(height: 14),
             GestureDetector(
-              onTap: _onMulaiProyek,
+              onTap: () => _onMulaiProyek(context),
               child: Container(
                 padding: const EdgeInsets.symmetric(
                   horizontal: 16,
@@ -586,7 +578,7 @@ class _BerandaTabState extends State<BerandaTab> {
         }
 
         return GestureDetector(
-          onTap: () => _openProjectDetail(p),
+          onTap: () => _openProjectDetail(p, context),
           child: Container(
             margin: const EdgeInsets.only(bottom: 12),
             padding: const EdgeInsets.all(16),

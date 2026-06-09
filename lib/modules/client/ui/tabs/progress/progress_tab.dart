@@ -1,11 +1,12 @@
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:buildmatch/core/constants/colors.dart';
 import 'package:buildmatch/data/models/bid_model.dart';
 import 'package:buildmatch/data/models/project_model.dart';
-import 'package:buildmatch/data/providers/project_provider.dart';
 import 'package:buildmatch/modules/client/ui/screens/create_project/create_project_screen.dart';
 import 'package:buildmatch/modules/client/ui/screens/project_detail/project_detail_screen.dart';
+import 'package:buildmatch/modules/client/logic/project/project_cubit.dart';
+import 'package:buildmatch/modules/client/logic/project/project_state.dart';
 import 'widgets/progress_architect_bid_card.dart';
 import 'widgets/progress_grouped_bid_card.dart';
 import 'widgets/progress_draft_card.dart';
@@ -21,10 +22,6 @@ class ProgressTab extends StatefulWidget {
 }
 
 class _ProgressTabState extends State<ProgressTab> {
-  late Future<List<ProjectModel>> _projectsFuture;
-  late Future<List<ProjectModel>> _draftsFuture;
-  late Future<List<BidModel>> _incomingBidsFuture;
-  late Future<List<BidModel>> _architectBidsFuture;
 
   @override
   void initState() {
@@ -33,16 +30,15 @@ class _ProgressTabState extends State<ProgressTab> {
   }
 
   void _refresh() {
-    final provider = Provider.of<ProjectProvider>(context, listen: false);
-    setState(() {
-      _projectsFuture = provider.fetchProjects();
-      _draftsFuture = provider.fetchDraftProjects();
-      _incomingBidsFuture = provider.fetchClientIncomingBids();
-      _architectBidsFuture = provider.fetchClientArchitectBids();
-    });
+    final cubit = context.read<ProjectCubit>();
+    cubit.fetchProjects();
+    cubit.fetchDraftProjects();
+    cubit.fetchClientIncomingBids();
+    cubit.fetchClientArchitectBids();
   }
 
   Future<void> _confirmDeleteDraft(ProjectModel draft) async {
+    final cubit = context.read<ProjectCubit>();
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -69,8 +65,7 @@ class _ProgressTabState extends State<ProgressTab> {
     );
 
     if (confirmed == true && draft.id != null) {
-      final provider = Provider.of<ProjectProvider>(context, listen: false);
-      final success = await provider.deleteDraft(draft.id!);
+      final success = await cubit.deleteDraft(draft.id!);
       if (mounted) {
         if (success) {
           ScaffoldMessenger.of(context).showSnackBar(
@@ -93,8 +88,8 @@ class _ProgressTabState extends State<ProgressTab> {
   }
 
   Future<void> _handleEditProject(ProjectModel item) async {
-    final provider = Provider.of<ProjectProvider>(context, listen: false);
-    final bidCount = await provider.fetchProjectBidCountAll(item.id ?? '');
+    final cubit = context.read<ProjectCubit>();
+    final bidCount = await cubit.fetchProjectBidCountAll(item.id ?? '');
     if (!mounted) return;
 
     if (bidCount > 0) {
@@ -120,9 +115,9 @@ class _ProgressTabState extends State<ProgressTab> {
   }
 
   Future<void> _handleCancelProject(ProjectModel item) async {
-    final provider = Provider.of<ProjectProvider>(context, listen: false);
+    final cubit = context.read<ProjectCubit>();
 
-    final hasAccepted = await provider.hasAcceptedBid(item.id ?? '');
+    final hasAccepted = await cubit.hasAcceptedBid(item.id ?? '');
     if (!mounted) return;
 
     if (hasAccepted) {
@@ -135,7 +130,7 @@ class _ProgressTabState extends State<ProgressTab> {
       return;
     }
 
-    final bidCount = await provider.fetchProjectBidCountAll(item.id ?? '');
+    final bidCount = await cubit.fetchProjectBidCountAll(item.id ?? '');
     if (!mounted) return;
 
     final confirmed = await showDialog<bool>(
@@ -181,7 +176,7 @@ class _ProgressTabState extends State<ProgressTab> {
     );
 
     if (confirmed == true && mounted) {
-      final success = await provider.cancelProject(item.id ?? '');
+      final success = await cubit.cancelProject(item.id ?? '');
       if (!mounted) return;
       if (success) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -224,240 +219,199 @@ class _ProgressTabState extends State<ProgressTab> {
       body: RefreshIndicator(
         color: AppColors.primary,
         onRefresh: () async => _refresh(),
-        child: ListView(
-          padding: const EdgeInsets.all(20),
-          children: [
-            // ── SECTION PENAWARAN KONTRAKTOR MASUK (GROUPED PER PROYEK) ──
-            FutureBuilder<List<BidModel>>(
-              future: _incomingBidsFuture,
-              builder: (context, snapshot) {
-                if (snapshot.connectionState == ConnectionState.waiting) {
-                  return const SizedBox.shrink();
-                }
+        child: BlocBuilder<ProjectCubit, ProjectState>(
+          builder: (context, state) {
+            if (state is ProjectInitial || state is ProjectLoading) {
+              return const Center(
+                child: CircularProgressIndicator(color: AppColors.primary),
+              );
+            }
 
-                final bids = snapshot.data ?? [];
-                if (bids.isEmpty) return const SizedBox.shrink();
+            if (state is ProjectError) {
+              return Center(
+                child: Padding(
+                  padding: const EdgeInsets.all(24.0),
+                  child: Text(
+                    'Gagal memuat data: ${state.message}',
+                    style: const TextStyle(color: Colors.red),
+                    textAlign: TextAlign.center,
+                  ),
+                ),
+              );
+            }
 
+            if (state is ProjectLoaded) {
+              final projects = state.projects;
+              final drafts = state.draftProjects;
+              final incomingBids = state.incomingBids;
+              final architectBids = state.architectBids;
+
+              final List<Widget> listChildren = [];
+
+              // ── SECTION PENAWARAN KONTRAKTOR MASUK (GROUPED PER PROYEK) ──
+              if (incomingBids.isNotEmpty) {
                 final Map<String, List<BidModel>> grouped = {};
-                for (final bid in bids) {
+                for (final bid in incomingBids) {
                   grouped.putIfAbsent(bid.projectId, () => []).add(bid);
                 }
 
-                return Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        Container(
-                          padding: const EdgeInsets.all(6),
-                          decoration: BoxDecoration(
-                            color: Colors.orange.withValues(alpha: 0.1),
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          child: const Icon(Icons.gavel_rounded, size: 16, color: Colors.orange),
+                listChildren.addAll([
+                  Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(6),
+                        decoration: BoxDecoration(
+                          color: Colors.orange.withValues(alpha: 0.1),
+                          borderRadius: BorderRadius.circular(8),
                         ),
-                        const SizedBox(width: 8),
-                        Text(
-                          'Penawaran Kontraktor (${grouped.length} proyek)',
-                          style: const TextStyle(
-                            fontSize: 15,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.black87,
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 12),
-
-                    ...grouped.entries.map((entry) {
-                      final projectBids = entry.value;
-                      final firstBid = projectBids.first;
-                      final project = firstBid.project;
-                      return ProgressGroupedBidCard(
-                        projectBids: projectBids,
-                        project: project,
-                        onRefresh: _refresh,
-                      );
-                    }),
-
-                    const SizedBox(height: 8),
-                    const Divider(height: 32),
-                  ],
-                );
-              },
-            ),
-
-            // ── SECTION KONSULTASI ARSITEK ──
-            FutureBuilder<List<BidModel>>(
-              future: _architectBidsFuture,
-              builder: (context, snapshot) {
-                if (snapshot.connectionState == ConnectionState.waiting) {
-                  return const SizedBox.shrink();
-                }
-
-                final architectBids = snapshot.data ?? [];
-                if (architectBids.isEmpty) return const SizedBox.shrink();
-
-                return Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        Container(
-                          padding: const EdgeInsets.all(6),
-                          decoration: BoxDecoration(
-                            color: Colors.purple.withValues(alpha: 0.1),
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          child: const Icon(Icons.architecture_rounded, size: 16, color: Colors.purple),
-                        ),
-                        const SizedBox(width: 8),
-                        Text(
-                          'Konsultasi Arsitek (${architectBids.length})',
-                          style: const TextStyle(
-                            fontSize: 15,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.black87,
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 12),
-
-                    ...architectBids.map(
-                      (bid) => ProgressArchitectBidCard(
-                        bid: bid,
-                        onRefresh: _refresh,
+                        child: const Icon(Icons.gavel_rounded, size: 16, color: Colors.orange),
                       ),
+                      const SizedBox(width: 8),
+                      Text(
+                        'Penawaran Kontraktor (${grouped.length} proyek)',
+                        style: const TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.black87,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  ...grouped.entries.map((entry) {
+                    final projectBids = entry.value;
+                    final firstBid = projectBids.first;
+                    final project = firstBid.project;
+                    return ProgressGroupedBidCard(
+                      projectBids: projectBids,
+                      project: project,
+                      onRefresh: _refresh,
+                    );
+                  }),
+                  const SizedBox(height: 8),
+                  const Divider(height: 32),
+                ]);
+              }
+
+              // ── SECTION KONSULTASI ARSITEK ──
+              if (architectBids.isNotEmpty) {
+                listChildren.addAll([
+                  Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(6),
+                        decoration: BoxDecoration(
+                          color: Colors.purple.withValues(alpha: 0.1),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: const Icon(Icons.architecture_rounded, size: 16, color: Colors.purple),
+                      ),
+                      const SizedBox(width: 8),
+                      Text(
+                        'Konsultasi Arsitek (${architectBids.length})',
+                        style: const TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.black87,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  ...architectBids.map(
+                    (bid) => ProgressArchitectBidCard(
+                      bid: bid,
+                      onRefresh: _refresh,
                     ),
+                  ),
+                  const SizedBox(height: 8),
+                  const Divider(height: 32),
+                ]);
+              }
 
-                    const SizedBox(height: 8),
-                    const Divider(height: 32),
-                  ],
-                );
-              },
-            ),
-
-            // ── SECTION DRAFT ──
-            FutureBuilder<List<ProjectModel>>(
-              future: _draftsFuture,
-              builder: (context, snapshot) {
-                if (snapshot.connectionState == ConnectionState.waiting) {
-                  return const SizedBox(
-                    height: 60,
-                    child: Center(
-                      child: SizedBox(
-                        width: 20,
-                        height: 20,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2,
+              // ── SECTION DRAFT ──
+              if (drafts.isNotEmpty) {
+                listChildren.addAll([
+                  Row(
+                    children: [
+                      const Icon(Icons.bookmark_rounded, size: 16, color: AppColors.primary),
+                      const SizedBox(width: 6),
+                      Text(
+                        'Draft Saya (${drafts.length})',
+                        style: const TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.bold,
                           color: AppColors.primary,
                         ),
                       ),
-                    ),
-                  );
-                }
-
-                final drafts = snapshot.data ?? [];
-                if (drafts.isEmpty) return const SizedBox.shrink();
-
-                return Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        const Icon(Icons.bookmark_rounded, size: 16, color: AppColors.primary),
-                        const SizedBox(width: 6),
-                        Text(
-                          'Draft Saya (${drafts.length})',
-                          style: const TextStyle(
-                            fontSize: 14,
-                            fontWeight: FontWeight.bold,
-                            color: AppColors.primary,
+                    ],
+                  ),
+                  const SizedBox(height: 10),
+                  ...drafts.map(
+                    (draft) => ProgressDraftCard(
+                      draft: draft,
+                      onTap: () async {
+                        final val = await Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => CreateProjectScreen(draft: draft),
                           ),
-                        ),
-                      ],
+                        );
+                        _refresh();
+                        if (val == 'route_to_consultation') {
+                          widget.onSwitchTab?.call(99);
+                        }
+                      },
+                      onDelete: () => _confirmDeleteDraft(draft),
                     ),
-                    const SizedBox(height: 10),
-
-                    ...drafts.map(
-                      (draft) => ProgressDraftCard(
-                        draft: draft,
-                        onTap: () async {
-                          final val = await Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (_) => CreateProjectScreen(draft: draft),
-                            ),
-                          );
-                          _refresh();
-                          if (val == 'route_to_consultation') {
-                            widget.onSwitchTab?.call(99);
-                          }
-                        },
-                        onDelete: () => _confirmDeleteDraft(draft),
+                  ),
+                  const SizedBox(height: 8),
+                  const Divider(height: 32),
+                  const Row(
+                    children: [
+                      Icon(Icons.assignment_outlined, size: 16, color: Colors.black54),
+                      SizedBox(width: 6),
+                      Text(
+                        'Proyek Aktif',
+                        style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.black54,
+                        ),
                       ),
-                    ),
+                    ],
+                  ),
+                  const SizedBox(height: 10),
+                ]);
+              }
 
-                    const SizedBox(height: 8),
-                    const Divider(height: 32),
-
-                    const Row(
-                      children: [
-                        Icon(Icons.assignment_outlined, size: 16, color: Colors.black54),
-                        SizedBox(width: 6),
-                        Text(
-                          'Proyek Aktif',
-                          style: TextStyle(
-                            fontSize: 14,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.black54,
-                          ),
-                        ),
-                      ],
+              // ── SECTION PROYEK AKTIF ──
+              if (projects.isEmpty) {
+                listChildren.add(const ProgressEmptyState());
+              } else {
+                listChildren.addAll(
+                  projects.map(
+                    (item) => ProgressProjectCard(
+                      project: item,
+                      onTap: () => Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (_) => ProjectDetailScreen(project: item)),
+                      ).then((_) => _refresh()),
+                      onEdit: () => _handleEditProject(item),
+                      onCancel: () => _handleCancelProject(item),
                     ),
-                    const SizedBox(height: 10),
-                  ],
+                  ),
                 );
-              },
-            ),
+              }
 
-            // ── SECTION PROYEK AKTIF ──
-            FutureBuilder<List<ProjectModel>>(
-              future: _projectsFuture,
-              builder: (context, snapshot) {
-                if (snapshot.connectionState == ConnectionState.waiting) {
-                  return const Center(
-                    child: Padding(
-                      padding: EdgeInsets.all(40),
-                      child: CircularProgressIndicator(color: AppColors.primary),
-                    ),
-                  );
-                }
+              return ListView(
+                padding: const EdgeInsets.all(20),
+                children: listChildren,
+              );
+            }
 
-                if (!snapshot.hasData || snapshot.data!.isEmpty) {
-                  return const ProgressEmptyState();
-                }
-
-                final projects = snapshot.data!;
-                return Column(
-                  children: projects
-                      .map(
-                        (item) => ProgressProjectCard(
-                          project: item,
-                          onTap: () => Navigator.push(
-                            context,
-                            MaterialPageRoute(builder: (_) => ProjectDetailScreen(project: item)),
-                          ).then((_) => _refresh()),
-                          onEdit: () => _handleEditProject(item),
-                          onCancel: () => _handleCancelProject(item),
-                        ),
-                      )
-                      .toList(),
-                );
-              },
-            ),
-          ],
+            return const SizedBox.shrink();
+          },
         ),
       ),
     );

@@ -1,20 +1,14 @@
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:buildmatch/core/constants/colors.dart';
 import 'package:buildmatch/data/models/profile_model.dart';
-import 'package:buildmatch/data/providers/architect_provider.dart';
+import 'package:buildmatch/modules/client/logic/architect/architect_cubit.dart';
+import 'package:buildmatch/modules/client/logic/architect/architect_state.dart';
 import 'package:buildmatch/ui/shared/widgets/glass_card.dart';
 import 'package:buildmatch/modules/client/ui/screens/architect_detail/architect_detail_screen.dart';
 
 class ArchitectTabContent extends StatefulWidget {
-  final Future<List<Map<String, dynamic>>> architectsFuture;
-  final Future<void> Function() onRefresh;
-
-  const ArchitectTabContent({
-    super.key,
-    required this.architectsFuture,
-    required this.onRefresh,
-  });
+  const ArchitectTabContent({super.key});
 
   @override
   State<ArchitectTabContent> createState() => _ArchitectTabContentState();
@@ -55,38 +49,54 @@ class _ArchitectTabContentState extends State<ArchitectTabContent> {
 
         // List
         Expanded(
-          child: FutureBuilder<List<Map<String, dynamic>>>(
-            future: widget.architectsFuture,
-            builder: (context, snapshot) {
-              if (snapshot.connectionState == ConnectionState.waiting) {
+          child: BlocBuilder<ArchitectCubit, ArchitectState>(
+            builder: (context, state) {
+              if (state is ArchitectInitial || state is ArchitectLoading) {
                 return const Center(child: CircularProgressIndicator(color: AppColors.primary));
               }
 
-              final all = snapshot.data ?? [];
-              final filtered = _searchArchitect.isEmpty
-                  ? all
-                  : all.where((a) {
-                      final profile = a['profile'] as ProfileModel;
-                      final q = _searchArchitect.toLowerCase();
-                      return profile.name.toLowerCase().contains(q) ||
-                          (profile.companyName ?? '').toLowerCase().contains(q) ||
-                          (a['location'] as String).toLowerCase().contains(q);
-                    }).toList();
-
-              if (filtered.isEmpty) {
-                return _buildEmptyArchitects();
+              if (state is ArchitectError) {
+                return Center(
+                  child: Padding(
+                    padding: const EdgeInsets.all(24.0),
+                    child: Text(
+                      'Gagal memuat data: ${state.message}',
+                      style: const TextStyle(color: Colors.red),
+                      textAlign: TextAlign.center,
+                    ),
+                  ),
+                );
               }
 
-              return RefreshIndicator(
-                color: AppColors.primary,
-                onRefresh: widget.onRefresh,
-                child: ListView.builder(
-                  physics: const BouncingScrollPhysics(),
-                  padding: const EdgeInsets.fromLTRB(20, 10, 20, 100),
-                  itemCount: filtered.length,
-                  itemBuilder: (_, i) => _buildArchitectCard(filtered[i]),
-                ),
-              );
+              if (state is ArchitectLoaded) {
+                final all = state.architects;
+                final filtered = _searchArchitect.isEmpty
+                    ? all
+                    : all.where((a) {
+                        final profile = a['profile'] as ProfileModel;
+                        final q = _searchArchitect.toLowerCase();
+                        return profile.name.toLowerCase().contains(q) ||
+                            (profile.companyName ?? '').toLowerCase().contains(q) ||
+                            (a['location'] as String).toLowerCase().contains(q);
+                      }).toList();
+
+                if (filtered.isEmpty) {
+                  return _buildEmptyArchitects();
+                }
+
+                return RefreshIndicator(
+                  color: AppColors.primary,
+                  onRefresh: () async => context.read<ArchitectCubit>().fetchAllArchitects(),
+                  child: ListView.builder(
+                    physics: const BouncingScrollPhysics(),
+                    padding: const EdgeInsets.fromLTRB(20, 10, 20, 100),
+                    itemCount: filtered.length,
+                    itemBuilder: (_, i) => _buildArchitectCard(filtered[i]),
+                  ),
+                );
+              }
+
+              return const SizedBox.shrink();
             },
           ),
         ),

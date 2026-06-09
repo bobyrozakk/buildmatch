@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:buildmatch/data/models/profile_model.dart';
-import 'package:buildmatch/data/providers/chat_provider.dart';
+import 'package:buildmatch/modules/client/logic/chat/chat_cubit.dart';
+import 'package:buildmatch/modules/client/logic/chat/chat_state.dart';
 import 'package:buildmatch/data/providers/notification_provider.dart';
 import 'package:buildmatch/core/constants/colors.dart';
 import 'package:buildmatch/ui/shared/screens/notification_screen.dart';
@@ -110,14 +112,17 @@ class BerandaAppBar extends StatelessWidget {
           ),
         ),
         const Spacer(),
-        Consumer<ChatProvider>(
-          builder: (context, chat, child) => _buildIconBtn(
-            Icons.chat_bubble_outline_rounded,
-            badge: chat.totalUnreadCount,
-            onTap: () {
-              onSwitchTab?.call(2);
-            },
-          ),
+        BlocBuilder<ChatCubit, ChatState>(
+          builder: (context, state) {
+            final unreadCount = state is ChatLoaded ? state.totalUnreadCount : 0;
+            return _buildIconBtn(
+              Icons.chat_bubble_outline_rounded,
+              badge: unreadCount,
+              onTap: () {
+                onSwitchTab?.call(2);
+              },
+            );
+          },
         ),
         const SizedBox(width: 8),
         Consumer<NotificationProvider>(

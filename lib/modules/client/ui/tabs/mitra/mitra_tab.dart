@@ -1,9 +1,8 @@
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:buildmatch/core/constants/colors.dart';
-import 'package:buildmatch/data/models/profile_model.dart';
-import 'package:buildmatch/data/providers/vendor_provider.dart';
-import 'package:buildmatch/data/providers/architect_provider.dart';
+import 'package:buildmatch/modules/client/logic/vendor/vendor_cubit.dart';
+import 'package:buildmatch/modules/client/logic/architect/architect_cubit.dart';
 
 // Extracted Tab Content Widgets
 import 'widgets/contractor_tab_content.dart';
@@ -19,8 +18,6 @@ class MitraTab extends StatefulWidget {
 
 class _MitraTabState extends State<MitraTab> with SingleTickerProviderStateMixin {
   late TabController _tabController;
-  late Future<List<ProfileModel>> _vendorsFuture;
-  late Future<List<Map<String, dynamic>>> _architectsFuture;
 
   @override
   void initState() {
@@ -30,28 +27,14 @@ class _MitraTabState extends State<MitraTab> with SingleTickerProviderStateMixin
       vsync: this, 
       initialIndex: widget.initialTab,
     );
-    _vendorsFuture = Provider.of<VendorProvider>(context, listen: false).fetchVendors();
-    _architectsFuture = Provider.of<ArchitectProvider>(context, listen: false).fetchAllArchitects();
+    context.read<VendorCubit>().fetchVendors();
+    context.read<ArchitectCubit>().fetchAllArchitects();
   }
 
   @override
   void dispose() {
     _tabController.dispose();
     super.dispose();
-  }
-
-  Future<void> _refreshVendors() async {
-    setState(() {
-      _vendorsFuture = Provider.of<VendorProvider>(context, listen: false).fetchVendors();
-    });
-    await _vendorsFuture;
-  }
-
-  Future<void> _refreshArchitects() async {
-    setState(() {
-      _architectsFuture = Provider.of<ArchitectProvider>(context, listen: false).fetchAllArchitects();
-    });
-    await _architectsFuture;
   }
 
   @override
@@ -94,15 +77,9 @@ class _MitraTabState extends State<MitraTab> with SingleTickerProviderStateMixin
         ),
         child: TabBarView(
           controller: _tabController,
-          children: [
-            ContractorTabContent(
-              vendorsFuture: _vendorsFuture,
-              onRefresh: _refreshVendors,
-            ),
-            ArchitectTabContent(
-              architectsFuture: _architectsFuture,
-              onRefresh: _refreshArchitects,
-            ),
+          children: const [
+            ContractorTabContent(),
+            ArchitectTabContent(),
           ],
         ),
       ),
