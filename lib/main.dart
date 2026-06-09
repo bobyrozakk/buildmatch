@@ -3,13 +3,17 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/date_symbol_data_local.dart';
 
-// --- IMPORT PROVIDERS ---
 import 'data/providers/project_provider.dart';
 import 'data/providers/auth_provider.dart';
 import 'data/providers/vendor_provider.dart';
 import 'data/providers/chat_provider.dart';
 import 'data/providers/notification_provider.dart';
 import 'data/providers/architect_provider.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
+import 'modules/client/logic/project/project_cubit.dart';
+import 'modules/client/logic/vendor/vendor_cubit.dart';
+import 'modules/client/logic/architect/architect_cubit.dart';
+import 'modules/client/logic/chat/chat_cubit.dart';
 
 // --- IMPORT SCREENS ---
 import 'ui/shared/screens/main_nav.dart';
@@ -40,16 +44,24 @@ void main() async {
   );
 
   runApp(
-    MultiProvider(
+    MultiBlocProvider(
       providers: [
-        ChangeNotifierProvider(create: (_) => AuthProvider()),
-        ChangeNotifierProvider(create: (_) => ProjectProvider()),
-        ChangeNotifierProvider(create: (_) => VendorProvider()),
-        ChangeNotifierProvider(create: (_) => ChatProvider()),
-        ChangeNotifierProvider(create: (_) => NotificationProvider()),
-        ChangeNotifierProvider(create: (_) => ArchitectProvider()),
+        BlocProvider<ProjectCubit>(create: (_) => ProjectCubit()),
+        BlocProvider<VendorCubit>(create: (_) => VendorCubit()),
+        BlocProvider<ArchitectCubit>(create: (_) => ArchitectCubit()),
+        BlocProvider<ChatCubit>(create: (_) => ChatCubit()),
       ],
-      child: const BuildMatchApp(),
+      child: MultiProvider(
+        providers: [
+          ChangeNotifierProvider(create: (_) => AuthProvider()),
+          ChangeNotifierProvider(create: (_) => ProjectProvider()),
+          ChangeNotifierProvider(create: (_) => VendorProvider()),
+          ChangeNotifierProvider(create: (_) => ChatProvider()),
+          ChangeNotifierProvider(create: (_) => NotificationProvider()),
+          ChangeNotifierProvider(create: (_) => ArchitectProvider()),
+        ],
+        child: const BuildMatchApp(),
+      ),
     ),
   );
 }
