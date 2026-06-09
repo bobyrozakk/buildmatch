@@ -1,31 +1,20 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart'; // ADDED: untuk TextInputFormatter
-import 'package:provider/provider.dart';
+import 'package:flutter/services.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:image_picker/image_picker.dart';
-import '../../data/providers/auth_provider.dart';
-import '../../core/widgets/buildmatch_appbar.dart';
-import 'login_screen.dart';
+import '../../logic/auth_cubit.dart';
 
-// ============================================================
-// ADDED: NIB Input Formatter
-// Auto-format tampilan: XXXX XXXX XXXX X (spasi setiap 4 digit)
-// Nilai yang disimpan ke DB: 13 digit murni tanpa spasi
-// ============================================================
 class _NibInputFormatter extends TextInputFormatter {
   @override
   TextEditingValue formatEditUpdate(
     TextEditingValue oldValue,
     TextEditingValue newValue,
   ) {
-    // Ambil digit murni saja, buang selain angka
     final digits = newValue.text.replaceAll(RegExp(r'\D'), '');
-    // Batasi maksimal 13 digit
     final limited = digits.length > 13 ? digits.substring(0, 13) : digits;
-    // Format: XXXX XXXX XXXX X
     final buffer = StringBuffer();
     for (int i = 0; i < limited.length; i++) {
-      // Tambah spasi sebelum digit ke-5, ke-9, dan ke-13
       if (i == 4 || i == 8 || i == 12) buffer.write(' ');
       buffer.write(limited[i]);
     }
@@ -37,14 +26,21 @@ class _NibInputFormatter extends TextInputFormatter {
   }
 }
 
-class RegisterScreen extends StatefulWidget {
+class RegisterForm extends StatefulWidget {
   final String role;
-  const RegisterScreen({super.key, required this.role});
+  final bool isLoading;
+
+  const RegisterForm({
+    super.key,
+    required this.role,
+    required this.isLoading,
+  });
+
   @override
-  State<RegisterScreen> createState() => _RegisterScreenState();
+  State<RegisterForm> createState() => _RegisterFormState();
 }
 
-class _RegisterScreenState extends State<RegisterScreen> {
+class _RegisterFormState extends State<RegisterForm> {
   // Controller umum (semua role)
   final _emailController = TextEditingController();
   final _phoneController = TextEditingController();
@@ -63,7 +59,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
   String? _npwpFileName;
   File? _npwpFile;
 
-  // ADDED: Controller & state untuk NIB
+  // Controller khusus NIB
   final _nibController = TextEditingController();
   String? _nibFileName;
   File? _nibFile;
@@ -87,13 +83,12 @@ class _RegisterScreenState extends State<RegisterScreen> {
     _companyNameController.dispose();
     _picNameController.dispose();
     _npwpController.dispose();
-    _nibController.dispose(); // ADDED
+    _nibController.dispose();
     _straNumberController.dispose();
     _experienceController.dispose();
     super.dispose();
   }
 
-  // ========== Password Strength Logic ==========
   int _getPasswordStrength(String password) {
     if (password.isEmpty) return 0;
     int score = 0;
@@ -125,8 +120,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
     }
   }
 
-  // ========== Submit ==========
-  void _submit() async {
+  void _submit() {
     final email = _emailController.text.trim();
     final emailRegex = RegExp(r"^[a-zA-Z0-9.a-zA-Z0-9.!#$%&'*+-/=?^_`{|}~]+@[a-zA-Z0-9]+\.[a-zA-Z]+");
 
@@ -143,10 +137,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
       return;
     }
 
-    // ADDED: Validasi NIB khusus kontraktor
     String? nibDigits;
     if (_isKontraktor) {
-      // Strip spasi dari tampilan formatter → ambil 13 digit murni
       nibDigits = _nibController.text.replaceAll(' ', '');
       if (nibDigits.isEmpty) {
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('NIB wajib diisi!'), backgroundColor: Colors.red));
@@ -162,11 +154,10 @@ class _RegisterScreenState extends State<RegisterScreen> {
       }
     }
 
-    final provider = Provider.of<AuthProvider>(context, listen: false);
     String name = _nameController.text.trim();
     if (_isKontraktor) name = _picNameController.text.trim();
 
-    String? errorMsg = await provider.register(
+    context.read<AuthCubit>().register(
       email: email,
       password: _passwordController.text,
       name: name,
@@ -176,27 +167,14 @@ class _RegisterScreenState extends State<RegisterScreen> {
       picName: _isKontraktor ? _picNameController.text.trim() : null,
       npwp: _isKontraktor ? _npwpController.text.trim() : null,
       npwpFile: _isKontraktor ? _npwpFile : null,
-      nib: _isKontraktor ? nibDigits : null,       // ADDED: kirim 13 digit murni
-      nibFile: _isKontraktor ? _nibFile : null,    // ADDED: kirim file foto NIB
+      nib: _isKontraktor ? nibDigits : null,
+      nibFile: _isKontraktor ? _nibFile : null,
       straNumber: _isArsitek ? _straNumberController.text.trim() : null,
       experienceYears: _isArsitek ? _experienceController.text.trim() : null,
       straFile: _isArsitek ? _straFile : null,
     );
-
-    if (!mounted) return;
-
-    if (errorMsg == null) {
-      Navigator.pushAndRemoveUntil(
-        context,
-        MaterialPageRoute(builder: (_) => RegisterSuccessScreen(role: widget.role)),
-        (route) => false,
-      );
-    } else {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(errorMsg), backgroundColor: Colors.red));
-    }
   }
 
-  // ========== Pilih Foto NPWP ==========
   Future<void> _pickNpwpPhoto(ImageSource source) async {
     try {
       final picker = ImagePicker();
@@ -230,14 +208,14 @@ class _RegisterScreenState extends State<RegisterScreen> {
             children: [
               const Text("Pilih Sumber Foto NPWP", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
               const SizedBox(height: 16),
-              ListTile(
-                leading: const Icon(Icons.camera_alt_outlined),
-                title: const Text('Kamera'),
+              ListTypeTile(
+                icon: Icons.camera_alt_outlined,
+                title: 'Kamera',
                 onTap: () { Navigator.pop(context); _pickNpwpPhoto(ImageSource.camera); },
               ),
-              ListTile(
-                leading: const Icon(Icons.photo_library_outlined),
-                title: const Text('Galeri'),
+              ListTypeTile(
+                icon: Icons.photo_library_outlined,
+                title: 'Galeri',
                 onTap: () { Navigator.pop(context); _pickNpwpPhoto(ImageSource.gallery); },
               ),
             ],
@@ -247,7 +225,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
     );
   }
 
-  // ADDED: Pilih Foto NIB
   Future<void> _pickNibPhoto(ImageSource source) async {
     try {
       final picker = ImagePicker();
@@ -281,14 +258,14 @@ class _RegisterScreenState extends State<RegisterScreen> {
             children: [
               const Text("Pilih Sumber Foto NIB", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
               const SizedBox(height: 16),
-              ListTile(
-                leading: const Icon(Icons.camera_alt_outlined),
-                title: const Text('Kamera'),
+              ListTypeTile(
+                icon: Icons.camera_alt_outlined,
+                title: 'Kamera',
                 onTap: () { Navigator.pop(context); _pickNibPhoto(ImageSource.camera); },
               ),
-              ListTile(
-                leading: const Icon(Icons.photo_library_outlined),
-                title: const Text('Galeri'),
+              ListTypeTile(
+                icon: Icons.photo_library_outlined,
+                title: 'Galeri',
                 onTap: () { Navigator.pop(context); _pickNibPhoto(ImageSource.gallery); },
               ),
             ],
@@ -298,105 +275,134 @@ class _RegisterScreenState extends State<RegisterScreen> {
     );
   }
 
-  @override
-  Widget build(BuildContext context) {
-    final isLoading = context.watch<AuthProvider>().isLoading;
-    final password = _passwordController.text;
-    final strength = _getPasswordStrength(password);
+  Future<void> _pickStraPhoto(ImageSource source) async {
+    try {
+      final picker = ImagePicker();
+      final XFile? image = await picker.pickImage(source: source);
+      if (image != null) {
+        final ext = image.path.split('.').last.toLowerCase();
+        if (ext == 'jpg' || ext == 'jpeg' || ext == 'png') {
+          setState(() {
+            _straFile = File(image.path);
+            _straFileName = image.name;
+          });
+        } else {
+          if (!mounted) return;
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Format file harus JPG atau PNG!'), backgroundColor: Colors.red));
+        }
+      }
+    } catch (e) {
+      debugPrint("Error picking STRA image: $e");
+    }
+  }
 
-    return Scaffold(
-      backgroundColor: const Color(0xFFF7F4EF),
-      appBar: BuildMatchAppBar(
-        actions: [
-          Container(
-            margin: const EdgeInsets.only(right: 16, top: 12, bottom: 12),
-            padding: const EdgeInsets.symmetric(horizontal: 12),
-            decoration: BoxDecoration(color: const Color(0xFF8B2B0F), borderRadius: BorderRadius.circular(20)),
-            alignment: Alignment.center,
-            child: Text(widget.role, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12)),
-          ),
-        ],
-      ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(24.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+  void _showStraImageSourceDialog() {
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      builder: (_) => SafeArea(
+        child: Wrap(
           children: [
-            const Text("Buat Akun Baru", style: TextStyle(fontSize: 26, fontWeight: FontWeight.bold, color: Colors.black87)),
-            const SizedBox(height: 8),
-            const Text("Masuk ke akun BuildMatch Anda", style: TextStyle(color: Colors.black54, fontSize: 14)),
-            const SizedBox(height: 30),
-            // FORM FIELDS BERDASARKAN ROLE
-            if (_isKontraktor)
-              ..._buildKontraktorFields()
-            else if (_isArsitek)
-              ..._buildArsitekFields()
-            else
-              ..._buildClientFields(),
-            // FIELD UMUM: EMAIL
-            const SizedBox(height: 16),
-            _buildLabel("Email"),
-            _buildFigmaTextField(_emailController, "contoh@gmail.com", Icons.email_outlined),
-            // FIELD UMUM: PASSWORD
-            const SizedBox(height: 16),
-            _buildLabel("Password"),
-            _buildFigmaTextField(
-              _passwordController, "Min. 8 karakter", Icons.lock_outline,
-              isPassword: true, isObscure: _obscurePass,
-              onToggle: () => setState(() => _obscurePass = !_obscurePass),
-              onChanged: (_) => setState(() {}),
+            ListTypeTile(
+              icon: Icons.camera_alt,
+              title: 'Kamera',
+              onTap: () { Navigator.pop(context); _pickStraPhoto(ImageSource.camera); },
             ),
-            // FIELD UMUM: KONFIRMASI PASSWORD
-            const SizedBox(height: 16),
-            _buildLabel("Konfirmasi Password"),
-            _buildFigmaTextField(
-              _confirmController, "Min. 8 karakter", Icons.lock_outline,
-              isPassword: true, isObscure: _obscureConfirm,
-              onToggle: () => setState(() => _obscureConfirm = !_obscureConfirm),
+            ListTypeTile(
+              icon: Icons.photo_library,
+              title: 'Galeri',
+              onTap: () { Navigator.pop(context); _pickStraPhoto(ImageSource.gallery); },
             ),
-            // PASSWORD STRENGTH
-            const SizedBox(height: 16),
-            _buildPasswordStrengthBar(strength),
-            const SizedBox(height: 16),
-            _buildPasswordChecklist(password),
-            const SizedBox(height: 40),
-            // TOMBOL LANJUTKAN
-            SizedBox(
-              width: double.infinity,
-              height: 55,
-              child: ElevatedButton(
-                onPressed: isLoading ? null : _submit,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF8B2B0F),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                ),
-                child: isLoading
-                    ? const CircularProgressIndicator(color: Colors.white)
-                    : const Text("Lanjutkan →", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white)),
-              ),
-            ),
-            const SizedBox(height: 16),
-            Center(
-              child: RichText(
-                textAlign: TextAlign.center,
-                text: TextSpan(
-                  style: const TextStyle(color: Colors.black38, fontSize: 11),
-                  children: [
-                    const TextSpan(text: "Dengan melanjutkan, Anda menyetujui "),
-                    TextSpan(text: "Syarat & Ketentuan", style: TextStyle(color: const Color(0xFF8B2B0F).withOpacity(0.8), fontWeight: FontWeight.bold)),
-                    const TextSpan(text: " kami"),
-                  ],
-                ),
-              ),
-            ),
-            const SizedBox(height: 24),
           ],
         ),
       ),
     );
   }
 
-  // ========== FIELD KHUSUS CLIENT ==========
+  @override
+  Widget build(BuildContext context) {
+    final password = _passwordController.text;
+    final strength = _getPasswordStrength(password);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text("Buat Akun Baru", style: TextStyle(fontSize: 26, fontWeight: FontWeight.bold, color: Colors.black87)),
+        const SizedBox(height: 8),
+        const Text("Masuk ke akun BuildMatch Anda", style: TextStyle(color: Colors.black54, fontSize: 14)),
+        const SizedBox(height: 30),
+
+        if (_isKontraktor)
+          ..._buildKontraktorFields()
+        else if (_isArsitek)
+          ..._buildArsitekFields()
+        else
+          ..._buildClientFields(),
+
+        const SizedBox(height: 16),
+        _buildLabel("Email"),
+        _buildFigmaTextField(_emailController, "contoh@gmail.com", Icons.email_outlined),
+
+        const SizedBox(height: 16),
+        _buildLabel("Password"),
+        _buildFigmaTextField(
+          _passwordController, "Min. 8 karakter", Icons.lock_outline,
+          isPassword: true, isObscure: _obscurePass,
+          onToggle: () => setState(() => _obscurePass = !_obscurePass),
+          onChanged: (_) => setState(() {}),
+        ),
+
+        const SizedBox(height: 16),
+        _buildLabel("Konfirmasi Password"),
+        _buildFigmaTextField(
+          _confirmController, "Min. 8 karakter", Icons.lock_outline,
+          isPassword: true, isObscure: _obscureConfirm,
+          onToggle: () => setState(() => _obscureConfirm = !_obscureConfirm),
+        ),
+
+        const SizedBox(height: 16),
+        _buildPasswordStrengthBar(strength),
+        const SizedBox(height: 16),
+        _buildPasswordChecklist(password),
+        const SizedBox(height: 40),
+
+        SizedBox(
+          width: double.infinity,
+          height: 55,
+          child: ElevatedButton(
+            onPressed: widget.isLoading ? null : _submit,
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF8B2B0F),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            ),
+            child: widget.isLoading
+                ? const SizedBox(
+                    width: 24,
+                    height: 24,
+                    child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2.5),
+                  )
+                : const Text("Lanjutkan →", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white)),
+          ),
+        ),
+        const SizedBox(height: 16),
+        Center(
+          child: RichText(
+            textAlign: TextAlign.center,
+            text: TextSpan(
+              style: const TextStyle(color: Colors.black38, fontSize: 11),
+              children: [
+                const TextSpan(text: "Dengan melanjutkan, Anda menyetujui "),
+                TextSpan(text: "Syarat & Ketentuan", style: TextStyle(color: const Color(0xFF8B2B0F).withOpacity(0.8), fontWeight: FontWeight.bold)),
+                const TextSpan(text: " kami"),
+              ],
+            ),
+          ),
+        ),
+        const SizedBox(height: 24),
+      ],
+    );
+  }
+
   List<Widget> _buildClientFields() {
     return [
       _buildLabel("Nama Lengkap"),
@@ -407,7 +413,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
     ];
   }
 
-  // ========== FIELD KHUSUS KONTRAKTOR ==========
   List<Widget> _buildKontraktorFields() {
     return [
       _buildLabel("Nama Perusahaan"),
@@ -425,12 +430,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
       _buildLabel("Foto NPWP (JPG, PNG)"),
       _buildNpwpUploadArea(),
       const SizedBox(height: 16),
-
-      // =============================================
-      // ADDED: NIB — Nomor Induk Berusaha
-      // =============================================
       _buildLabel("NIB (Nomor Induk Berusaha)"),
-      _buildNibTextField(), // field khusus dengan auto-formatter
+      _buildNibTextField(),
       const SizedBox(height: 4),
       const Padding(
         padding: EdgeInsets.only(left: 4),
@@ -442,11 +443,9 @@ class _RegisterScreenState extends State<RegisterScreen> {
       const SizedBox(height: 16),
       _buildLabel("Foto Bukti NIB (JPG, PNG)"),
       _buildNibUploadArea(),
-      // =============================================
     ];
   }
 
-  // ========== FIELD KHUSUS ARSITEK ==========
   List<Widget> _buildArsitekFields() {
     return [
       _buildLabel("Nama Lengkap"),
@@ -466,7 +465,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
     ];
   }
 
-  // ========== WIDGET: Upload Area NPWP ==========
   Widget _buildNpwpUploadArea() {
     return GestureDetector(
       onTap: _showNpwpImageSourceDialog,
@@ -517,18 +515,16 @@ class _RegisterScreenState extends State<RegisterScreen> {
     );
   }
 
-  // ADDED: NIB text field khusus dengan _NibInputFormatter
   Widget _buildNibTextField() {
     return TextFormField(
       controller: _nibController,
       keyboardType: TextInputType.number,
-      inputFormatters: [_NibInputFormatter()], // auto-format XXXX XXXX XXXX X
+      inputFormatters: [_NibInputFormatter()],
       onChanged: (_) => setState(() {}),
       decoration: InputDecoration(
         hintText: "XXXX XXXX XXXX X",
         hintStyle: const TextStyle(color: Colors.black38, fontSize: 13),
         prefixIcon: Icon(Icons.article_outlined, color: const Color(0xFF8B2B0F).withOpacity(0.8), size: 20),
-        // Counter tampilkan progress digit (digit murni / 13)
         suffixIcon: Padding(
           padding: const EdgeInsets.only(right: 12),
           child: Column(
@@ -557,7 +553,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
     );
   }
 
-  // ADDED: Upload Area NIB
   Widget _buildNibUploadArea() {
     return GestureDetector(
       onTap: _showNibImageSourceDialog,
@@ -610,7 +605,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
     );
   }
 
-  // ========== WIDGET: Password Strength Bar ==========
   Widget _buildPasswordStrengthBar(int strength) {
     final label = _getStrengthLabel(strength);
     final color = _getStrengthColor(strength);
@@ -643,7 +637,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
     );
   }
 
-  // ========== WIDGET: Password Checklist ==========
   Widget _buildPasswordChecklist(String password) {
     final checks = [
       {'label': 'Minimal 8 karakter', 'valid': password.length >= 8},
@@ -682,7 +675,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
     );
   }
 
-  // ========== WIDGET BUILDERS ==========
   Widget _buildLabel(String text) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 8),
@@ -753,7 +745,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
     );
   }
 
-  // ========== WIDGET: Upload Area STRA ==========
   Widget _buildStraUploadArea() {
     return GestureDetector(
       onTap: _showStraImageSourceDialog,
@@ -802,103 +793,26 @@ class _RegisterScreenState extends State<RegisterScreen> {
       ),
     );
   }
-
-  Future<void> _pickStraPhoto(ImageSource source) async {
-    final picker = ImagePicker();
-    final XFile? image = await picker.pickImage(source: source);
-    if (image != null) {
-      final ext = image.path.split('.').last.toLowerCase();
-      if (ext == 'jpg' || ext == 'jpeg' || ext == 'png') {
-        setState(() { _straFile = File(image.path); _straFileName = image.name; });
-      } else {
-        if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Format file harus JPG atau PNG!'), backgroundColor: Colors.red));
-      }
-    }
-  }
-
-  void _showStraImageSourceDialog() {
-    showModalBottomSheet(
-      context: context,
-      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
-      builder: (_) => SafeArea(
-        child: Wrap(
-          children: [
-            ListTile(leading: const Icon(Icons.camera_alt), title: const Text('Kamera'), onTap: () { Navigator.pop(context); _pickStraPhoto(ImageSource.camera); }),
-            ListTile(leading: const Icon(Icons.photo_library), title: const Text('Galeri'), onTap: () { Navigator.pop(context); _pickStraPhoto(ImageSource.gallery); }),
-          ],
-        ),
-      ),
-    );
-  }
 }
 
-// ========== SCREEN: REGISTRASI BERHASIL ==========
-class RegisterSuccessScreen extends StatefulWidget {
-  final String role;
-  const RegisterSuccessScreen({super.key, required this.role});
-  @override
-  State<RegisterSuccessScreen> createState() => _RegisterSuccessScreenState();
-}
+class ListTypeTile extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final VoidCallback onTap;
 
-class _RegisterSuccessScreenState extends State<RegisterSuccessScreen>
-    with SingleTickerProviderStateMixin {
-  late AnimationController _controller;
-  late Animation<double> _scaleAnimation;
-
-  @override
-  void initState() {
-    super.initState();
-    _controller = AnimationController(vsync: this, duration: const Duration(milliseconds: 800));
-    _scaleAnimation = CurvedAnimation(parent: _controller, curve: Curves.easeOutBack);
-    WidgetsBinding.instance.addPostFrameCallback((_) { _controller.forward(); });
-  }
-
-  @override
-  void dispose() { _controller.dispose(); super.dispose(); }
+  const ListTypeTile({
+    super.key,
+    required this.icon,
+    required this.title,
+    required this.onTap,
+  });
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: const Color(0xFFF7F4EF),
-      body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 24.0),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              const Spacer(),
-              ScaleTransition(
-                scale: _scaleAnimation,
-                child: Container(
-                  width: 100, height: 100,
-                  decoration: const BoxDecoration(color: Color(0xFF8B2B0F), shape: BoxShape.circle),
-                  child: const Icon(Icons.check_rounded, color: Colors.white, size: 70),
-                ),
-              ),
-              const SizedBox(height: 24),
-              const Text("Registrasi Berhasil", style: TextStyle(fontSize: 22, fontWeight: FontWeight.w700, color: Colors.black87, letterSpacing: -0.5)),
-              const SizedBox(height: 12),
-              const Text("Silakan masuk ke akun Anda melalui\nhalaman login", textAlign: TextAlign.center, style: TextStyle(fontSize: 14, color: Colors.black54, height: 1.5)),
-              const Spacer(),
-              SizedBox(
-                width: double.infinity,
-                child: TextButton(
-                  onPressed: () {
-                    Navigator.pushAndRemoveUntil(
-                      context,
-                      MaterialPageRoute(builder: (_) => const LoginScreen()),
-                      (route) => false,
-                    );
-                  },
-                  child: const Text("Masuk", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF8B2B0F))),
-                ),
-              ),
-              const SizedBox(height: 16),
-            ],
-          ),
-        ),
-      ),
+    return ListTile(
+      leading: Icon(icon),
+      title: Text(title),
+      onTap: onTap,
     );
   }
 }

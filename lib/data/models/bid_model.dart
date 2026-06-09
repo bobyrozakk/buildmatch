@@ -1,7 +1,8 @@
+import 'package:equatable/equatable.dart';
 import 'project_model.dart';
 
 /// Data model for contractor bids on projects.
-class BidModel {
+class BidModel extends Equatable {
   final String? id;
   final String projectId;
   final String vendorId;
@@ -78,4 +79,53 @@ class BidModel {
       vendorRating: vendorRating,
     );
   }
-}
+
+  BidModel copyWith({
+    String? id,
+    String? projectId,
+    String? vendorId,
+    double? price,
+    String? message,
+    String? status,
+    DateTime? createdAt,
+    ProjectModel? project,
+    String? vendorName,
+    int? estimationMonths,
+    String? rabUrl,
+    int? vendorExperienceYears,
+    double? vendorRating,
+  }) {
+    return BidModel(
+      id: id ?? this.id,
+      projectId: projectId ?? this.projectId,
+      vendorId: vendorId ?? this.vendorId,
+      price: price ?? this.price,
+      message: message ?? this.message,
+      status: status ?? this.status,
+      createdAt: createdAt ?? this.createdAt,
+      project: project ?? this.project,
+      vendorName: vendorName ?? this.vendorName,
+      estimationMonths: estimationMonths ?? this.estimationMonths,
+      rabUrl: rabUrl ?? this.rabUrl,
+      vendorExperienceYears: vendorExperienceYears ?? this.vendorExperienceYears,
+      vendorRating: vendorRating ?? this.vendorRating,
+    );
+  }
+
+  @override
+  List<Object?> get props => [
+        id,
+        projectId,
+        vendorId,
+        price,
+        message,
+        status,
+        createdAt,
+        project,
+        vendorName,
+        estimationMonths,
+        rabUrl,
+        vendorExperienceYears,
+        vendorRating,
+      ];
+}

@@ -1,5 +1,7 @@
+import 'package:equatable/equatable.dart';
+
 /// Data model for user profiles (client, vendor, architect).
-class ProfileModel {
+class ProfileModel extends Equatable {
   final String id;
   final String name;
   final String? phone;
@@ -61,4 +63,50 @@ class ProfileModel {
       'is_verified': isVerified,
     };
   }
-}
+
+  ProfileModel copyWith({
+    String? id,
+    String? name,
+    String? phone,
+    String? role,
+    String? companyName,
+    String? npwp,
+    String? nib,
+    String? straNumber,
+    String? experienceYears,
+    bool? isVerified,
+    String? avatarUrl,
+    DateTime? createdAt,
+  }) {
+    return ProfileModel(
+      id: id ?? this.id,
+      name: name ?? this.name,
+      phone: phone ?? this.phone,
+      role: role ?? this.role,
+      companyName: companyName ?? this.companyName,
+      npwp: npwp ?? this.npwp,
+      nib: nib ?? this.nib,
+      straNumber: straNumber ?? this.straNumber,
+      experienceYears: experienceYears ?? this.experienceYears,
+      isVerified: isVerified ?? this.isVerified,
+      avatarUrl: avatarUrl ?? this.avatarUrl,
+      createdAt: createdAt ?? this.createdAt,
+    );
+  }
+
+  @override
+  List<Object?> get props => [
+        id,
+        name,
+        phone,
+        role,
+        companyName,
+        npwp,
+        nib,
+        straNumber,
+        experienceYears,
+        isVerified,
+        avatarUrl,
+        createdAt,
+      ];
+}

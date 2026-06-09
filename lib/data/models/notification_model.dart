@@ -1,4 +1,6 @@
-class NotificationModel {
+import 'package:equatable/equatable.dart';
+
+class NotificationModel extends Equatable {
   final String id;
   final String userId;
   final String title;
@@ -10,7 +12,7 @@ class NotificationModel {
   final bool isRead;
   final DateTime createdAt;
 
-  NotificationModel({
+  const NotificationModel({
     required this.id,
     required this.userId,
     required this.title,
@@ -38,18 +40,59 @@ class NotificationModel {
     );
   }
 
-  NotificationModel copyWith({bool? isRead}) {
+  Map<String, dynamic> toJson() {
+    return {
+      'id': id,
+      'user_id': userId,
+      'title': title,
+      'message': message,
+      'type': type,
+      'chat_id': chatId,
+      'project_id': projectId,
+      'bid_id': bidId,
+      'is_read': isRead,
+      'created_at': createdAt.toIso8601String(),
+    };
+  }
+
+  NotificationModel copyWith({
+    String? id,
+    String? userId,
+    String? title,
+    String? message,
+    String? type,
+    String? chatId,
+    String? projectId,
+    String? bidId,
+    bool? isRead,
+    DateTime? createdAt,
+  }) {
     return NotificationModel(
-      id: id,
-      userId: userId,
-      title: title,
-      message: message,
-      type: type,
-      chatId: chatId,
-      projectId: projectId,
-      bidId: bidId,
+      id: id ?? this.id,
+      userId: userId ?? this.userId,
+      title: title ?? this.title,
+      message: message ?? this.message,
+      type: type ?? this.type,
+      chatId: chatId ?? this.chatId,
+      projectId: projectId ?? this.projectId,
+      bidId: bidId ?? this.bidId,
       isRead: isRead ?? this.isRead,
-      createdAt: createdAt,
+      createdAt: createdAt ?? this.createdAt,
     );
   }
+
+  @override
+  List<Object?> get props => [
+        id,
+        userId,
+        title,
+        message,
+        type,
+        chatId,
+        projectId,
+        bidId,
+        isRead,
+        createdAt,
+      ];
 }
+

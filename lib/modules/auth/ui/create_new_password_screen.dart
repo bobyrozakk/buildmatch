@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import '../../core/constants/colors.dart';
-import '../../core/utils/validators.dart';
-import '../../core/widgets/password_strength.dart';
+import '../../../core/constants/colors.dart';
+import '../../../core/utils/validators.dart';
+import '../../../core/widgets/password_strength.dart';
 
 class CreateNewPasswordScreen extends StatefulWidget {
   const CreateNewPasswordScreen({super.key});

@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'login_screen.dart'; // CHANGED: kept for "Sudah punya akun?" navigation
 import 'register_screen.dart';
-import '../../core/constants/colors.dart';
-import '../../core/widgets/buildmatch_appbar.dart';
+import '../../../core/constants/colors.dart';
+import '../../../core/widgets/buildmatch_appbar.dart';
 
 class RoleScreen extends StatefulWidget {
   const RoleScreen({super.key});

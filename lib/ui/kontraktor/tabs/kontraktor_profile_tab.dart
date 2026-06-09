@@ -1,13 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import '../../../data/providers/vendor_provider.dart';
-import '../../../data/providers/auth_provider.dart';
+import '../../../modules/auth/logic/auth_cubit.dart';
 import '../../../data/models/profile_model.dart';
 import '../../../data/models/portfolio_model.dart';
 import '../../../data/models/certification_model.dart';
+import '../../../data/providers/vendor_provider.dart';
 import '../screens/kontraktor_profileEdit_screen.dart';
-import '../../auth/login_screen.dart';
+import 'package:buildmatch/modules/auth/ui/login_screen.dart';
 import '../../shared/widgets/glass_card.dart';
 import '../../../core/constants/colors.dart';
 
@@ -88,13 +88,9 @@ class _KontraktorProfileTabState
     );
 
     if (confirm == true && mounted) {
-      final provider =
-          Provider.of<AuthProvider>(
-        context,
-        listen: false,
-      );
+      final authCubit = context.read<AuthCubit>();
 
-      await provider.logout();
+      await authCubit.logout();
 
       if (!mounted) return;
 

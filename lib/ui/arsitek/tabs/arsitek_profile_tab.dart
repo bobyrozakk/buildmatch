@@ -2,7 +2,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import '../../../data/providers/auth_provider.dart';
+import '../../../modules/auth/logic/auth_cubit.dart';
 import '../../../data/providers/architect_provider.dart';
 import '../../../data/models/profile_model.dart';
 import '../../../data/models/certification_model.dart';
@@ -10,7 +10,7 @@ import '../../../core/constants/colors.dart';
 import '../screens/edit_profil_screen.dart';
 import '../screens/upload_desain_screen.dart';
 import '../screens/detail_portofolio_arsitek_screen.dart';
-import '../../auth/login_screen.dart';
+import 'package:buildmatch/modules/auth/ui/login_screen.dart';
 
 
 class ArsitekProfileTab extends StatefulWidget {
@@ -101,8 +101,8 @@ class _ArsitekProfileTabState extends State<ArsitekProfileTab> {
     );
 
     if (confirm == true && mounted) {
-      final authProvider = context.read<AuthProvider>(); // simpan ref sebelum await
-      await authProvider.logout();
+      final authCubit = context.read<AuthCubit>();
+      await authCubit.logout();
       if (!mounted) return;
       Navigator.pushAndRemoveUntil(
         context,

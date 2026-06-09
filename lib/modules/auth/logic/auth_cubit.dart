@@ -235,4 +235,16 @@ class AuthCubit extends Cubit<AuthState> {
       return false;
     }
   }
+
+  // FUNGSI LOGIN GOOGLE
+  Future<void> loginWithGoogle() async {
+    try {
+      await _supabase.auth.signInWithOAuth(
+        OAuthProvider.google,
+        redirectTo: 'io.supabase.buildmatch://login-callback/',
+      );
+    } catch (e) {
+      debugPrint("Error Google Login: $e");
+    }
+  }
 }

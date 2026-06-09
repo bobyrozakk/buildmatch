@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import '../auth/login_screen.dart'; // CHANGED: was role_screen.dart
+import '../../modules/auth/ui/login_screen.dart'; // CHANGED: was role_screen.dart
 
 class OnboardingScreen extends StatefulWidget {
   const OnboardingScreen({super.key});
@@ -23,7 +23,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   }
 
   void _goToLoginScreen() { // CHANGED: was _goToRoleScreen()
-    Navigator.pushReplacement(
+    Navigator.push(
       context,
       MaterialPageRoute(builder: (_) => const LoginScreen()), // CHANGED: no role param
     );

@@ -1,4 +1,6 @@
-class ChatModel {
+import 'package:equatable/equatable.dart';
+
+class ChatModel extends Equatable {
   final String id;
   final String clientId;
   final String vendorId;
@@ -19,7 +21,7 @@ class ChatModel {
   final String? lastMessage;
   final int unreadCount;
 
-  ChatModel({
+  const ChatModel({
     required this.id,
     required this.clientId,
     required this.vendorId,
@@ -59,33 +61,59 @@ class ChatModel {
 
   bool get isPending => status == 'pending';
   bool get isAccepted => status == 'accepted';
-}
 
-class MessageModel {
-  final String id;
-  final String chatId;
-  final String senderId;
-  final String content;
-  final bool isRead;
-  final DateTime createdAt;
-
-  MessageModel({
-    required this.id,
-    required this.chatId,
-    required this.senderId,
-    required this.content,
-    required this.isRead,
-    required this.createdAt,
-  });
-
-  factory MessageModel.fromJson(Map<String, dynamic> json) {
-    return MessageModel(
-      id: json['id'] as String,
-      chatId: json['chat_id'] as String,
-      senderId: json['sender_id'] as String,
-      content: json['content'] as String,
-      isRead: json['is_read'] as bool? ?? false,
-      createdAt: DateTime.parse(json['created_at'] as String),
+  ChatModel copyWith({
+    String? id,
+    String? clientId,
+    String? vendorId,
+    String? projectId,
+    DateTime? createdAt,
+    DateTime? updatedAt,
+    String? status,
+    String? clientName,
+    String? vendorName,
+    String? clientAvatar,
+    String? vendorAvatar,
+    String? clientRole,
+    String? vendorRole,
+    String? lastMessage,
+    int? unreadCount,
+  }) {
+    return ChatModel(
+      id: id ?? this.id,
+      clientId: clientId ?? this.clientId,
+      vendorId: vendorId ?? this.vendorId,
+      projectId: projectId ?? this.projectId,
+      createdAt: createdAt ?? this.createdAt,
+      updatedAt: updatedAt ?? this.updatedAt,
+      status: status ?? this.status,
+      clientName: clientName ?? this.clientName,
+      vendorName: vendorName ?? this.vendorName,
+      clientAvatar: clientAvatar ?? this.clientAvatar,
+      vendorAvatar: vendorAvatar ?? this.vendorAvatar,
+      clientRole: clientRole ?? this.clientRole,
+      vendorRole: vendorRole ?? this.vendorRole,
+      lastMessage: lastMessage ?? this.lastMessage,
+      unreadCount: unreadCount ?? this.unreadCount,
     );
   }
+
+  @override
+  List<Object?> get props => [
+        id,
+        clientId,
+        vendorId,
+        projectId,
+        createdAt,
+        updatedAt,
+        status,
+        clientName,
+        vendorName,
+        clientAvatar,
+        vendorAvatar,
+        clientRole,
+        vendorRole,
+        lastMessage,
+        unreadCount,
+      ];
 }

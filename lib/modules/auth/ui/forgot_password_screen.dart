@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import '../../core/constants/colors.dart';
+import '../../../core/constants/colors.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'create_new_password_screen.dart';
 
