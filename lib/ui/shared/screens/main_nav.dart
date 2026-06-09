@@ -2,11 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 // --- IMPORT TAB KLIEN ---
-import '../../client/tabs/beranda_tab.dart';
-import '../../client/tabs/progress_tab.dart'; 
-import '../../client/tabs/mitra_tab.dart';
-import '../../client/tabs/consultasi_tab.dart';
-import '../../client/tabs/profile_tab.dart'; 
+import '../../../modules/client/ui/tabs/beranda/beranda_tab.dart';
+import '../../../modules/client/ui/tabs/progress/progress_tab.dart'; 
+import '../../../modules/client/ui/tabs/mitra/mitra_tab.dart';
+import '../../../modules/client/ui/tabs/consultasi/consultasi_tab.dart';
+import '../../../modules/client/ui/tabs/profile/profile_tab.dart'; 
 
 // --- IMPORT TAB KONTRAKTOR ---
 import '../../kontraktor/tabs/kontraktor_home_tab.dart';

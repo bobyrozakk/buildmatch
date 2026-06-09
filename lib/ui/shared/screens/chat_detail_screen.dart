@@ -13,8 +13,8 @@ import '../../../data/providers/architect_provider.dart';
 import '../../../data/providers/project_provider.dart';
 import '../../arsitek/widgets/buat_penawaran_sheet.dart';
 import '../../arsitek/screens/kirim_desain_screen.dart';
-import '../../client/screens/architect_offer_detail_screen.dart';
-import '../../client/screens/client_design_review_screen.dart';
+import 'package:buildmatch/modules/client/ui/screens/architect_offer_detail/architect_offer_detail_screen.dart';
+import 'package:buildmatch/modules/client/ui/screens/client_design_review/client_design_review_screen.dart';
 
 class ChatDetailScreen extends StatefulWidget {
   final String chatId;

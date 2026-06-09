@@ -7,7 +7,7 @@ import '../../../data/models/notification_model.dart';
 import '../../../data/providers/notification_provider.dart';
 import '../../../data/providers/project_provider.dart';
 import '../../../data/providers/chat_provider.dart';
-import '../../client/screens/project_detail_screen.dart';
+import 'package:buildmatch/modules/client/ui/screens/project_detail/project_detail_screen.dart';
 import 'chat_detail_screen.dart';
 import 'contractor_chat_detail_screen.dart';
 
