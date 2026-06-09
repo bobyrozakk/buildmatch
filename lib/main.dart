@@ -16,8 +16,7 @@ import 'modules/client/logic/chat/chat_cubit.dart';
 import 'modules/auth/logic/auth_cubit.dart';
 
 // --- IMPORT SCREENS ---
-import 'ui/shared/screens/main_nav.dart';
-import 'ui/screens/splash_screen.dart';
+import 'modules/startup/ui/splash/splash_screen.dart';
 
 // --- IMPORT CONSTANTS ---
 import 'core/constants/colors.dart';
@@ -82,23 +81,7 @@ class BuildMatchApp extends StatelessWidget {
         useMaterial3: true,
         fontFamily: 'Inter',
       ),
-      // Gunakan StreamBuilder untuk mendengarkan auth state secara real-time
-      // Setiap kali login/logout terjadi, UI otomatis diperbarui
-      home: StreamBuilder(
-        stream: Supabase.instance.client.auth.onAuthStateChange,
-        builder: (context, snapshot) {
-          // Jika stream belum ready, tampilkan splash dulu
-          if (snapshot.connectionState == ConnectionState.waiting) {
-            return const SplashScreen();
-          }
-          // Cek apakah ada sesi aktif
-          final session = snapshot.data?.session;
-          if (session != null) {
-            return const MainNavScreen();
-          }
-          return const SplashScreen();
-        },
-      ),
+      home: const SplashScreen(),
     );
   }
 }

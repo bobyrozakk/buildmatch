@@ -23,7 +23,7 @@ class BuildMatchAppBar extends StatelessWidget implements PreferredSizeWidget {
     return AppBar(
       backgroundColor: Colors.transparent,
       elevation: 0,
-      leading: showBack
+      leading: (showBack && Navigator.canPop(context))
           ? IconButton(
               icon: const Icon(Icons.arrow_back, color: Colors.black87),
               onPressed: onBack ?? () => Navigator.pop(context),

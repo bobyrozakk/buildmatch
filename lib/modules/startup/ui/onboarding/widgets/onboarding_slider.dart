@@ -1,209 +1,26 @@
 import 'package:flutter/material.dart';
-import '../../modules/auth/ui/login_screen.dart'; // CHANGED: was role_screen.dart
 
-class OnboardingScreen extends StatefulWidget {
-  const OnboardingScreen({super.key});
-  @override
-  State<OnboardingScreen> createState() => _OnboardingScreenState();
-}
+class OnboardingSlider extends StatelessWidget {
+  final PageController pageController;
+  final ValueChanged<int> onPageChanged;
 
-class _OnboardingScreenState extends State<OnboardingScreen> {
-  final PageController _pageController = PageController();
-  int _currentPage = 0;
-
-  void _nextPage() {
-    if (_currentPage < 2) {
-      _pageController.nextPage(
-        duration: const Duration(milliseconds: 300),
-        curve: Curves.easeInOut,
-      );
-    } else {
-      _goToLoginScreen(); // CHANGED: was _goToRoleScreen()
-    }
-  }
-
-  void _goToLoginScreen() { // CHANGED: was _goToRoleScreen()
-    Navigator.push(
-      context,
-      MaterialPageRoute(builder: (_) => const LoginScreen()), // CHANGED: no role param
-    );
-  }
+  const OnboardingSlider({
+    super.key,
+    required this.pageController,
+    required this.onPageChanged,
+  });
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: const Color(0xFFF2E9DF),
-      body: SafeArea(
-        child: Column(
-          children: [
-            // Header (Lewati)
-            Padding(
-              padding: const EdgeInsets.symmetric(
-                horizontal: 24.0,
-                vertical: 16.0,
-              ),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.end,
-                children: [
-                  TextButton(
-                    onPressed: _goToLoginScreen, // CHANGED: was _goToRoleScreen
-                    child: const Text(
-                      "Lewati",
-                      style: TextStyle(
-                        color: Colors.black54,
-                        fontWeight: FontWeight.bold,
-                        fontSize: 16,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            // PageView untuk Ilustrasi
-            Expanded(
-              child: PageView(
-                controller: _pageController,
-                onPageChanged: (index) {
-                  setState(() {
-                    _currentPage = index;
-                  });
-                },
-                children: [
-                  _buildSlide1Illustration(),
-                  _buildSlide2Illustration(),
-                  _buildSlide3Illustration(),
-                ],
-              ),
-            ),
-            // Bottom Card
-            Container(
-              width: double.infinity,
-              margin: const EdgeInsets.all(24.0),
-              padding: const EdgeInsets.all(32.0),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(32),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withOpacity(0.05),
-                    blurRadius: 20,
-                    offset: const Offset(0, 10),
-                  ),
-                ],
-              ),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // Page Indicator
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: List.generate(3, (index) {
-                      return AnimatedContainer(
-                        duration: const Duration(milliseconds: 300),
-                        margin: const EdgeInsets.symmetric(horizontal: 4),
-                        height: 8,
-                        width: _currentPage == index ? 24 : 8,
-                        decoration: BoxDecoration(
-                          color: _currentPage == index
-                              ? const Color(0xFF8B2B0F)
-                              : Colors.grey.shade300,
-                          borderRadius: BorderRadius.circular(4),
-                        ),
-                      );
-                    }),
-                  ),
-                  const SizedBox(height: 32),
-                  // Teks Judul
-                  Text(
-                    _getTitle(_currentPage),
-                    style: const TextStyle(
-                      fontSize: 24,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.black87,
-                      height: 1.2,
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  // Teks Deskripsi
-                  Text(
-                    _getDescription(_currentPage),
-                    style: const TextStyle(
-                      fontSize: 14,
-                      color: Colors.black54,
-                      height: 1.5,
-                    ),
-                  ),
-                  const SizedBox(height: 32),
-                  // Tombol Selanjutnya / Mulai
-                  SizedBox(
-                    width: double.infinity,
-                    height: 55,
-                    child: ElevatedButton(
-                      onPressed: _nextPage,
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF8B2B0F),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(16),
-                        ),
-                        elevation: 0,
-                      ),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Text(
-                            _currentPage == 2 ? "Mulai Sekarang" : "Selanjutnya",
-                            style: const TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.bold,
-                              color: Colors.white,
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                          Icon(
-                            _currentPage == 2
-                                ? Icons.rocket_launch_rounded
-                                : Icons.arrow_forward_rounded,
-                            color: Colors.white,
-                            size: 20,
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
+    return PageView(
+      controller: pageController,
+      onPageChanged: onPageChanged,
+      children: [
+        _buildSlide1Illustration(),
+        _buildSlide2Illustration(),
+        _buildSlide3Illustration(),
+      ],
     );
-  }
-
-  String _getTitle(int index) {
-    switch (index) {
-      case 0:
-        return "Temukan Kontraktor\nTerpercaya";
-      case 1:
-        return "Ajukan Proyek\ndengan Mudah";
-      case 2:
-        return "Pantau Progres\nPembangunan";
-      default:
-        return "";
-    }
-  }
-
-  String _getDescription(int index) {
-    switch (index) {
-      case 0:
-        return "Cari dan bandingkan kontraktor & arsitek terverifikasi sesuai kebutuhan proyek Anda";
-      case 1:
-        return "Buat deskripsi proyek, tentukan anggaran, dan terima penawaran dari beberapa kontraktor";
-      case 2:
-        return "Monitoring proyek secara real-time melalui laporan foto dan milestone dari kontraktor";
-      default:
-        return "";
-    }
   }
 
   Widget _buildSlide1Illustration() {
@@ -293,9 +110,9 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
               borderRadius: BorderRadius.circular(12),
               border: Border.all(color: Colors.white, width: 2),
             ),
-            child: Row(
+            child: const Row(
               mainAxisSize: MainAxisSize.min,
-              children: const [
+              children: [
                 Icon(Icons.verified, color: Colors.white, size: 12),
                 SizedBox(width: 4),
                 Text(
@@ -318,11 +135,11 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
             decoration: BoxDecoration(
               color: Colors.white,
               borderRadius: BorderRadius.circular(12),
-              boxShadow: [BoxShadow(color: Colors.black12, blurRadius: 10)],
+              boxShadow: const [BoxShadow(color: Colors.black12, blurRadius: 10)],
             ),
-            child: Row(
+            child: const Row(
               mainAxisSize: MainAxisSize.min,
-              children: const [
+              children: [
                 Icon(Icons.star, color: Colors.amber, size: 12),
                 SizedBox(width: 4),
                 Text(
@@ -527,12 +344,12 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
               color: const Color(0xFF8B2B0F),
               shape: BoxShape.circle,
               border: Border.all(color: Colors.white, width: 3),
-              boxShadow: [BoxShadow(color: Colors.black26, blurRadius: 8)],
+              boxShadow: const [BoxShadow(color: Colors.black26, blurRadius: 8)],
             ),
             alignment: Alignment.center,
-            child: Column(
+            child: const Column(
               mainAxisSize: MainAxisSize.min,
-              children: const [
+              children: [
                 Text("3", style: TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.bold, height: 1.0)),
                 Text("Offer", style: TextStyle(color: Colors.white, fontSize: 8)),
               ],
@@ -547,11 +364,11 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
             decoration: BoxDecoration(
               color: Colors.white,
               borderRadius: BorderRadius.circular(16),
-              boxShadow: [BoxShadow(color: Colors.black12, blurRadius: 10)],
+              boxShadow: const [BoxShadow(color: Colors.black12, blurRadius: 10)],
             ),
-            child: Row(
+            child: const Row(
               mainAxisSize: MainAxisSize.min,
-              children: const [
+              children: [
                 Icon(Icons.monetization_on, color: Color(0xFFC95E36), size: 14),
                 SizedBox(width: 4),
                 Text("Anggaran", style: TextStyle(color: Colors.black87, fontSize: 10, fontWeight: FontWeight.bold)),
@@ -627,9 +444,9 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                 ],
               ),
               const SizedBox(height: 20),
-              Row(
+              const Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: const [
+                children: [
                   Text("Progres Keseluruhan", style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.black54)),
                   Text("72%", style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFFC95E36))),
                 ],
@@ -656,17 +473,17 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
             decoration: BoxDecoration(
               color: const Color(0xFF8B2B0F),
               borderRadius: BorderRadius.circular(8),
-              boxShadow: [BoxShadow(color: Colors.black26, blurRadius: 10)],
+              boxShadow: const [BoxShadow(color: Colors.black26, blurRadius: 10)],
             ),
-            child: Row(
+            child: const Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                const Icon(Icons.camera_alt, color: Colors.white, size: 16),
-                const SizedBox(width: 6),
+                Icon(Icons.camera_alt, color: Colors.white, size: 16),
+                SizedBox(width: 6),
                 Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   mainAxisSize: MainAxisSize.min,
-                  children: const [
+                  children: [
                     Text("Foto Laporan", style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold)),
                     Text("12 foto baru", style: TextStyle(color: Colors.white70, fontSize: 8)),
                   ],
@@ -683,17 +500,17 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
             decoration: BoxDecoration(
               color: Colors.white,
               borderRadius: BorderRadius.circular(16),
-              boxShadow: [BoxShadow(color: Colors.black12, blurRadius: 10)],
+              boxShadow: const [BoxShadow(color: Colors.black12, blurRadius: 10)],
             ),
-            child: Row(
+            child: const Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                const Icon(Icons.notifications_active, color: Color(0xFFC95E36), size: 14),
-                const SizedBox(width: 6),
+                Icon(Icons.notifications_active, color: Color(0xFFC95E36), size: 14),
+                SizedBox(width: 6),
                 Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   mainAxisSize: MainAxisSize.min,
-                  children: const [
+                  children: [
                     Text("Update Milestone", style: TextStyle(color: Colors.black87, fontSize: 10, fontWeight: FontWeight.bold)),
                     Text("Struktur selesai ✓", style: TextStyle(color: Colors.black54, fontSize: 8)),
                   ],

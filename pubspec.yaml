@@ -27,7 +27,7 @@ dependencies:
   uuid: ^4.4.0
 
   # UI icons tambahan
-  flutter_svg: ^2.0.10
+  flutter_svg: ^2.3.0
   supabase_flutter: ^2.12.4
   image_picker: ^1.2.1
   file_picker: ^8.0.7
@@ -52,3 +52,4 @@ flutter:
 
   assets:
     - assets/images/house_styles/
+    - assets/images/
