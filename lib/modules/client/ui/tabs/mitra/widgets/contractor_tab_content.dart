@@ -139,7 +139,10 @@ class _ContractorTabContentState extends State<ContractorTabContent> {
                   Row(
                     children: [
                       const Icon(Icons.star_rounded, color: Colors.amber, size: 16),
-                      const Text(" 4.9", style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                      Text(
+                        " ${vendor.avgRating?.toStringAsFixed(1) ?? '0.0'}",
+                        style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
+                      ),
                       const SizedBox(width: 12),
                       const Icon(Icons.phone, color: Colors.black38, size: 14),
                       Text(" ${vendor.phone ?? 'Tidak ada No. HP'}", style: const TextStyle(fontSize: 12, color: Colors.black54)),

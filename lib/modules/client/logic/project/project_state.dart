@@ -26,6 +26,7 @@ class ProjectLoaded extends ProjectState {
   final List<BidModel> incomingBids;
   final List<BidModel> architectBids;
   final List<BidModel> projectBids;
+  final List<BidModel> vendorBids;
   final List<PaymentTermModel> paymentTerms;
   final ProjectModel? selectedProject;
   final ReviewModel? projectReview;
@@ -37,6 +38,7 @@ class ProjectLoaded extends ProjectState {
     this.incomingBids = const [],
     this.architectBids = const [],
     this.projectBids = const [],
+    this.vendorBids = const [],
     this.paymentTerms = const [],
     this.selectedProject,
     this.projectReview,
@@ -49,6 +51,7 @@ class ProjectLoaded extends ProjectState {
     List<BidModel>? incomingBids,
     List<BidModel>? architectBids,
     List<BidModel>? projectBids,
+    List<BidModel>? vendorBids,
     List<PaymentTermModel>? paymentTerms,
     ProjectModel? selectedProject,
     ReviewModel? projectReview,
@@ -60,6 +63,7 @@ class ProjectLoaded extends ProjectState {
       incomingBids: incomingBids ?? this.incomingBids,
       architectBids: architectBids ?? this.architectBids,
       projectBids: projectBids ?? this.projectBids,
+      vendorBids: vendorBids ?? this.vendorBids,
       paymentTerms: paymentTerms ?? this.paymentTerms,
       selectedProject: selectedProject ?? this.selectedProject,
       projectReview: projectReview ?? this.projectReview,
@@ -74,6 +78,7 @@ class ProjectLoaded extends ProjectState {
         incomingBids,
         architectBids,
         projectBids,
+        vendorBids,
         paymentTerms,
         selectedProject,
         projectReview,
@@ -88,3 +93,19 @@ class ProjectError extends ProjectState {
   @override
   List<Object?> get props => [message];
 }
+
+class ProjectSuccess extends ProjectLoaded {
+  const ProjectSuccess({
+    super.projects = const [],
+    super.draftProjects = const [],
+    super.availableProjects = const [],
+    super.incomingBids = const [],
+    super.architectBids = const [],
+    super.projectBids = const [],
+    super.vendorBids = const [],
+    super.paymentTerms = const [],
+    super.selectedProject,
+    super.projectReview,
+  });
+}
+

@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:buildmatch/data/models/bid_model.dart';
-import '../../shared/widgets/glass_card.dart';
-import '../../../core/constants/colors.dart';
-import '../../../core/utils/formatters.dart';
+import 'package:buildmatch/ui/shared/widgets/glass_card.dart';
+import 'package:buildmatch/core/constants/colors.dart';
+import 'package:buildmatch/core/utils/formatters.dart';
 import 'kontraktor_payment_terms_screen.dart';
 
 class KontraktorBidDetailScreen extends StatelessWidget {

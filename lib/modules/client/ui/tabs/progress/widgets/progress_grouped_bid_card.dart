@@ -102,8 +102,17 @@ class ProgressGroupedBidCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final projectTitle = project?.title ?? projectBids.first.project?.title ?? 'Proyek';
-    final previewBids = projectBids.take(3).toList();
-    final remaining = projectBids.length - previewBids.length;
+    final bool isAcceptedOrInProgress = project?.status == 'in_progress' ||
+        projectBids.any((b) => b.status == 'accepted' || b.project?.status == 'in_progress');
+
+    final List<BidModel> previewBids;
+    if (isAcceptedOrInProgress) {
+      previewBids = projectBids.where((b) => b.status == 'accepted').toList();
+    } else {
+      previewBids = projectBids.take(3).toList();
+    }
+
+    final remaining = isAcceptedOrInProgress ? 0 : (projectBids.length - previewBids.length);
     final ProjectModel? navProject = project;
 
     return Container(
@@ -154,7 +163,9 @@ class ProgressGroupedBidCard extends StatelessWidget {
                         overflow: TextOverflow.ellipsis,
                       ),
                       Text(
-                        '${projectBids.length} kontraktor menawar',
+                        isAcceptedOrInProgress
+                            ? 'Penawaran Diterima'
+                            : '${projectBids.length} kontraktor menawar',
                         style: const TextStyle(
                           fontSize: 11,
                           color: Colors.orange,
@@ -171,7 +182,7 @@ class ProgressGroupedBidCard extends StatelessWidget {
                     borderRadius: BorderRadius.circular(10),
                   ),
                   child: Text(
-                    '${projectBids.length} bid',
+                    isAcceptedOrInProgress ? 'Diterima' : '${projectBids.length} bid',
                     style: const TextStyle(
                       fontSize: 11,
                       fontWeight: FontWeight.bold,

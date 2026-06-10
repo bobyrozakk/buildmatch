@@ -1,13 +1,14 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
-import '../../../data/providers/vendor_provider.dart';
-import '../../../data/models/portfolio_model.dart';
-import '../../../data/models/certification_model.dart';
-import '../../../core/constants/colors.dart';
+import 'package:buildmatch/modules/client/logic/vendor/vendor_cubit.dart';
+import 'package:buildmatch/modules/client/logic/vendor/vendor_state.dart';
+import 'package:buildmatch/data/models/portfolio_model.dart';
+import 'package:buildmatch/data/models/certification_model.dart';
+import 'package:buildmatch/core/constants/colors.dart';
 
 class EditProfileScreen extends StatefulWidget {
   const EditProfileScreen({super.key});
@@ -133,10 +134,7 @@ class _TabProfilFormState
   Future<void> _save() async {
 
     final provider =
-        Provider.of<VendorProvider>(
-      context,
-      listen: false,
-    );
+        context.read<VendorCubit>();
 
     final success =
         await provider.updateVendorProfile(
@@ -164,10 +162,9 @@ class _TabProfilFormState
 
   @override
   Widget build(BuildContext context) {
-
-    final loading =
-        context.watch<VendorProvider>()
-            .isLoading;
+    return BlocBuilder<VendorCubit, VendorState>(
+      builder: (context, state) {
+        final loading = state is VendorLoading;
 
     return SingleChildScrollView(
       padding: const EdgeInsets.all(20),
@@ -270,6 +267,8 @@ class _TabProfilFormState
         ],
       ),
     );
+      },
+    );
   }
 }
 
@@ -296,9 +295,6 @@ class _TabPortoFormState
 
   File? _imageFile;
 
-  late Future<List<PortfolioModel>>
-      _future;
-
   @override
   void initState() {
     super.initState();
@@ -306,11 +302,7 @@ class _TabPortoFormState
   }
 
   void _load() {
-    _future =
-        Provider.of<VendorProvider>(
-      context,
-      listen: false,
-    ).fetchPortfolios();
+    context.read<VendorCubit>().fetchPortfolios();
   }
 
   @override
@@ -346,10 +338,7 @@ class _TabPortoFormState
       return;
     }
 
-    final provider = Provider.of<VendorProvider>(
-      context,
-      listen: false,
-    );
+    final provider = context.read<VendorCubit>();
 
     try {
       final success = await provider.addPortfolio(
@@ -396,18 +385,10 @@ class _TabPortoFormState
   }
   @override
   Widget build(BuildContext context) {
-
-    final loading =
-        context.watch<VendorProvider>()
-            .isLoading;
-
-    return FutureBuilder<List<PortfolioModel>>(
-      future: _future,
-
-      builder: (_, snapshot) {
-
-        final portfolios =
-            snapshot.data ?? [];
+    return BlocBuilder<VendorCubit, VendorState>(
+      builder: (context, state) {
+        final loading = state is VendorLoading;
+        final portfolios = state is VendorLoaded ? state.portfolios : <PortfolioModel>[];
 
         return SingleChildScrollView(
           padding:
@@ -625,11 +606,7 @@ class _TabPortoFormState
                             'delete') {
 
                           final provider =
-                              Provider.of<
-                                  VendorProvider>(
-                            context,
-                            listen: false,
-                          );
+                              context.read<VendorCubit>();
 
                           await provider
                               .deletePortfolio(
@@ -674,9 +651,6 @@ class _TabSertifFormState
   final _issuerCtrl =
       TextEditingController();
 
-  late Future<List<CertificationModel>>
-      _future;
-
   @override
   void initState() {
     super.initState();
@@ -684,11 +658,7 @@ class _TabSertifFormState
   }
 
   void _load() {
-    _future =
-        Provider.of<VendorProvider>(
-      context,
-      listen: false,
-    ).fetchCertifications();
+    context.read<VendorCubit>().fetchCertifications();
   }
 
   @override
@@ -706,7 +676,7 @@ class _TabSertifFormState
       return;
     }
 
-    final provider = Provider.of<VendorProvider>(context, listen: false);
+    final provider = context.read<VendorCubit>();
 
     try {
       final success = await provider.addCertification(
@@ -750,19 +720,10 @@ class _TabSertifFormState
 
   @override
   Widget build(BuildContext context) {
-
-    final loading =
-        context.watch<VendorProvider>()
-            .isLoading;
-
-    return FutureBuilder<
-        List<CertificationModel>>(
-      future: _future,
-
-      builder: (_, snapshot) {
-
-        final certs =
-            snapshot.data ?? [];
+    return BlocBuilder<VendorCubit, VendorState>(
+      builder: (context, state) {
+        final loading = state is VendorLoading;
+        final certs = state is VendorLoaded ? state.certifications : <CertificationModel>[];
 
         return SingleChildScrollView(
           padding:
@@ -952,12 +913,7 @@ class _TabSertifFormState
                               'delete') {
 
                             final provider =
-                                Provider.of<
-                                    VendorProvider>(
-                              context,
-                              listen:
-                                  false,
-                            );
+                                context.read<VendorCubit>();
 
                             await provider
                                 .deleteCertification(

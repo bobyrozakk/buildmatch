@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
+import 'package:url_launcher/url_launcher.dart';
 import 'package:buildmatch/data/providers/project_provider.dart';
 import 'package:buildmatch/data/models/payment_term_model.dart';
 import 'package:buildmatch/data/models/project_model.dart';
@@ -746,6 +747,18 @@ class _ClientPaymentTermsScreenState extends State<ClientPaymentTermsScreen> {
                       size: 60,
                     ),
                   ),
+                  frameBuilder: (context, child, frame, wasSynchronouslyLoaded) {
+                    if (wasSynchronouslyLoaded) return child;
+                    if (frame == null) {
+                      return const Center(
+                        child: CircularProgressIndicator(
+                          strokeWidth: 3,
+                          color: AppColors.primary,
+                        ),
+                      );
+                    }
+                    return child;
+                  },
                 ),
               ),
             ),
@@ -1768,6 +1781,7 @@ class _ClientPaymentTermsScreenState extends State<ClientPaymentTermsScreen> {
                             width: 90,
                             height: 90,
                             fit: BoxFit.cover,
+                            cacheWidth: 200, // Optimize memory for network thumbnails
                             errorBuilder: (_, __, ___) => Container(
                               width: 90,
                               height: 90,
@@ -1777,19 +1791,22 @@ class _ClientPaymentTermsScreenState extends State<ClientPaymentTermsScreen> {
                                 color: Colors.black26,
                               ),
                             ),
-                            loadingBuilder: (_, child, progress) {
-                              if (progress == null) return child;
-                              return Container(
-                                width: 90,
-                                height: 90,
-                                color: Colors.grey.shade100,
-                                child: const Center(
-                                  child: CircularProgressIndicator(
-                                    strokeWidth: 2,
-                                    color: AppColors.primary,
+                            frameBuilder: (context, child, frame, wasSynchronouslyLoaded) {
+                              if (wasSynchronouslyLoaded) return child;
+                              if (frame == null) {
+                                return Container(
+                                  width: 90,
+                                  height: 90,
+                                  color: Colors.grey.shade100,
+                                  child: const Center(
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                      color: AppColors.primary,
+                                    ),
                                   ),
-                                ),
-                              );
+                                );
+                              }
+                              return child;
                             },
                           ),
                         ),
@@ -1822,14 +1839,24 @@ class _ClientPaymentTermsScreenState extends State<ClientPaymentTermsScreen> {
           if (term.progressPdfUrl != null) ...[
             const SizedBox(height: 10),
             GestureDetector(
-              onTap: () {
-                Clipboard.setData(ClipboardData(text: term.progressPdfUrl!));
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('🔗 Link PDF disalin ke clipboard'),
-                    duration: Duration(seconds: 2),
-                  ),
-                );
+              onTap: () async {
+                final urlString = term.progressPdfUrl!;
+                try {
+                  final uri = Uri.parse(urlString);
+                  if (!await launchUrl(uri, mode: LaunchMode.externalApplication)) {
+                    throw 'Could not launch';
+                  }
+                } catch (e) {
+                  Clipboard.setData(ClipboardData(text: urlString));
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('Gagal membuka PDF, link disalin ke clipboard'),
+                        duration: Duration(seconds: 2),
+                      ),
+                    );
+                  }
+                }
               },
               child: Container(
                 padding: const EdgeInsets.all(10),
@@ -1859,7 +1886,7 @@ class _ClientPaymentTermsScreenState extends State<ClientPaymentTermsScreen> {
                             ),
                           ),
                           Text(
-                            'Ketuk untuk salin link PDF',
+                            'Ketuk untuk membuka file PDF',
                             style: TextStyle(
                               fontSize: 11,
                               color: Colors.black45,
@@ -1869,7 +1896,7 @@ class _ClientPaymentTermsScreenState extends State<ClientPaymentTermsScreen> {
                       ),
                     ),
                     const Icon(
-                      Icons.copy_rounded,
+                      Icons.open_in_new_rounded,
                       size: 16,
                       color: Colors.black38,
                     ),

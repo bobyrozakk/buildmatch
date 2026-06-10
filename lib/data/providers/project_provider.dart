@@ -34,6 +34,8 @@ class ProjectProvider extends ChangeNotifier {
     required double longitude,
     File? imageFile,
     File? pdfFile,
+    List<String>? imageUrls,
+    String? referencePdfUrl,
   }) async {
     _isLoading = true;
     notifyListeners();
@@ -81,8 +83,8 @@ class ProjectProvider extends ChangeNotifier {
         'latitude': latitude,
         'longitude': longitude,
         'client_id': userId,
-        'image_urls': imageUrl != null ? [imageUrl] : [],
-        'reference_pdf_url': pdfUrl,
+        'image_urls': imageUrl != null ? [imageUrl] : (imageUrls ?? []),
+        'reference_pdf_url': pdfUrl ?? referencePdfUrl,
         'status': 'open',
       });
 
@@ -116,12 +118,41 @@ class ProjectProvider extends ChangeNotifier {
     double? longitude,
     double? landCustomPanjang,
     double? landCustomLebar,
+    File? imageFile,
+    File? pdfFile,
+    List<String>? imageUrls,
+    String? referencePdfUrl,
   }) async {
     _isLoading = true;
     notifyListeners();
     try {
       final userId = _supabase.auth.currentUser?.id;
       if (userId == null) throw Exception("User belum login!");
+
+      String? imageUrl;
+      String? pdfUrl;
+
+      // 1. Upload new image if provided
+      if (imageFile != null) {
+        final imageExt = imageFile.path.split('.').last;
+        final imageName =
+            '${userId}_${DateTime.now().millisecondsSinceEpoch}.$imageExt';
+        await _supabase.storage
+            .from('project-renders')
+            .upload(imageName, imageFile);
+        imageUrl = _supabase.storage
+            .from('project-renders')
+            .getPublicUrl(imageName);
+      }
+
+      // 2. Upload new PDF if provided
+      if (pdfFile != null) {
+        final pdfExt = pdfFile.path.split('.').last;
+        final pdfName =
+            '${userId}_${DateTime.now().millisecondsSinceEpoch}_Reference.$pdfExt';
+        await _supabase.storage.from('documents').upload(pdfName, pdfFile);
+        pdfUrl = _supabase.storage.from('documents').getPublicUrl(pdfName);
+      }
 
       final data = {
         'title': title.trim().isEmpty ? 'Draft Tanpa Judul' : title.trim(),
@@ -137,7 +168,8 @@ class ProjectProvider extends ChangeNotifier {
         'latitude': latitude,
         'longitude': longitude,
         'client_id': userId,
-        'image_urls': [],
+        'image_urls': imageUrl != null ? [imageUrl] : (imageUrls ?? []),
+        'reference_pdf_url': pdfUrl ?? referencePdfUrl,
         'status': 'draft',
         if (landCustomPanjang != null) 'land_custom_panjang': landCustomPanjang,
         if (landCustomLebar != null) 'land_custom_lebar': landCustomLebar,
@@ -235,10 +267,42 @@ class ProjectProvider extends ChangeNotifier {
     required String location,
     double? latitude,
     double? longitude,
+    File? imageFile,
+    File? pdfFile,
+    List<String>? imageUrls,
+    String? referencePdfUrl,
   }) async {
     _isLoading = true;
     notifyListeners();
     try {
+      final userId = _supabase.auth.currentUser?.id;
+      if (userId == null) throw Exception("User belum login!");
+
+      String? imageUrl;
+      String? pdfUrl;
+
+      // 1. Upload foto sampul jika ada
+      if (imageFile != null) {
+        final imageExt = imageFile.path.split('.').last;
+        final imageName =
+            '${userId}_${DateTime.now().millisecondsSinceEpoch}.$imageExt';
+        await _supabase.storage
+            .from('project-renders')
+            .upload(imageName, imageFile);
+        imageUrl = _supabase.storage
+            .from('project-renders')
+            .getPublicUrl(imageName);
+      }
+
+      // 2. Upload PDF referensi klien jika ada
+      if (pdfFile != null) {
+        final pdfExt = pdfFile.path.split('.').last;
+        final pdfName =
+            '${userId}_${DateTime.now().millisecondsSinceEpoch}_Reference.$pdfExt';
+        await _supabase.storage.from('documents').upload(pdfName, pdfFile);
+        pdfUrl = _supabase.storage.from('documents').getPublicUrl(pdfName);
+      }
+
       await _supabase.from('projects').update({
         'title': title,
         'description': description,
@@ -252,12 +316,33 @@ class ProjectProvider extends ChangeNotifier {
         'location': location,
         if (latitude != null) 'latitude': latitude,
         if (longitude != null) 'longitude': longitude,
+        'image_urls': imageUrl != null ? [imageUrl] : (imageUrls ?? []),
+        'reference_pdf_url': pdfUrl ?? referencePdfUrl,
       }).eq('id', projectId);
       _isLoading = false;
       notifyListeners();
       return true;
     } catch (e) {
       debugPrint("Error update project: $e");
+      _isLoading = false;
+      notifyListeners();
+      return false;
+    }
+  }
+
+  // ─────────────────────────────────────────────
+  // HAPUS PROYEK (CLIENT)
+  // ─────────────────────────────────────────────
+  Future<bool> deleteProject(String projectId) async {
+    _isLoading = true;
+    notifyListeners();
+    try {
+      await _supabase.from('projects').delete().eq('id', projectId);
+      _isLoading = false;
+      notifyListeners();
+      return true;
+    } catch (e) {
+      debugPrint("Error delete project: $e");
       _isLoading = false;
       notifyListeners();
       return false;
@@ -1012,12 +1097,10 @@ class ProjectProvider extends ChangeNotifier {
 
       // 4. Update progress_percent pada proyek di database dengan clamping maksimal 100%
       final int progressToUpdate = completedPct.round().clamp(0, 100);
-      final bool isProjectFinished = progressToUpdate >= 100;
       await _supabase
           .from('projects')
           .update({
             'progress_percent': progressToUpdate,
-            if (isProjectFinished) 'status': 'completed',
           })
           .eq('id', projectId);
 
@@ -1156,7 +1239,6 @@ class ProjectProvider extends ChangeNotifier {
     }
   }
 
-  /// Menambahkan review/rating baru dari klien
   Future<bool> addReview({
     required String projectId,
     required String vendorId,
@@ -1168,6 +1250,17 @@ class ProjectProvider extends ChangeNotifier {
     try {
       final clientId = _supabase.auth.currentUser?.id;
       if (clientId == null) throw Exception('Client belum login!');
+
+      final existing = await _supabase
+          .from('reviews')
+          .select('id')
+          .eq('project_id', projectId)
+          .eq('user_id', clientId)
+          .maybeSingle();
+      if (existing != null) {
+        throw Exception('Ulasan untuk proyek ini sudah dikirim.');
+      }
+
       await _supabase.from('reviews').insert({
         'project_id': projectId,
         'vendor_id': vendorId,

@@ -22,6 +22,7 @@ class ProjectCubit extends Cubit<ProjectState> {
   List<BidModel> _incomingBids = [];
   List<BidModel> _architectBids = [];
   List<BidModel> _projectBids = [];
+  List<BidModel> _vendorBids = [];
   List<PaymentTermModel> _paymentTerms = [];
   ProjectModel? _selectedProject;
   ReviewModel? _projectReview;
@@ -38,6 +39,22 @@ class ProjectCubit extends Cubit<ProjectState> {
       incomingBids: _incomingBids,
       architectBids: _architectBids,
       projectBids: _projectBids,
+      vendorBids: _vendorBids,
+      paymentTerms: _paymentTerms,
+      selectedProject: _selectedProject,
+      projectReview: _projectReview,
+    ));
+  }
+
+  void _emitSuccess() {
+    emit(ProjectSuccess(
+      projects: _projects,
+      draftProjects: _draftProjects,
+      availableProjects: _availableProjects,
+      incomingBids: _incomingBids,
+      architectBids: _architectBids,
+      projectBids: _projectBids,
+      vendorBids: _vendorBids,
       paymentTerms: _paymentTerms,
       selectedProject: _selectedProject,
       projectReview: _projectReview,
@@ -62,6 +79,8 @@ class ProjectCubit extends Cubit<ProjectState> {
     required double longitude,
     File? imageFile,
     File? pdfFile,
+    List<String>? imageUrls,
+    String? referencePdfUrl,
   }) async {
     _isLoading = true;
     emit(const ProjectLoading());
@@ -109,13 +128,17 @@ class ProjectCubit extends Cubit<ProjectState> {
         'latitude': latitude,
         'longitude': longitude,
         'client_id': userId,
-        'image_urls': imageUrl != null ? [imageUrl] : [],
-        'reference_pdf_url': pdfUrl,
+        'image_urls': imageUrl != null ? [imageUrl] : (imageUrls ?? []),
+        'reference_pdf_url': pdfUrl ?? referencePdfUrl,
         'status': 'open',
       });
 
       _isLoading = false;
       await fetchProjects(); // Refresh cached list
+      _emitSuccess();
+      Future.delayed(Duration.zero, () {
+        if (!isClosed) _emitLoaded();
+      });
       return true;
     } catch (e) {
       debugPrint("Error insert project: $e");
@@ -144,12 +167,41 @@ class ProjectCubit extends Cubit<ProjectState> {
     double? longitude,
     double? landCustomPanjang,
     double? landCustomLebar,
+    File? imageFile,
+    File? pdfFile,
+    List<String>? imageUrls,
+    String? referencePdfUrl,
   }) async {
     _isLoading = true;
     emit(const ProjectLoading());
     try {
       final userId = _supabase.auth.currentUser?.id;
       if (userId == null) throw Exception("User belum login!");
+
+      String? imageUrl;
+      String? pdfUrl;
+
+      // 1. Upload new image if provided
+      if (imageFile != null) {
+        final imageExt = imageFile.path.split('.').last;
+        final imageName =
+            '${userId}_${DateTime.now().millisecondsSinceEpoch}.$imageExt';
+        await _supabase.storage
+            .from('project-renders')
+            .upload(imageName, imageFile);
+        imageUrl = _supabase.storage
+            .from('project-renders')
+            .getPublicUrl(imageName);
+      }
+
+      // 2. Upload new PDF if provided
+      if (pdfFile != null) {
+        final pdfExt = pdfFile.path.split('.').last;
+        final pdfName =
+            '${userId}_${DateTime.now().millisecondsSinceEpoch}_Reference.$pdfExt';
+        await _supabase.storage.from('documents').upload(pdfName, pdfFile);
+        pdfUrl = _supabase.storage.from('documents').getPublicUrl(pdfName);
+      }
 
       final data = {
         'title': title.trim().isEmpty ? 'Draft Tanpa Judul' : title.trim(),
@@ -165,7 +217,8 @@ class ProjectCubit extends Cubit<ProjectState> {
         'latitude': latitude,
         'longitude': longitude,
         'client_id': userId,
-        'image_urls': [],
+        'image_urls': imageUrl != null ? [imageUrl] : (imageUrls ?? []),
+        'reference_pdf_url': pdfUrl ?? referencePdfUrl,
         'status': 'draft',
         if (landCustomPanjang != null) 'land_custom_panjang': landCustomPanjang,
         if (landCustomLebar != null) 'land_custom_lebar': landCustomLebar,
@@ -179,6 +232,10 @@ class ProjectCubit extends Cubit<ProjectState> {
 
       _isLoading = false;
       await fetchDraftProjects(); // Refresh cached list
+      _emitSuccess();
+      Future.delayed(Duration.zero, () {
+        if (!isClosed) _emitLoaded();
+      });
       return true;
     } catch (e) {
       debugPrint("Error save draft: $e");
@@ -267,10 +324,42 @@ class ProjectCubit extends Cubit<ProjectState> {
     required String location,
     double? latitude,
     double? longitude,
+    File? imageFile,
+    File? pdfFile,
+    List<String>? imageUrls,
+    String? referencePdfUrl,
   }) async {
     _isLoading = true;
     emit(const ProjectLoading());
     try {
+      final userId = _supabase.auth.currentUser?.id;
+      if (userId == null) throw Exception("User belum login!");
+
+      String? imageUrl;
+      String? pdfUrl;
+
+      // 1. Upload foto sampul jika ada
+      if (imageFile != null) {
+        final imageExt = imageFile.path.split('.').last;
+        final imageName =
+            '${userId}_${DateTime.now().millisecondsSinceEpoch}.$imageExt';
+        await _supabase.storage
+            .from('project-renders')
+            .upload(imageName, imageFile);
+        imageUrl = _supabase.storage
+            .from('project-renders')
+            .getPublicUrl(imageName);
+      }
+
+      // 2. Upload PDF referensi klien jika ada
+      if (pdfFile != null) {
+        final pdfExt = pdfFile.path.split('.').last;
+        final pdfName =
+            '${userId}_${DateTime.now().millisecondsSinceEpoch}_Reference.$pdfExt';
+        await _supabase.storage.from('documents').upload(pdfName, pdfFile);
+        pdfUrl = _supabase.storage.from('documents').getPublicUrl(pdfName);
+      }
+
       await _supabase.from('projects').update({
         'title': title,
         'description': description,
@@ -284,9 +373,15 @@ class ProjectCubit extends Cubit<ProjectState> {
         'location': location,
         if (latitude != null) 'latitude': latitude,
         if (longitude != null) 'longitude': longitude,
+        'image_urls': imageUrl != null ? [imageUrl] : (imageUrls ?? []),
+        'reference_pdf_url': pdfUrl ?? referencePdfUrl,
       }).eq('id', projectId);
       _isLoading = false;
       await fetchProjects();
+      _emitSuccess();
+      Future.delayed(Duration.zero, () {
+        if (!isClosed) _emitLoaded();
+      });
       return true;
     } catch (e) {
       debugPrint("Error update project: $e");
@@ -295,6 +390,30 @@ class ProjectCubit extends Cubit<ProjectState> {
       return false;
     }
   }
+
+  // ─────────────────────────────────────────────
+  // HAPUS PROYEK (CLIENT)
+  // ─────────────────────────────────────────────
+  Future<bool> deleteProject(String projectId) async {
+    _isLoading = true;
+    emit(const ProjectLoading());
+    try {
+      await _supabase.from('projects').delete().eq('id', projectId);
+      _isLoading = false;
+      await fetchProjects();
+      _emitSuccess();
+      Future.delayed(Duration.zero, () {
+        if (!isClosed) _emitLoaded();
+      });
+      return true;
+    } catch (e) {
+      debugPrint("Error delete project: $e");
+      _isLoading = false;
+      _emitLoaded();
+      return false;
+    }
+  }
+
 
   // ─────────────────────────────────────────────
   // HITUNG SEMUA BID UNTUK SATU PROYEK
@@ -379,9 +498,6 @@ class ProjectCubit extends Cubit<ProjectState> {
     }
   }
 
-  // ─────────────────────────────────────────────
-  // AMBIL PROYEK BERJALAN UNTUK VENDOR
-  // ─────────────────────────────────────────────
   Future<List<ProjectModel>> fetchVendorActiveProjects() async {
     try {
       final vendorId = _supabase.auth.currentUser?.id;
@@ -396,6 +512,8 @@ class ProjectCubit extends Cubit<ProjectState> {
           .where((e) => e['projects'] is Map)
           .map((e) => ProjectModel.fromJson(Map<String, dynamic>.from(e['projects'] as Map)))
           .toList();
+      _projects = activeList;
+      _emitLoaded();
       return activeList;
     } catch (e) {
       debugPrint("Error fetch vendor active projects: $e");
@@ -418,9 +536,12 @@ class ProjectCubit extends Cubit<ProjectState> {
         query = query.eq('status', status);
       }
       final response = await query.order('created_at', ascending: false);
-      return List<Map<String, dynamic>>.from(
+      final list = List<Map<String, dynamic>>.from(
         response,
       ).map((json) => BidModel.fromJson(json)).toList();
+      _vendorBids = list;
+      _emitLoaded();
+      return list;
     } catch (e) {
       debugPrint("Error fetch vendor bids: $e");
       return [];
@@ -1037,12 +1158,10 @@ class ProjectCubit extends Cubit<ProjectState> {
       }
 
       final int progressToUpdate = completedPct.round().clamp(0, 100);
-      final bool isProjectFinished = progressToUpdate >= 100;
       await _supabase
           .from('projects')
           .update({
             'progress_percent': progressToUpdate,
-            if (isProjectFinished) 'status': 'completed',
           })
           .eq('id', projectId);
 
@@ -1196,9 +1315,6 @@ class ProjectCubit extends Cubit<ProjectState> {
     }
   }
 
-  // ─────────────────────────────────────────────
-  // TAMBAH REVIEW BARU
-  // ─────────────────────────────────────────────
   Future<bool> addReview({
     required String projectId,
     required String vendorId,
@@ -1210,6 +1326,17 @@ class ProjectCubit extends Cubit<ProjectState> {
     try {
       final clientId = _supabase.auth.currentUser?.id;
       if (clientId == null) throw Exception('Client belum login!');
+
+      final existing = await _supabase
+          .from('reviews')
+          .select('id')
+          .eq('project_id', projectId)
+          .eq('user_id', clientId)
+          .maybeSingle();
+      if (existing != null) {
+        throw Exception('Ulasan untuk proyek ini sudah dikirim.');
+      }
+
       await _supabase.from('reviews').insert({
         'project_id': projectId,
         'vendor_id': vendorId,

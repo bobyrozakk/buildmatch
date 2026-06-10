@@ -1,10 +1,12 @@
+
 import 'dart:math' as math;
 import 'dart:io';
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:file_picker/file_picker.dart';
-import 'package:buildmatch/data/providers/project_provider.dart';
+import 'package:buildmatch/modules/client/logic/project/project_cubit.dart';
+import 'package:buildmatch/modules/client/logic/project/project_state.dart';
 import 'package:buildmatch/data/models/project_model.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:buildmatch/ui/shared/screens/map_picker_screen.dart';
@@ -60,6 +62,12 @@ class _CreateProjectScreenState extends State<CreateProjectScreen> {
   // Harga borongan standar Jatim 2025: Rp 4.000.000 / m²
   static const double _hargaBoronganPerM2 = 4_000_000.0;
 
+  // ── State untuk file di server (draft) ──
+  String? _serverImageUrl;
+  String? _serverPdfUrl;
+  bool _isDrafting = false;
+  bool _isConsulting = false;
+
   // ── initState: populate form jika membuka dari draft ──
   @override
   void initState() {
@@ -82,6 +90,10 @@ class _CreateProjectScreenState extends State<CreateProjectScreen> {
       if (draft.latitude != null && draft.longitude != null) {
         _selectedLocation = LatLng(draft.latitude!, draft.longitude!);
       }
+      
+      // Restore files
+      _serverImageUrl = draft.imageUrls.isNotEmpty ? draft.imageUrls.first : null;
+      _serverPdfUrl = draft.referencePdfUrl;
 
       // ── Restore pilihan luas tanah ──
       if (draft.landSize > 0) {
@@ -483,15 +495,18 @@ class _CreateProjectScreenState extends State<CreateProjectScreen> {
 
   /// Simpan data form saat ini ke Supabase sebagai draft, lalu keluar.
   Future<void> _saveDraftAndExit() async {
-    final provider = Provider.of<ProjectProvider>(context, listen: false);
+    setState(() {
+      _isDrafting = true;
+      _isConsulting = false;
+    });
 
-    final success = await provider.saveDraft(
+    final success = await context.read<ProjectCubit>().saveDraft(
       draftId: _editingDraftId,
       title: _titleController.text.trim(),
       description: _descController.text.trim(),
       budget: _budget,
       landSize: _effectiveLandSize,
-      buildingSize: double.tryParse(_buildingSizeController.text) ?? 0,
+      buildingSize: double.tryParse(_buildingSizeController.text) ?? 0.0,
       floors: _floors,
       bedrooms: _bedrooms,
       bathrooms: _bathrooms,
@@ -505,20 +520,14 @@ class _CreateProjectScreenState extends State<CreateProjectScreen> {
       landCustomLebar: _isCustomLand
           ? (double.tryParse(_customLandLebarController.text))
           : null,
+      imageFile: _selectedImageFile,
+      pdfFile: _selectedPdfFile,
+      imageUrls: _serverImageUrl != null ? [_serverImageUrl!] : [],
+      referencePdfUrl: _serverPdfUrl,
     );
 
     if (!mounted) return;
-
-    if (success) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('\u{1F4DD} Draft berhasil disimpan!'),
-          backgroundColor: Colors.green,
-          duration: Duration(seconds: 2),
-        ),
-      );
-      Navigator.pop(context);
-    } else {
+    if (!success) {
       _showError('Gagal menyimpan draft. Coba lagi.');
     }
   }
@@ -526,15 +535,18 @@ class _CreateProjectScreenState extends State<CreateProjectScreen> {
   /// Simpan draf lalu kembalikan sinyal 'route_to_consultation' ke pemanggil
   /// agar navigasi tab dapat langsung beralih ke tab Konsultasi.
   Future<void> _saveDraftAndConsultArchitect() async {
-    final provider = Provider.of<ProjectProvider>(context, listen: false);
+    setState(() {
+      _isDrafting = true;
+      _isConsulting = true;
+    });
 
-    final success = await provider.saveDraft(
+    final success = await context.read<ProjectCubit>().saveDraft(
       draftId: _editingDraftId,
       title: _titleController.text.trim(),
       description: _descController.text.trim(),
       budget: _budget,
       landSize: _effectiveLandSize,
-      buildingSize: double.tryParse(_buildingSizeController.text) ?? 0,
+      buildingSize: double.tryParse(_buildingSizeController.text) ?? 0.0,
       floors: _floors,
       bedrooms: _bedrooms,
       bathrooms: _bathrooms,
@@ -548,49 +560,14 @@ class _CreateProjectScreenState extends State<CreateProjectScreen> {
       landCustomLebar: _isCustomLand
           ? (double.tryParse(_customLandLebarController.text))
           : null,
+      imageFile: _selectedImageFile,
+      pdfFile: _selectedPdfFile,
+      imageUrls: _serverImageUrl != null ? [_serverImageUrl!] : [],
+      referencePdfUrl: _serverPdfUrl,
     );
 
     if (!mounted) return;
-
-    if (success) {
-      await showDialog<void>(
-        context: context,
-        barrierDismissible: false,
-        builder: (ctx) => AlertDialog(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-          title: const Row(
-            children: [
-              Icon(Icons.check_circle_outline, color: Colors.green),
-              SizedBox(width: 10),
-              Expanded(
-                child: Text(
-                  'Draft Tersimpan!',
-                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-                ),
-              ),
-            ],
-          ),
-          content: const Text(
-            'Proyek kamu berhasil disimpan ke draft. Kamu akan diarahkan ke halaman Konsultasi Arsitek.',
-            style: TextStyle(fontSize: 13, color: Colors.black54, height: 1.5),
-          ),
-          actionsPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-          actions: [
-            ElevatedButton(
-              onPressed: () => Navigator.pop(ctx),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppColors.primary,
-                shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12)),
-              ),
-              child: const Text('Lanjutkan', style: TextStyle(color: Colors.white)),
-            ),
-          ],
-        ),
-      );
-      if (!mounted) return;
-      Navigator.pop(context, 'route_to_consultation');
-    } else {
+    if (!success) {
       _showError('Gagal menyimpan draft. Coba lagi.');
     }
   }
@@ -718,11 +695,14 @@ class _CreateProjectScreenState extends State<CreateProjectScreen> {
       return;
     }
 
-    final provider = Provider.of<ProjectProvider>(context, listen: false);
+    setState(() {
+      _isDrafting = false;
+      _isConsulting = false;
+    });
 
     // ── MODE EDIT PROYEK AKTIF ──
     if (widget.isEditMode && _editingDraftId != null) {
-      final success = await provider.updateProject(
+      final success = await context.read<ProjectCubit>().updateProject(
         projectId: _editingDraftId!,
         title: _titleController.text.trim(),
         description: _descController.text.trim(),
@@ -736,25 +716,20 @@ class _CreateProjectScreenState extends State<CreateProjectScreen> {
         location: _locationController.text.trim(),
         latitude: _selectedLocation?.latitude,
         longitude: _selectedLocation?.longitude,
+        imageFile: _selectedImageFile,
+        pdfFile: _selectedPdfFile,
+        imageUrls: _serverImageUrl != null ? [_serverImageUrl!] : [],
+        referencePdfUrl: _serverPdfUrl,
       );
       if (!mounted) return;
-      if (success) {
-        showDialog(
-          context: context,
-          barrierDismissible: false,
-          builder: (context) => const AnimatedSuccessDialog(
-            message: 'Proyek berhasil diperbarui! ✅',
-          ),
-        );
-        Navigator.pop(context);
-      } else {
+      if (!success) {
         _showError('Gagal memperbarui proyek. Coba lagi.');
       }
       return;
     }
 
     // ── MODE BUAT PROYEK BARU ──
-    bool success = await provider.createProject(
+    bool success = await context.read<ProjectCubit>().createProject(
       title: _titleController.text.trim(),
       description: _descController.text.trim(),
       budget: _budget,
@@ -769,6 +744,8 @@ class _CreateProjectScreenState extends State<CreateProjectScreen> {
       longitude: _selectedLocation!.longitude,
       imageFile: _selectedImageFile,
       pdfFile: _selectedPdfFile,
+      imageUrls: _serverImageUrl != null ? [_serverImageUrl!] : [],
+      referencePdfUrl: _serverPdfUrl,
     );
 
     if (!mounted) return;
@@ -776,17 +753,8 @@ class _CreateProjectScreenState extends State<CreateProjectScreen> {
     if (success) {
       // Hapus draft lama jika ini adalah lanjutan dari draft
       if (_editingDraftId != null) {
-        await provider.deleteDraft(_editingDraftId!);
+        await context.read<ProjectCubit>().deleteDraft(_editingDraftId!);
       }
-      if (!mounted) return;
-      showDialog(
-        context: context,
-        barrierDismissible: false,
-        builder: (context) => const AnimatedSuccessDialog(
-          message: 'Proyek berhasil dipublikasikan! 🚀',
-        ),
-      );
-      Navigator.pop(context);
     } else {
       _showError('Gagal membuat proyek. Coba lagi.');
     }
@@ -813,47 +781,84 @@ class _CreateProjectScreenState extends State<CreateProjectScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final isLoading = context.watch<ProjectProvider>().isLoading;
+    final projectState = context.watch<ProjectCubit>().state;
+    final isLoading = projectState is ProjectLoading;
 
-    return Scaffold(
-      backgroundColor: AppColors.backgroundCream,
-      body: SafeArea(
-        child: Column(
-          children: [
-            // ── AppBar ──
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  // Panah kiri → exit dengan dialog draft
-                  IconButton(
-                    icon: Container(
-                      padding: const EdgeInsets.all(8),
-                      decoration: const BoxDecoration(
-                        color: Colors.white,
-                        shape: BoxShape.circle,
-                      ),
-                      child: const Icon(
-                        Icons.arrow_back,
-                        color: Colors.black87,
-                        size: 20,
+    return BlocListener<ProjectCubit, ProjectState>(
+      listener: (context, state) {
+        if (state is ProjectSuccess) {
+          if (_isConsulting) {
+            _isConsulting = false;
+            showDialog<void>(
+              context: context,
+              barrierDismissible: false,
+              builder: (ctx) => AlertDialog(
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                title: const Row(
+                  children: [
+                    Icon(Icons.check_circle_outline, color: Colors.green),
+                    SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        'Draft Tersimpan!',
+                        style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
                       ),
                     ),
-                    onPressed: isLoading ? null : _onExitPressed,
-                  ),
-                  Text(
-                    widget.isEditMode ? "Edit Proyek" : "Buat Proyek Baru",
-                    style: const TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.black87,
+                  ],
+                ),
+                content: const Text(
+                  'Proyek kamu berhasil disimpan ke draft. Kamu akan diarahkan ke halaman Konsultasi Arsitek.',
+                  style: TextStyle(fontSize: 13, color: Colors.black54, height: 1.5),
+                ),
+                actionsPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                actions: [
+                  ElevatedButton(
+                    onPressed: () {
+                      Navigator.pop(ctx); // pop dialog
+                      Navigator.pop(context, 'route_to_consultation'); // pop screen with route info
+                    },
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppColors.primary,
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12)),
                     ),
+                    child: const Text('Lanjutkan', style: TextStyle(color: Colors.white)),
                   ),
-                  // Icon bookmark → hanya tampil di mode buat baru (bukan edit)
-                  if (!widget.isEditMode)
+                ],
+              ),
+            );
+          } else {
+            showDialog(
+              context: context,
+              barrierDismissible: false,
+              builder: (ctx) => AnimatedSuccessDialog(
+                message: widget.isEditMode
+                    ? 'Proyek berhasil diperbarui! ✅'
+                    : (_isDrafting ? 'Draft berhasil disimpan! 📝' : 'Proyek berhasil dipublikasikan! 🚀'),
+              ),
+            );
+            Future.delayed(const Duration(seconds: 2), () {
+              if (mounted) {
+                Navigator.pop(context); // pop dialog
+                Navigator.pop(context); // pop screen
+              }
+            });
+          }
+        }
+      },
+      child: Scaffold(
+        backgroundColor: AppColors.backgroundCream,
+        body: SafeArea(
+          child: Column(
+            children: [
+              // ── AppBar ──
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    // Panah kiri → exit dengan dialog draft
                     IconButton(
-                      tooltip: 'Simpan sebagai draft',
                       icon: Container(
                         padding: const EdgeInsets.all(8),
                         decoration: const BoxDecoration(
@@ -861,39 +866,66 @@ class _CreateProjectScreenState extends State<CreateProjectScreen> {
                           shape: BoxShape.circle,
                         ),
                         child: const Icon(
-                          Icons.bookmark_outline,
-                          color: AppColors.primary,
+                          Icons.arrow_back,
+                          color: Colors.black87,
                           size: 20,
                         ),
                       ),
-                      onPressed: isLoading ? null : _saveDraftAndExit,
-                    )
-                  else
-                    const SizedBox(width: 48), // placeholder agar judul tetap center
-                ],
-              ),
-            ),
-            Padding(
-              padding: const EdgeInsets.symmetric(vertical: 16),
-              child: _buildStepper(),
-            ),
-            Expanded(
-              child: Form(
-                key: _formKey,
-                child: PageView(
-                  controller: _pageController,
-                  physics: const NeverScrollableScrollPhysics(),
-                  children: [
-                    _buildStep1(),
-                    _buildStep2(),
-                    _buildStep3(),
-                    _buildStep4(),
+                      onPressed: isLoading ? null : _onExitPressed,
+                    ),
+                    Text(
+                      widget.isEditMode ? "Edit Proyek" : "Buat Proyek Baru",
+                      style: const TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.black87,
+                      ),
+                    ),
+                    // Icon bookmark → hanya tampil di mode buat baru (bukan edit)
+                    if (!widget.isEditMode)
+                      IconButton(
+                        tooltip: 'Simpan sebagai draft',
+                        icon: Container(
+                          padding: const EdgeInsets.all(8),
+                          decoration: const BoxDecoration(
+                            color: Colors.white,
+                            shape: BoxShape.circle,
+                          ),
+                          child: const Icon(
+                            Icons.bookmark_outline,
+                            color: AppColors.primary,
+                            size: 20,
+                          ),
+                        ),
+                        onPressed: isLoading ? null : _saveDraftAndExit,
+                      )
+                    else
+                      const SizedBox(width: 48), // placeholder agar judul tetap center
                   ],
                 ),
               ),
-            ),
-            _buildBottomNav(isLoading),
-          ],
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 16),
+                child: _buildStepper(),
+              ),
+              Expanded(
+                child: Form(
+                  key: _formKey,
+                  child: PageView(
+                    controller: _pageController,
+                    physics: const NeverScrollableScrollPhysics(),
+                    children: [
+                      _buildStep1(),
+                      _buildStep2(),
+                      _buildStep3(),
+                      _buildStep4(),
+                    ],
+                  ),
+                ),
+              ),
+              _buildBottomNav(isLoading),
+            ],
+          ),
         ),
       ),
     );
@@ -1307,17 +1339,22 @@ class _CreateProjectScreenState extends State<CreateProjectScreen> {
             "Foto Sampul Proyek (Maks 5MB, terkompresi otomatis)",
           ),
           _buildUploadBox(
-            title: _selectedImageFile == null
-                ? "Unggah Foto (.jpg, .png)"
-                : _selectedImageFile!.path.split('/').last,
+            title: _selectedImageFile != null
+                ? _selectedImageFile!.path.split('/').last
+                : (_serverImageUrl != null
+                    ? _serverImageUrl!.split('/').last
+                    : "Unggah Foto (.jpg, .png)"),
             icon: Icons.add_photo_alternate_outlined,
-            isUploaded: _selectedImageFile != null,
+            isUploaded: _selectedImageFile != null || _serverImageUrl != null,
             onTap: _pickImage,
           ),
-          if (_selectedImageFile != null) ...[
+          if (_selectedImageFile != null || _serverImageUrl != null) ...[
             const SizedBox(height: 8),
             GestureDetector(
-              onTap: () => setState(() => _selectedImageFile = null),
+              onTap: () => setState(() {
+                _selectedImageFile = null;
+                _serverImageUrl = null;
+              }),
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
@@ -1338,13 +1375,39 @@ class _CreateProjectScreenState extends State<CreateProjectScreen> {
           const SizedBox(height: 16),
           _buildSectionTitle("Dokumen Pendukung / Denah (Max 2MB)"),
           _buildUploadBox(
-            title: _selectedPdfFile == null
-                ? "Unggah PDF Referensi (.pdf)"
-                : _selectedPdfFile!.path.split('/').last,
+            title: _selectedPdfFile != null
+                ? _selectedPdfFile!.path.split('/').last
+                : (_serverPdfUrl != null
+                    ? _serverPdfUrl!.split('/').last
+                    : "Unggah PDF Referensi (.pdf)"),
             icon: Icons.description_outlined,
-            isUploaded: _selectedPdfFile != null,
+            isUploaded: _selectedPdfFile != null || _serverPdfUrl != null,
             onTap: _pickPdf,
           ),
+          if (_selectedPdfFile != null || _serverPdfUrl != null) ...[
+            const SizedBox(height: 8),
+            GestureDetector(
+              onTap: () => setState(() {
+                _selectedPdfFile = null;
+                _serverPdfUrl = null;
+              }),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.close_rounded, size: 14, color: Colors.red.shade400),
+                  const SizedBox(width: 4),
+                  Text(
+                    'Hapus PDF',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: Colors.red.shade400,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
           const SizedBox(height: 28),
           // ── Tombol konsultasi arsitek — card premium ──
           _buildArchitectConsultButton(),

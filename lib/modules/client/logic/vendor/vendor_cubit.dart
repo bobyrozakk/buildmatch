@@ -106,9 +106,29 @@ class VendorCubit extends Cubit<VendorState> {
           .eq('role', 'vendor')
           .order('created_at', ascending: false);
 
-      final list = List<Map<String, dynamic>>.from(response)
-          .map((e) => ProfileModel.fromJson(e))
-          .toList();
+      final reviewsResponse = await _supabase
+          .from('reviews')
+          .select('vendor_id, rating');
+
+      final Map<String, List<int>> ratingMap = {};
+      for (final row in List<Map<String, dynamic>>.from(reviewsResponse)) {
+        final vid = row['vendor_id'] as String?;
+        final r = row['rating'] as int?;
+        if (vid != null && r != null) {
+          ratingMap.putIfAbsent(vid, () => []).add(r);
+        }
+      }
+
+      final list = List<Map<String, dynamic>>.from(response).map((e) {
+        final id = e['id'] as String;
+        double? avgRating;
+        if (ratingMap.containsKey(id)) {
+          final ratings = ratingMap[id]!;
+          avgRating = ratings.reduce((a, b) => a + b) / ratings.length;
+        }
+        return ProfileModel.fromJson(e).copyWith(avgRating: avgRating);
+      }).toList();
+
       _vendors = list;
       _emitLoaded();
       return list;

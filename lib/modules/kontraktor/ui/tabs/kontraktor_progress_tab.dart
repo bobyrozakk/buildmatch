@@ -1,11 +1,12 @@
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
-import 'package:buildmatch/data/providers/project_provider.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:buildmatch/modules/client/logic/project/project_cubit.dart';
+import 'package:buildmatch/modules/client/logic/project/project_state.dart';
 import 'package:buildmatch/data/models/bid_model.dart';
-import '../../../core/constants/colors.dart';
-import '../../../core/utils/formatters.dart';
-import '../screens/kontraktor_bid_detail_screen.dart';
-import '../../shared/widgets/animated_success_dialog.dart';
+import 'package:buildmatch/core/constants/colors.dart';
+import 'package:buildmatch/core/utils/formatters.dart';
+import 'package:buildmatch/modules/kontraktor/ui/screens/kontraktor_bid_detail_screen.dart';
+import 'package:buildmatch/ui/shared/widgets/animated_success_dialog.dart';
 
 class KontraktorProgressTab extends StatefulWidget {
   const KontraktorProgressTab({super.key});
@@ -15,24 +16,14 @@ class KontraktorProgressTab extends StatefulWidget {
 }
 
 class _KontraktorProgressTabState extends State<KontraktorProgressTab> {
-  late Future<List<BidModel>> _future;
-
   @override
   void initState() {
     super.initState();
-    _future = Provider.of<ProjectProvider>(
-      context,
-      listen: false,
-    ).fetchVendorBids();
+    context.read<ProjectCubit>().fetchVendorBids();
   }
 
   Future<void> _refresh() async {
-    setState(() {
-      _future = Provider.of<ProjectProvider>(
-        context,
-        listen: false,
-      ).fetchVendorBids();
-    });
+    await context.read<ProjectCubit>().fetchVendorBids();
   }
 
   @override
@@ -53,16 +44,18 @@ class _KontraktorProgressTabState extends State<KontraktorProgressTab> {
           ),
         ],
       ),
-      body: FutureBuilder<List<BidModel>>(
-        future: _future,
-        builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) {
+      body: BlocBuilder<ProjectCubit, ProjectState>(
+        builder: (context, state) {
+          if (state is ProjectLoading || state is ProjectInitial) {
             return const Center(
               child: CircularProgressIndicator(color: AppColors.primary),
             );
           }
-
-          final allBids = snapshot.data ?? [];
+          if (state is ProjectError) {
+            return Center(child: Text(state.message));
+          }
+          if (state is ProjectLoaded) {
+            final allBids = state.vendorBids;
           // Urutkan: accepted dulu, lalu pending, lalu rejected/diabaikan
           final bids = [...allBids]..sort((a, b) {
             int rank(BidModel bid) {
@@ -313,10 +306,12 @@ class _KontraktorProgressTabState extends State<KontraktorProgressTab> {
               );
             },
           );
-        },
-      ),
-    );
-  }
+        }
+        return const SizedBox.shrink();
+      },
+    ),
+  );
+}
 
   Widget _statusChip(String status, DateTime? createdAt) {
     final isOldPending = status == 'pending' && createdAt != null && DateTime.now().difference(createdAt).inDays > 7;
@@ -398,7 +393,7 @@ class _KontraktorProgressTabState extends State<KontraktorProgressTab> {
 
     if (confirm != true || !mounted) return;
 
-    final provider = Provider.of<ProjectProvider>(context, listen: false);
+    final provider = context.read<ProjectCubit>();
     final success = await provider.deleteBid(bidId: bidId);
 
     if (!mounted) return;
@@ -469,7 +464,7 @@ class _KontraktorProgressTabState extends State<KontraktorProgressTab> {
 
     if (confirm != true || !mounted) return;
 
-    final provider = Provider.of<ProjectProvider>(context, listen: false);
+    final provider = context.read<ProjectCubit>();
     final success = await provider.deleteBid(bidId: bidId);
 
     if (!mounted) return;

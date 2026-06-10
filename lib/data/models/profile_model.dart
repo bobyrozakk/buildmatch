@@ -14,6 +14,7 @@ class ProfileModel extends Equatable {
   final bool isVerified;
   final String? avatarUrl;
   final DateTime? createdAt;
+  final double? avgRating;
 
   const ProfileModel({
     required this.id,
@@ -28,6 +29,7 @@ class ProfileModel extends Equatable {
     this.isVerified = false,
     this.avatarUrl,
     this.createdAt,
+    this.avgRating,
   });
 
   factory ProfileModel.fromJson(Map<String, dynamic> json) {
@@ -46,6 +48,7 @@ class ProfileModel extends Equatable {
       createdAt: json['created_at'] != null
           ? DateTime.tryParse(json['created_at'] as String)
           : null,
+      avgRating: (json['avg_rating'] as num?)?.toDouble(),
     );
   }
 
@@ -61,6 +64,7 @@ class ProfileModel extends Equatable {
       'stra_number': straNumber,
       'experience_years': experienceYears,
       'is_verified': isVerified,
+      if (avgRating != null) 'avg_rating': avgRating,
     };
   }
 
@@ -77,6 +81,7 @@ class ProfileModel extends Equatable {
     bool? isVerified,
     String? avatarUrl,
     DateTime? createdAt,
+    double? avgRating,
   }) {
     return ProfileModel(
       id: id ?? this.id,
@@ -91,6 +96,7 @@ class ProfileModel extends Equatable {
       isVerified: isVerified ?? this.isVerified,
       avatarUrl: avatarUrl ?? this.avatarUrl,
       createdAt: createdAt ?? this.createdAt,
+      avgRating: avgRating ?? this.avgRating,
     );
   }
 
@@ -108,5 +114,6 @@ class ProfileModel extends Equatable {
         isVerified,
         avatarUrl,
         createdAt,
+        avgRating,
       ];
 }

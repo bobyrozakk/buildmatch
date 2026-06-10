@@ -85,6 +85,7 @@ class _ChatListScreenState extends State<ChatListScreen> {
         backgroundColor: Colors.white,
         elevation: 0,
         automaticallyImplyLeading: false,
+        leading: Navigator.canPop(context) ? const BackButton(color: Colors.black87) : null,
       ),
       body: Column(
         children: [

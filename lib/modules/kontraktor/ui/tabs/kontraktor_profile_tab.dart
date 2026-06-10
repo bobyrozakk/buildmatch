@@ -1,15 +1,16 @@
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import '../../../modules/auth/logic/auth_cubit.dart';
-import '../../../data/models/profile_model.dart';
-import '../../../data/models/portfolio_model.dart';
-import '../../../data/models/certification_model.dart';
-import '../../../data/providers/vendor_provider.dart';
-import '../screens/kontraktor_profileEdit_screen.dart';
+import 'package:buildmatch/modules/auth/logic/auth_cubit.dart';
+import 'package:buildmatch/data/models/profile_model.dart';
+import 'package:buildmatch/data/models/portfolio_model.dart';
+import 'package:buildmatch/data/models/certification_model.dart';
+import 'package:buildmatch/modules/client/logic/vendor/vendor_cubit.dart';
+import 'package:buildmatch/modules/client/logic/vendor/vendor_state.dart';
+import 'package:buildmatch/modules/kontraktor/ui/screens/profile_edit/kontraktor_profileEdit_screen.dart';
 import 'package:buildmatch/modules/auth/ui/login_screen.dart';
-import '../../shared/widgets/glass_card.dart';
-import '../../../core/constants/colors.dart';
+import 'package:buildmatch/ui/shared/widgets/glass_card.dart';
+import 'package:buildmatch/core/constants/colors.dart';
 
 class KontraktorProfileTab extends StatefulWidget {
   const KontraktorProfileTab({super.key});
@@ -22,8 +23,6 @@ class KontraktorProfileTab extends StatefulWidget {
 class _KontraktorProfileTabState
     extends State<KontraktorProfileTab> {
 
-  late Future<List<dynamic>> _future;
-
   @override
   void initState() {
     super.initState();
@@ -31,19 +30,13 @@ class _KontraktorProfileTabState
   }
 
   void _load() {
-    final provider =
-        Provider.of<VendorProvider>(
-      context,
-      listen: false,
-    );
+    final cubit = context.read<VendorCubit>();
     final userId = Supabase.instance.client.auth.currentUser?.id ?? "";
 
-    _future = Future.wait([
-      provider.fetchVendorProfile(),
-      provider.fetchPortfolios(),
-      provider.fetchCertifications(),
-      provider.fetchReviews(userId), // 3: reviews
-    ]);
+    cubit.fetchVendorProfile();
+    cubit.fetchPortfolios();
+    cubit.fetchCertifications();
+    cubit.fetchReviews(userId);
   }
 
   Future<void> _logout() async {
@@ -110,33 +103,24 @@ class _KontraktorProfileTabState
       backgroundColor:
           AppColors.backgroundCream,
 
-      body: FutureBuilder<List<dynamic>>(
-        future: _future,
-        builder: (_, snapshot) {
-
-          if (snapshot.connectionState ==
-              ConnectionState.waiting) {
+      body: BlocBuilder<VendorCubit, VendorState>(
+        builder: (context, state) {
+          if (state is VendorLoading || state is VendorInitial) {
             return const Center(
               child: CircularProgressIndicator(
                 color: AppColors.primary,
               ),
             );
           }
+          if (state is VendorError) {
+            return Center(child: Text(state.message));
+          }
+          if (state is VendorLoaded) {
+            final profile = state.vendorProfile;
+            final portfolios = state.portfolios;
+            final certifications = state.certifications;
 
-          final profile =
-              snapshot.data?[0] as ProfileModel?;
-
-          final portfolios =
-              snapshot.data?[1]
-                      as List<PortfolioModel>? ??
-                  [];
-
-          final certifications =
-              snapshot.data?[2]
-                      as List<CertificationModel>? ??
-                  [];
-
-          return CustomScrollView(
+            return CustomScrollView(
             physics:
                 const BouncingScrollPhysics(),
             slivers: [
@@ -149,7 +133,7 @@ class _KontraktorProfileTabState
                 padding:
                     const EdgeInsets.all(20),
                 sliver: SliverToBoxAdapter(
-                  child: _stats(portfolios),
+                  child: _stats(portfolios, state.reviews),
                 ),
               ),
 
@@ -255,10 +239,12 @@ class _KontraktorProfileTabState
               ),
             ],
           );
-        },
-      ),
-    );
-  }
+        }
+        return const SizedBox.shrink();
+      },
+    ),
+  );
+}
 
 Widget _header(ProfileModel? p) {
   return Stack(
@@ -426,7 +412,15 @@ Widget _header(ProfileModel? p) {
 
   Widget _stats(
     List<PortfolioModel> portfolios,
+    List<Map<String, dynamic>> reviews,
   ) {
+    double avgRating = 0.0;
+    if (reviews.isNotEmpty) {
+      final total = reviews.fold(0.0, (sum, r) => sum + (r['rating'] as num? ?? 0.0));
+      avgRating = total / reviews.length;
+    }
+    final ratingStr = reviews.isEmpty ? '0.0' : avgRating.toStringAsFixed(1);
+
     return Row(
       children: [
 
@@ -437,7 +431,7 @@ Widget _header(ProfileModel? p) {
 
         const SizedBox(width: 12),
 
-        _statBox('4.9', 'Rating'),
+        _statBox(ratingStr, 'Rating'),
 
         const SizedBox(width: 12),
 

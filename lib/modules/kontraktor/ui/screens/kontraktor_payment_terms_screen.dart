@@ -1,15 +1,16 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:provider/provider.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:url_launcher/url_launcher.dart';
 import 'package:file_picker/file_picker.dart';
-import 'package:buildmatch/data/providers/project_provider.dart';
+import 'package:buildmatch/modules/client/logic/project/project_cubit.dart';
 import 'package:buildmatch/data/models/payment_term_model.dart';
 import 'package:buildmatch/data/models/project_model.dart';
-import '../../../core/constants/colors.dart';
-import '../../../core/utils/formatters.dart';
-import '../../shared/widgets/animated_success_dialog.dart';
+import 'package:buildmatch/core/constants/colors.dart';
+import 'package:buildmatch/core/utils/formatters.dart';
+import 'package:buildmatch/ui/shared/widgets/animated_success_dialog.dart';
 
 // ─────────────────────────────────────────────────────────────────────────
 // CATATAN DEPENDENCY (tambahkan ke pubspec.yaml jika belum ada):
@@ -50,10 +51,7 @@ class _KontraktorPaymentTermsScreenState
   }
 
   void _load() async {
-    final prov = Provider.of<ProjectProvider>(
-      context,
-      listen: false,
-    );
+    final prov = context.read<ProjectCubit>();
     _termsFuture = prov.fetchPaymentTerms(widget.projectId);
 
     setState(() {
@@ -299,10 +297,7 @@ class _KontraktorPaymentTermsScreenState
                                 ? null
                                 : () async {
                                     if (!formKey.currentState!.validate()) return;
-                                    final provider = Provider.of<ProjectProvider>(
-                                      context,
-                                      listen: false,
-                                    );
+                                    final provider = context.read<ProjectCubit>();
                                     setModal(() {
                                       isSaving = true;
                                     });
@@ -412,6 +407,7 @@ class _KontraktorPaymentTermsScreenState
     File? selectedPdf;
     String? pdfName;
     bool isSubmitting = false;
+    String? uploadWarning;
 
     await showModalBottomSheet(
       context: context,
@@ -422,38 +418,51 @@ class _KontraktorPaymentTermsScreenState
           builder: (ctx, setSheet) {
             Future<void> pickImages() async {
               if (selectedImages.length >= 5) {
-                ScaffoldMessenger.of(ctx).showSnackBar(
-                  const SnackBar(
-                    content: Text('Maksimal 5 gambar'),
-                    backgroundColor: Colors.orange,
-                  ),
-                );
+                setSheet(() {
+                  uploadWarning = 'Maksimal 5 gambar';
+                });
                 return;
               }
               final picker = ImagePicker();
               final remaining = 5 - selectedImages.length;
-              final picked = await picker.pickMultiImage(limit: remaining);
+              
+              // Safe selection of remaining images: if 1, use pickImage; otherwise pickMultiImage
+              final List<XFile> picked = [];
+              try {
+                if (remaining == 1) {
+                  final single = await picker.pickImage(source: ImageSource.gallery);
+                  if (single != null) picked.add(single);
+                } else {
+                  final multiple = await picker.pickMultiImage(limit: remaining);
+                  if (multiple.isNotEmpty) picked.addAll(multiple);
+                }
+              } catch (_) {}
+              
               if (picked.isEmpty) return;
 
-              // Validasi ukuran setiap gambar
+              // Validasi ukuran dan format setiap gambar
               final List<XFile> valid = [];
+              String? warning;
               for (final xf in picked) {
+                final ext = xf.path.split('.').last.toLowerCase();
+                final isSupported = ext == 'jpg' || ext == 'jpeg' || ext == 'png';
                 final size = await File(xf.path).length();
-                if (size > 5 * 1024 * 1024) {
-                  if (ctx.mounted) {
-                    ScaffoldMessenger.of(ctx).showSnackBar(
-                      SnackBar(
-                        content: Text('❌ ${xf.name} melebihi 5MB, dilewati.'),
-                        backgroundColor: Colors.red,
-                      ),
-                    );
-                  }
+                
+                if (!isSupported) {
+                  warning = 'Format file tidak didukung. Harap pilih foto JPG atau PNG.';
+                } else if (size > 5 * 1024 * 1024) {
+                  warning = 'Ukuran foto ${xf.name} melebihi 5MB.';
                 } else {
                   valid.add(xf);
                 }
               }
 
               setSheet(() {
+                if (warning != null) {
+                  uploadWarning = warning;
+                } else {
+                  uploadWarning = null;
+                }
                 final canAdd = 5 - selectedImages.length;
                 selectedImages.addAll(valid.take(canAdd));
               });
@@ -476,7 +485,7 @@ class _KontraktorPaymentTermsScreenState
               if (!formKey.currentState!.validate()) return;
               setSheet(() => isSubmitting = true);
 
-              final provider = Provider.of<ProjectProvider>(ctx, listen: false);
+              final provider = ctx.read<ProjectCubit>();
               String errorMsg = '';
               bool ok = false;
               try {
@@ -648,28 +657,55 @@ class _KontraktorPaymentTermsScreenState
                                   color: Colors.black38,
                                 ),
                               ),
+                              if (uploadWarning != null) ...[
+                                const SizedBox(height: 8),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                                  decoration: BoxDecoration(
+                                    color: Colors.red.shade50,
+                                    borderRadius: BorderRadius.circular(8),
+                                    border: Border.all(color: Colors.red.shade200),
+                                  ),
+                                  child: Row(
+                                    children: [
+                                      const Icon(Icons.error_outline_rounded, color: Colors.red, size: 16),
+                                      const SizedBox(width: 8),
+                                      Expanded(
+                                        child: Text(
+                                          uploadWarning!,
+                                          style: const TextStyle(color: Colors.red, fontSize: 11),
+                                        ),
+                                      ),
+                                      const SizedBox(width: 8),
+                                      GestureDetector(
+                                        onTap: () => setSheet(() => uploadWarning = null),
+                                        child: const Icon(Icons.close, color: Colors.red, size: 14),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ],
                               const SizedBox(height: 10),
-                              // Grid gambar yang dipilih + tombol tambah
+                              // List gambar yang dipilih + tombol tambah
                               SizedBox(
-                                height: selectedImages.isEmpty ? 80 : 160,
+                                height: 90,
                                 child: selectedImages.isEmpty
                                     ? _buildAddImageButton(pickImages)
-                                    : GridView.builder(
+                                    : ListView.separated(
                                         scrollDirection: Axis.horizontal,
-                                        gridDelegate:
-                                            const SliverGridDelegateWithFixedCrossAxisCount(
-                                              crossAxisCount: 2,
-                                              crossAxisSpacing: 8,
-                                              mainAxisSpacing: 8,
-                                            ),
                                         itemCount: selectedImages.length < 5
                                             ? selectedImages.length + 1
                                             : selectedImages.length,
+                                        separatorBuilder: (_, __) => const SizedBox(width: 8),
                                         itemBuilder: (_, i) {
                                           if (i == selectedImages.length &&
                                               selectedImages.length < 5) {
-                                            return _buildAddImageButton(
-                                              pickImages,
+                                            return SizedBox(
+                                              width: 90,
+                                              height: 90,
+                                              child: _buildAddImageButton(
+                                                pickImages,
+                                              ),
                                             );
                                           }
                                           return Stack(
@@ -680,8 +716,9 @@ class _KontraktorPaymentTermsScreenState
                                                 child: Image.file(
                                                   File(selectedImages[i].path),
                                                   fit: BoxFit.cover,
-                                                  width: double.infinity,
-                                                  height: double.infinity,
+                                                  width: 90,
+                                                  height: 90,
+                                                  cacheWidth: 200, // Optimize memory for local thumbnails
                                                 ),
                                               ),
                                               Positioned(
@@ -936,7 +973,7 @@ class _KontraktorPaymentTermsScreenState
       ),
     );
     if (ok != true || !mounted) return;
-    final provider = Provider.of<ProjectProvider>(context, listen: false);
+    final provider = context.read<ProjectCubit>();
     bool success = false;
     String errMsg = '';
     try {
@@ -991,7 +1028,7 @@ class _KontraktorPaymentTermsScreenState
       ),
     );
     if (ok != true || !mounted) return;
-    final provider = Provider.of<ProjectProvider>(context, listen: false);
+    final provider = context.read<ProjectCubit>();
     final success = await provider.deletePaymentTerm(term.id!);
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -1055,6 +1092,9 @@ class _KontraktorPaymentTermsScreenState
           final totalPct = _totalPercentage(terms);
           final remainingPct = (100.0 - totalPct).clamp(0.0, 100.0);
           final nextOrder = terms.length + 1;
+          final isProgressFullyCompleted = terms.isNotEmpty &&
+              terms.every((t) => t.isCompleted) &&
+              totalPct >= 100.0;
 
           return ListView(
             padding: const EdgeInsets.all(20),
@@ -1142,28 +1182,31 @@ class _KontraktorPaymentTermsScreenState
                     ],
                   ),
                 ),
-              if (terms.isNotEmpty && terms.every((t) => t.isCompleted) && _project?.status == 'in_progress') ...[
+              if (_project?.status == 'in_progress') ...[
                 const SizedBox(height: 20),
                 SizedBox(
                   width: double.infinity,
                   height: 52,
                   child: ElevatedButton.icon(
-                    onPressed: _loadingProject ? null : () => _confirmCompleteProject(context),
+                    onPressed: (isProgressFullyCompleted && !_loadingProject)
+                        ? () => _confirmCompleteProject(context)
+                        : null,
                     style: ElevatedButton.styleFrom(
                       backgroundColor: Colors.teal,
+                      disabledBackgroundColor: Colors.grey.shade300,
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(16),
                       ),
                       elevation: 0,
                     ),
-                    icon: const Icon(
+                    icon: Icon(
                       Icons.done_all_rounded,
-                      color: Colors.white,
+                      color: isProgressFullyCompleted ? Colors.white : Colors.black26,
                     ),
-                    label: const Text(
+                    label: Text(
                       'Selesaikan Kontrak & Proyek',
                       style: TextStyle(
-                        color: Colors.white,
+                        color: isProgressFullyCompleted ? Colors.white : Colors.black26,
                         fontWeight: FontWeight.bold,
                         fontSize: 14,
                       ),
@@ -1951,36 +1994,43 @@ class _KontraktorPaymentTermsScreenState
                 itemCount: term.progressImages!.length,
                 separatorBuilder: (_, __) => const SizedBox(width: 8),
                 itemBuilder: (_, i) {
-                  return ClipRRect(
-                    borderRadius: BorderRadius.circular(8),
-                    child: Image.network(
-                      term.progressImages![i],
-                      width: 80,
-                      height: 80,
-                      fit: BoxFit.cover,
-                      errorBuilder: (_, __, ___) => Container(
+                  return GestureDetector(
+                    onTap: () => _showImageViewer(term.progressImages!, i),
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(8),
+                      child: Image.network(
+                        term.progressImages![i],
                         width: 80,
                         height: 80,
-                        color: Colors.grey.shade200,
-                        child: const Icon(
-                          Icons.broken_image_outlined,
-                          color: Colors.black26,
-                        ),
-                      ),
-                      loadingBuilder: (_, child, progress) {
-                        if (progress == null) return child;
-                        return Container(
+                        fit: BoxFit.cover,
+                        cacheWidth: 200, // Optimize memory for network thumbnails
+                        errorBuilder: (_, __, ___) => Container(
                           width: 80,
                           height: 80,
-                          color: Colors.grey.shade100,
-                          child: const Center(
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2,
-                              color: AppColors.primary,
-                            ),
+                          color: Colors.grey.shade200,
+                          child: const Icon(
+                            Icons.broken_image_outlined,
+                            color: Colors.black26,
                           ),
-                        );
-                      },
+                        ),
+                        frameBuilder: (context, child, frame, wasSynchronouslyLoaded) {
+                          if (wasSynchronouslyLoaded) return child;
+                          if (frame == null) {
+                            return Container(
+                              width: 80,
+                              height: 80,
+                              color: Colors.grey.shade100,
+                              child: const Center(
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  color: AppColors.primary,
+                                ),
+                              ),
+                            );
+                          }
+                          return child;
+                        },
+                      ),
                     ),
                   );
                 },
@@ -1996,31 +2046,69 @@ class _KontraktorPaymentTermsScreenState
           if (term.progressPdfUrl != null) ...[
             const SizedBox(height: 10),
             GestureDetector(
-              onTap: () {
-                Clipboard.setData(ClipboardData(text: term.progressPdfUrl!));
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('🔗 Link PDF disalin ke clipboard'),
-                    duration: Duration(seconds: 2),
-                  ),
-                );
+              onTap: () async {
+                final urlString = term.progressPdfUrl!;
+                try {
+                  final uri = Uri.parse(urlString);
+                  if (!await launchUrl(uri, mode: LaunchMode.externalApplication)) {
+                    throw 'Could not launch';
+                  }
+                } catch (e) {
+                  Clipboard.setData(ClipboardData(text: urlString));
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('Gagal membuka PDF, link disalin ke clipboard'),
+                        duration: Duration(seconds: 2),
+                      ),
+                    );
+                  }
+                }
               },
-              child: Row(
-                children: [
-                  Icon(
-                    Icons.picture_as_pdf_rounded,
-                    size: 16,
-                    color: Colors.red.shade400,
-                  ),
-                  const SizedBox(width: 6),
-                  const Expanded(
-                    child: Text(
-                      'Laporan PDF tersedia · Ketuk untuk salin link',
-                      style: TextStyle(fontSize: 11, color: Colors.black54),
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                decoration: BoxDecoration(
+                  color: Colors.red.shade50,
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: Colors.red.shade200),
+                ),
+                child: Row(
+                  children: [
+                    Icon(
+                      Icons.picture_as_pdf_rounded,
+                      size: 16,
+                      color: Colors.red.shade400,
                     ),
-                  ),
-                  Icon(Icons.copy_rounded, size: 14, color: Colors.black38),
-                ],
+                    const SizedBox(width: 8),
+                    const Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Laporan PDF Tersedia',
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                              color: Colors.black87,
+                            ),
+                          ),
+                          Text(
+                            'Ketuk untuk membuka file PDF',
+                            style: TextStyle(
+                              fontSize: 11,
+                              color: Colors.black45,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const Icon(
+                      Icons.open_in_new_rounded,
+                      size: 16,
+                      color: Colors.black38,
+                    ),
+                  ],
+                ),
               ),
             ),
           ],
@@ -2178,7 +2266,7 @@ class _KontraktorPaymentTermsScreenState
       setState(() {
         _loadingProject = true;
       });
-      final ok = await Provider.of<ProjectProvider>(context, listen: false)
+      final ok = await context.read<ProjectCubit>()
           .completeProject(widget.projectId);
       if (mounted) {
         setState(() {
@@ -2203,6 +2291,64 @@ class _KontraktorPaymentTermsScreenState
         }
       }
     }
+  }
+
+  void _showImageViewer(List<String> imageUrls, int initialIndex) {
+    showDialog(
+      context: context,
+      builder: (ctx) => Dialog(
+        backgroundColor: Colors.black,
+        insetPadding: EdgeInsets.zero,
+        child: Stack(
+          children: [
+            PageView.builder(
+              controller: PageController(initialPage: initialIndex),
+              itemCount: imageUrls.length,
+              itemBuilder: (_, i) => InteractiveViewer(
+                child: Image.network(
+                  imageUrls[i],
+                  fit: BoxFit.contain,
+                  errorBuilder: (_, __, ___) => const Center(
+                    child: Icon(
+                      Icons.broken_image_outlined,
+                      color: Colors.white54,
+                      size: 60,
+                    ),
+                  ),
+                  frameBuilder: (context, child, frame, wasSynchronouslyLoaded) {
+                    if (wasSynchronouslyLoaded) return child;
+                    if (frame == null) {
+                      return const Center(
+                        child: CircularProgressIndicator(
+                          strokeWidth: 3,
+                          color: AppColors.primary,
+                        ),
+                      );
+                    }
+                    return child;
+                  },
+                ),
+              ),
+            ),
+            Positioned(
+              top: 40,
+              right: 16,
+              child: GestureDetector(
+                onTap: () => Navigator.pop(ctx),
+                child: Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: const BoxDecoration(
+                    color: Colors.black54,
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(Icons.close, color: Colors.white, size: 22),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 }
 

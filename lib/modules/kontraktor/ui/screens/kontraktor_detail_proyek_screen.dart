@@ -1,16 +1,17 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:provider/provider.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:file_picker/file_picker.dart';
-import 'package:buildmatch/data/providers/project_provider.dart';
+import 'package:buildmatch/modules/client/logic/project/project_cubit.dart';
+import 'package:buildmatch/modules/client/logic/project/project_state.dart';
 import 'package:buildmatch/data/models/project_model.dart';
 import 'package:buildmatch/data/models/bid_model.dart';
-import '../../shared/widgets/glass_card.dart';
-import '../../shared/widgets/animated_success_dialog.dart';
-import '../../../core/constants/colors.dart';
-import '../../../core/utils/formatters.dart';
+import 'package:buildmatch/ui/shared/widgets/glass_card.dart';
+import 'package:buildmatch/ui/shared/widgets/animated_success_dialog.dart';
+import 'package:buildmatch/core/constants/colors.dart';
+import 'package:buildmatch/core/utils/formatters.dart';
 
 class _ThousandsSeparatorFormatter extends TextInputFormatter {
   @override
@@ -67,7 +68,7 @@ class _KontraktorDetailProyekScreenState
 
   Future<void> _loadMeta() async {
     final provider =
-        Provider.of<ProjectProvider>(context, listen: false);
+        context.read<ProjectCubit>();
     final projectId = widget.project.id ?? '';
     final results = await Future.wait([
       provider.getVendorBidOnProject(projectId),
@@ -135,7 +136,7 @@ class _KontraktorDetailProyekScreenState
     }
 
     final provider =
-        Provider.of<ProjectProvider>(context, listen: false);
+        context.read<ProjectCubit>();
     bool success = await provider.submitBid(
       projectId: widget.project.id ?? '',
       price: double.tryParse(
@@ -218,7 +219,7 @@ class _KontraktorDetailProyekScreenState
       _checkingBid = true;
     });
 
-    final provider = Provider.of<ProjectProvider>(context, listen: false);
+    final provider = context.read<ProjectCubit>();
     final success = await provider.deleteBid(bidId: bidId);
 
     if (!mounted) return;
@@ -270,9 +271,11 @@ class _KontraktorDetailProyekScreenState
 
   @override
   Widget build(BuildContext context) {
-    final isLoading = context.watch<ProjectProvider>().isLoading;
+    return BlocBuilder<ProjectCubit, ProjectState>(
+      builder: (context, state) {
+        final isLoading = state is ProjectLoading;
 
-    return Scaffold(
+        return Scaffold(
       backgroundColor: AppColors.backgroundCream,
       appBar: AppBar(
         backgroundColor: Colors.transparent,
@@ -748,6 +751,8 @@ class _KontraktorDetailProyekScreenState
           ],
         ),
       ),
+        );
+      },
     );
   }
 

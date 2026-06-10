@@ -9,6 +9,7 @@ class ProgressProjectCard extends StatelessWidget {
   final VoidCallback onTap;
   final VoidCallback onEdit;
   final VoidCallback onCancel;
+  final VoidCallback? onDelete;
 
   const ProgressProjectCard({
     super.key,
@@ -16,6 +17,7 @@ class ProgressProjectCard extends StatelessWidget {
     required this.onTap,
     required this.onEdit,
     required this.onCancel,
+    this.onDelete,
   });
 
   Widget _buildStatusTag(String? status) {
@@ -229,6 +231,40 @@ class ProgressProjectCard extends StatelessWidget {
                 minHeight: 8,
               ),
             ),
+            if (project.status == 'cancelled') ...[
+              const SizedBox(height: 16),
+              FutureBuilder<int>(
+                future: Provider.of<ProjectProvider>(context, listen: false)
+                    .fetchProjectBidCountAll(project.id ?? ''),
+                builder: (ctx, snap) {
+                  final bidCount = snap.data ?? 0;
+                  if (snap.connectionState == ConnectionState.done && bidCount == 0) {
+                    return SizedBox(
+                      width: double.infinity,
+                      child: ElevatedButton.icon(
+                        onPressed: onDelete,
+                        icon: const Icon(Icons.delete_forever_rounded, color: Colors.white, size: 16),
+                        label: const Text(
+                          'Hapus Proyek',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 13,
+                          ),
+                        ),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.red.shade600,
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                          elevation: 0,
+                        ),
+                      ),
+                    );
+                  }
+                  return const SizedBox.shrink();
+                },
+              ),
+            ],
           ],
         ),
       ),

@@ -1,12 +1,13 @@
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
-import 'package:buildmatch/data/providers/project_provider.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:buildmatch/modules/client/logic/project/project_cubit.dart';
+import 'package:buildmatch/modules/client/logic/project/project_state.dart';
 import 'package:buildmatch/data/models/project_model.dart';
 import 'package:buildmatch/data/models/bid_model.dart';
-import '../screens/kontraktor_detail_proyek_screen.dart';
-import '../../shared/widgets/location_picker_sheet.dart';
-import '../../../core/constants/colors.dart';
-import '../../../core/utils/formatters.dart';
+import 'package:buildmatch/modules/kontraktor/ui/screens/kontraktor_detail_proyek_screen.dart';
+import 'package:buildmatch/ui/shared/widgets/location_picker_sheet.dart';
+import 'package:buildmatch/core/constants/colors.dart';
+import 'package:buildmatch/core/utils/formatters.dart';
 
 class KontraktorProyekTab extends StatefulWidget {
   const KontraktorProyekTab({super.key});
@@ -16,7 +17,6 @@ class KontraktorProyekTab extends StatefulWidget {
 }
 
 class _KontraktorProyekTabState extends State<KontraktorProyekTab> {
-  late Future<List<dynamic>> _dataFuture;
   String _searchQuery = '';
   String _selectedFilter = 'Semua';
   LocationResult _location = const LocationResult();
@@ -32,13 +32,14 @@ class _KontraktorProyekTabState extends State<KontraktorProyekTab> {
   }
 
   void _loadData() {
-    final p = Provider.of<ProjectProvider>(context, listen: false);
-    _dataFuture = Future.wait([p.fetchAvailableProjects(), p.fetchVendorBids()]);
+    final p = context.read<ProjectCubit>();
+    p.fetchAvailableProjects();
+    p.fetchVendorBids();
   }
 
   Future<void> _refresh() async {
-    setState(_loadData);
-    await _dataFuture;
+    final p = context.read<ProjectCubit>();
+    await Future.wait([p.fetchAvailableProjects(), p.fetchVendorBids()]);
   }
 
   void _openDetail(ProjectModel p) {
@@ -95,58 +96,63 @@ class _KontraktorProyekTabState extends State<KontraktorProyekTab> {
     return Scaffold(
       backgroundColor: AppColors.backgroundCream,
       body: SafeArea(
-        child: FutureBuilder<List<dynamic>>(
-          future: _dataFuture,
-          builder: (context, snapshot) {
-            if (snapshot.connectionState == ConnectionState.waiting) {
+        child: BlocBuilder<ProjectCubit, ProjectState>(
+          builder: (context, state) {
+            if (state is ProjectLoading || state is ProjectInitial) {
               return const Center(child: CircularProgressIndicator(color: AppColors.primary));
             }
-            final allProjects = (snapshot.data?[0] as List<ProjectModel>? ?? []);
-            final allBids = (snapshot.data?[1] as List<BidModel>? ?? []);
+            if (state is ProjectError) {
+              return Center(child: Text(state.message));
+            }
+            if (state is ProjectLoaded) {
+              final allProjects = state.availableProjects;
+              final allBids = state.vendorBids;
 
-            final filteredProjects = _isBidFilter ? const <ProjectModel>[] : _applyProjectFilters(allProjects);
-            final filteredBids = _isBidFilter ? _applyBidFilters(allBids) : const <BidModel>[];
-            final itemCount = _isBidFilter ? filteredBids.length : filteredProjects.length;
-            final headerCount = _isBidFilter ? allBids.where((b) => b.status == (_selectedFilter == 'Penawaran Diajukan' ? 'pending' : 'accepted')).length : allProjects.length;
+              final filteredProjects = _isBidFilter ? const <ProjectModel>[] : _applyProjectFilters(allProjects);
+              final filteredBids = _isBidFilter ? _applyBidFilters(allBids) : const <BidModel>[];
+              final itemCount = _isBidFilter ? filteredBids.length : filteredProjects.length;
+              final headerCount = _isBidFilter ? allBids.where((b) => b.status == (_selectedFilter == 'Penawaran Diajukan' ? 'pending' : 'accepted')).length : allProjects.length;
 
-            return RefreshIndicator(
-              color: AppColors.primary,
-              onRefresh: _refresh,
-              child: CustomScrollView(
-                physics: const AlwaysScrollableScrollPhysics(parent: BouncingScrollPhysics()),
-                slivers: [
-                  SliverPadding(
-                    padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
-                    sliver: SliverToBoxAdapter(child: _buildHeader(headerCount)),
-                  ),
-                  SliverPadding(
-                    padding: const EdgeInsets.fromLTRB(20, 8, 20, 8),
-                    sliver: SliverToBoxAdapter(child: _buildSearchRow()),
-                  ),
-                  SliverToBoxAdapter(child: _buildFilterChips()),
-                  if (itemCount == 0)
-                    SliverFillRemaining(
-                      hasScrollBody: false,
-                      child: _buildEmptyState(),
-                    )
-                  else
+              return RefreshIndicator(
+                color: AppColors.primary,
+                onRefresh: _refresh,
+                child: CustomScrollView(
+                  physics: const AlwaysScrollableScrollPhysics(parent: BouncingScrollPhysics()),
+                  slivers: [
                     SliverPadding(
-                      padding: const EdgeInsets.fromLTRB(20, 8, 20, 100),
-                      sliver: SliverList(
-                        delegate: SliverChildBuilderDelegate(
-                          (_, i) => Padding(
-                            padding: const EdgeInsets.only(bottom: 14),
-                            child: _isBidFilter
-                                ? _buildBidCard(filteredBids[i])
-                                : _buildProjectCard(filteredProjects[i], hasBid: allBids.any((b) => b.projectId == filteredProjects[i].id)),
+                      padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
+                      sliver: SliverToBoxAdapter(child: _buildHeader(headerCount)),
+                    ),
+                    SliverPadding(
+                      padding: const EdgeInsets.fromLTRB(20, 8, 20, 8),
+                      sliver: SliverToBoxAdapter(child: _buildSearchRow()),
+                    ),
+                    SliverToBoxAdapter(child: _buildFilterChips()),
+                    if (itemCount == 0)
+                      SliverFillRemaining(
+                        hasScrollBody: false,
+                        child: _buildEmptyState(),
+                      )
+                    else
+                      SliverPadding(
+                        padding: const EdgeInsets.fromLTRB(20, 8, 20, 100),
+                        sliver: SliverList(
+                          delegate: SliverChildBuilderDelegate(
+                            (_, i) => Padding(
+                              padding: const EdgeInsets.only(bottom: 14),
+                              child: _isBidFilter
+                                  ? _buildBidCard(filteredBids[i])
+                                  : _buildProjectCard(filteredProjects[i], hasBid: allBids.any((b) => b.projectId == filteredProjects[i].id)),
+                            ),
+                            childCount: itemCount,
                           ),
-                          childCount: itemCount,
                         ),
                       ),
-                    ),
-                ],
-              ),
-            );
+                  ],
+                ),
+              );
+            }
+            return const SizedBox.shrink();
           },
         ),
       ),

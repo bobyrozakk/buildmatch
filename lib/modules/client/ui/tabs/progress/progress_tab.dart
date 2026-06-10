@@ -197,6 +197,56 @@ class _ProgressTabState extends State<ProgressTab> {
     }
   }
 
+  Future<void> _handleDeleteProject(ProjectModel item) async {
+    final cubit = context.read<ProjectCubit>();
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Text('Hapus Proyek?', style: TextStyle(fontWeight: FontWeight.bold)),
+        content: Text(
+          'Proyek "${item.title}" akan dihapus permanen dari sistem.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Batal', style: TextStyle(color: Colors.black54)),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.red.shade600,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            ),
+            child: const Text('Hapus', style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true && item.id != null) {
+      final success = await cubit.deleteProject(item.id!);
+      if (mounted) {
+        if (success) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Proyek berhasil dihapus'),
+              backgroundColor: Colors.green,
+            ),
+          );
+          _refresh();
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Gagal menghapus proyek'),
+              backgroundColor: Colors.redAccent,
+            ),
+          );
+        }
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -399,6 +449,7 @@ class _ProgressTabState extends State<ProgressTab> {
                       ).then((_) => _refresh()),
                       onEdit: () => _handleEditProject(item),
                       onCancel: () => _handleCancelProject(item),
+                      onDelete: () => _handleDeleteProject(item),
                     ),
                   ),
                 );

@@ -9,10 +9,10 @@ import '../../../modules/client/ui/tabs/consultasi/consultasi_tab.dart';
 import '../../../modules/client/ui/tabs/profile/profile_tab.dart'; 
 
 // --- IMPORT TAB KONTRAKTOR ---
-import '../../kontraktor/tabs/kontraktor_home_tab.dart';
-import '../../kontraktor/tabs/kontraktor_proyek_tab.dart';
-import '../../kontraktor/tabs/kontraktor_progress_tab.dart';
-import '../../kontraktor/tabs/kontraktor_profile_tab.dart'; 
+import '../../../modules/kontraktor/ui/tabs/kontraktor_home_tab.dart';
+import '../../../modules/kontraktor/ui/tabs/kontraktor_proyek_tab.dart';
+import '../../../modules/kontraktor/ui/tabs/kontraktor_progress_tab.dart';
+import '../../../modules/kontraktor/ui/tabs/kontraktor_profile_tab.dart'; 
 
 
 // --- IMPORT TAB ARSITEK ---

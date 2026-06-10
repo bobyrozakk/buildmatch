@@ -1,19 +1,21 @@
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import '../../../core/constants/colors.dart';
-import '../../../core/utils/formatters.dart';
-import '../../../data/models/profile_model.dart';
-import '../../../data/models/project_model.dart';
-import '../../../data/models/bid_model.dart';
-import '../../../data/providers/vendor_provider.dart';
-import '../../../data/providers/project_provider.dart';
-import '../screens/kontraktor_profileEdit_screen.dart';
-import '../screens/kontraktor_detail_proyek_screen.dart';
-import '../../shared/screens/chat_list_screen.dart';
-import '../../shared/screens/notification_screen.dart';
-import '../../../data/providers/chat_provider.dart';
-import '../../../data/providers/notification_provider.dart';
+import 'package:buildmatch/core/constants/colors.dart';
+import 'package:buildmatch/core/utils/formatters.dart';
+import 'package:buildmatch/data/models/profile_model.dart';
+import 'package:buildmatch/data/models/project_model.dart';
+import 'package:buildmatch/data/models/bid_model.dart';
+import 'package:buildmatch/modules/client/logic/vendor/vendor_cubit.dart';
+import 'package:buildmatch/modules/client/logic/vendor/vendor_state.dart';
+import 'package:buildmatch/modules/client/logic/project/project_cubit.dart';
+import 'package:buildmatch/modules/client/logic/project/project_state.dart';
+import 'package:buildmatch/modules/client/logic/chat/chat_cubit.dart';
+import 'package:buildmatch/modules/client/logic/chat/chat_state.dart';
+import 'package:buildmatch/modules/kontraktor/ui/screens/profile_edit/kontraktor_profileEdit_screen.dart';
+import 'package:buildmatch/modules/kontraktor/ui/screens/kontraktor_detail_proyek_screen.dart';
+import 'package:buildmatch/ui/shared/screens/chat_list_screen.dart';
+import 'package:buildmatch/ui/shared/screens/notification_screen.dart';
 
 class KontraktorHomeTab extends StatefulWidget {
   final ValueChanged<int>? onSwitchTab;
@@ -24,7 +26,6 @@ class KontraktorHomeTab extends StatefulWidget {
 }
 
 class _KontraktorHomeTabState extends State<KontraktorHomeTab> {
-  late Future<List<dynamic>> _dataFuture;
 
   @override
   void initState() {
@@ -33,34 +34,42 @@ class _KontraktorHomeTabState extends State<KontraktorHomeTab> {
   }
 
   void _loadData() {
-    final vendor = Provider.of<VendorProvider>(context, listen: false);
-    final project = Provider.of<ProjectProvider>(context, listen: false);
+    final vendor = context.read<VendorCubit>();
+    final project = context.read<ProjectCubit>();
+    final userId = Supabase.instance.client.auth.currentUser?.id ?? "";
     
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
-        Provider.of<NotificationProvider>(context, listen: false).fetchNotifications();
-        Provider.of<ChatProvider>(context, listen: false).fetchChats();
+        context.read<ChatCubit>().fetchChats();
       }
     });
 
-    _dataFuture = Future.wait([
+    vendor.fetchVendorProfile();
+    project.fetchAvailableProjects();
+    project.fetchVendorActiveProjects();
+    project.fetchVendorBids(status: 'pending');
+    vendor.fetchReviews(userId);
+  }
+
+  Future<void> _refresh() async {
+    final vendor = context.read<VendorCubit>();
+    final project = context.read<ProjectCubit>();
+    final userId = Supabase.instance.client.auth.currentUser?.id ?? "";
+    
+    await Future.wait([
       vendor.fetchVendorProfile(),
       project.fetchAvailableProjects(),
       project.fetchVendorActiveProjects(),
       project.fetchVendorBids(status: 'pending'),
+      vendor.fetchReviews(userId),
     ]);
-  }
-
-  Future<void> _refresh() async {
-    setState(_loadData);
-    await _dataFuture;
   }
 
   // --- ACTIONS ---
 
   Future<void> _openEditProfile() async {
     await Navigator.push(context, MaterialPageRoute(builder: (_) => const EditProfileScreen()));
-    setState(_loadData);
+    _loadData();
   }
 
   void _openProjectDetail(ProjectModel project) {
@@ -89,43 +98,70 @@ class _KontraktorHomeTabState extends State<KontraktorHomeTab> {
         child: RefreshIndicator(
           color: AppColors.primary,
           onRefresh: _refresh,
-          child: FutureBuilder<List<dynamic>>(
-            future: _dataFuture,
-            builder: (context, snapshot) {
-              if (snapshot.connectionState == ConnectionState.waiting) {
-                return const Center(child: CircularProgressIndicator(color: AppColors.primary));
-              }
-              final profile = snapshot.data?[0] as ProfileModel?;
-              final tenders = (snapshot.data?[1] as List<ProjectModel>? ?? []);
-              final activeProjects = (snapshot.data?[2] as List<ProjectModel>? ?? []);
-              final submittedBids = (snapshot.data?[3] as List<BidModel>? ?? []);
+          child: BlocBuilder<VendorCubit, VendorState>(
+            builder: (context, vendorState) {
+              return BlocBuilder<ProjectCubit, ProjectState>(
+                builder: (context, projectState) {
+                  if (vendorState is VendorLoading ||
+                      vendorState is VendorInitial ||
+                      projectState is ProjectLoading ||
+                      projectState is ProjectInitial) {
+                    return const Center(
+                      child: CircularProgressIndicator(color: AppColors.primary),
+                    );
+                  }
 
-              return SingleChildScrollView(
-                physics: const AlwaysScrollableScrollPhysics(parent: BouncingScrollPhysics()),
-                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    _buildAppBar(profile),
-                    const SizedBox(height: 20),
-                    _buildWelcomeCard(profile),
-                    const SizedBox(height: 24),
-                    _buildStatsRow(activeProjects),
-                    const SizedBox(height: 28),
-                    _buildSectionHeader('Penawaran Masuk', onTap: _goToProyekTab),
-                    const SizedBox(height: 12),
-                    _buildPenawaranList(tenders),
-                    const SizedBox(height: 28),
-                    _buildSectionHeader('Penawaran Diajukan', onTap: _goToProyekTab),
-                    const SizedBox(height: 12),
-                    _buildPenawaranDiajukanList(submittedBids),
-                    const SizedBox(height: 28),
-                    _buildSectionHeader('Proyek Berjalan', onTap: _goToProgressTab),
-                    const SizedBox(height: 12),
-                    _buildProyekBerjalan(activeProjects),
-                    const SizedBox(height: 100),
-                  ],
-                ),
+                  ProfileModel? profile;
+                  List<Map<String, dynamic>> reviews = [];
+                  if (vendorState is VendorLoaded) {
+                    profile = vendorState.vendorProfile;
+                    reviews = vendorState.reviews;
+                  }
+
+                  List<ProjectModel> tenders = [];
+                  List<ProjectModel> activeProjects = [];
+                  List<BidModel> submittedBids = [];
+                  if (projectState is ProjectLoaded) {
+                    tenders = projectState.availableProjects;
+                    activeProjects = projectState.projects;
+                    submittedBids = projectState.vendorBids;
+                  }
+
+                  double avgRating = 0.0;
+                  if (reviews.isNotEmpty) {
+                    final totalRating = reviews.fold(0.0, (sum, r) => sum + (r['rating'] as num? ?? 0.0));
+                    avgRating = totalRating / reviews.length;
+                  }
+                  final ratingStr = reviews.isEmpty ? '0.0' : avgRating.toStringAsFixed(1);
+
+                  return SingleChildScrollView(
+                    physics: const AlwaysScrollableScrollPhysics(parent: BouncingScrollPhysics()),
+                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        _buildAppBar(profile),
+                        const SizedBox(height: 20),
+                        _buildWelcomeCard(profile),
+                        const SizedBox(height: 24),
+                        _buildStatsRow(activeProjects, ratingStr),
+                        const SizedBox(height: 28),
+                        _buildSectionHeader('Penawaran Masuk', onTap: _goToProyekTab),
+                        const SizedBox(height: 12),
+                        _buildPenawaranList(tenders),
+                        const SizedBox(height: 28),
+                        _buildSectionHeader('Penawaran Diajukan', onTap: _goToProyekTab),
+                        const SizedBox(height: 12),
+                        _buildPenawaranDiajukanList(submittedBids),
+                        const SizedBox(height: 28),
+                        _buildSectionHeader('Proyek Berjalan', onTap: _goToProgressTab),
+                        const SizedBox(height: 12),
+                        _buildProyekBerjalan(activeProjects),
+                        const SizedBox(height: 100),
+                      ],
+                    ),
+                  );
+                },
               );
             },
           ),
@@ -152,24 +188,25 @@ class _KontraktorHomeTabState extends State<KontraktorHomeTab> {
           ]),
         ),
         const Spacer(),
-        Consumer<ChatProvider>(
-          builder: (context, chat, child) => _buildIconBtn(
-            Icons.chat_bubble_outline_rounded, 
-            badge: chat.totalUnreadCount,
-            onTap: () {
-              Navigator.push(context, MaterialPageRoute(builder: (_) => const ChatListScreen()));
-            }
-          ),
+        BlocBuilder<ChatCubit, ChatState>(
+          builder: (context, state) {
+            final unreadCount = state is ChatLoaded ? state.totalUnreadCount : 0;
+            return _buildIconBtn(
+              Icons.chat_bubble_outline_rounded, 
+              badge: unreadCount,
+              onTap: () {
+                Navigator.push(context, MaterialPageRoute(builder: (_) => const ChatListScreen()));
+              }
+            );
+          },
         ),
         const SizedBox(width: 8),
-        Consumer<NotificationProvider>(
-          builder: (context, notif, child) => _buildIconBtn(
-            Icons.notifications_none_rounded, 
-            badge: notif.unreadCount,
-            onTap: () {
-              Navigator.push(context, MaterialPageRoute(builder: (_) => const NotificationScreen()));
-            }
-          ),
+        _buildIconBtn(
+          Icons.notifications_none_rounded, 
+          badge: 0,
+          onTap: () {
+            Navigator.push(context, MaterialPageRoute(builder: (_) => const NotificationScreen()));
+          }
         ),
         const SizedBox(width: 8),
         GestureDetector(
@@ -309,7 +346,7 @@ class _KontraktorHomeTabState extends State<KontraktorHomeTab> {
 
   // --- STATS ---
 
-  Widget _buildStatsRow(List<ProjectModel> activeProjects) {
+  Widget _buildStatsRow(List<ProjectModel> activeProjects, String ratingStr) {
     final activeCount = activeProjects.where((p) => p.status == 'in_progress').length;
     final completedCount = activeProjects.where((p) => p.status == 'completed').length;
 
@@ -321,7 +358,7 @@ class _KontraktorHomeTabState extends State<KontraktorHomeTab> {
         const SizedBox(width: 10),
         _buildStatItem('Rp 0', 'Pendapatan'),
         const SizedBox(width: 10),
-        _buildStatItemWithIcon('0.0', 'Rating', Icons.star_rounded),
+        _buildStatItemWithIcon(ratingStr, 'Rating', Icons.star_rounded),
       ],
     );
   }

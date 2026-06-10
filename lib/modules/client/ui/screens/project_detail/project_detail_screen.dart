@@ -402,7 +402,17 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
                 }
 
                 final rawBids = snapshot.data ?? [];
-                final bids = _sortBids(rawBids);
+                final bool hasAccepted = rawBids.any((b) => b.status == 'accepted');
+                final bool isAcceptedOrInProgress = _project.status == 'in_progress' || hasAccepted;
+
+                final List<BidModel> filteredRawBids;
+                if (isAcceptedOrInProgress) {
+                  filteredRawBids = rawBids.where((b) => b.status == 'accepted').toList();
+                } else {
+                  filteredRawBids = rawBids;
+                }
+
+                final bids = _sortBids(filteredRawBids);
 
                 if (bids.isEmpty) {
                   return Container(
