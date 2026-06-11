@@ -5,6 +5,7 @@ import 'package:buildmatch/data/providers/project_provider.dart';
 import 'package:buildmatch/data/providers/architect_provider.dart';
 import 'package:buildmatch/data/models/payment_term_model.dart';
 import 'package:buildmatch/core/constants/colors.dart';
+import 'package:buildmatch/data/providers/chat_provider.dart';
 import 'widgets/architect_offer_detail_card.dart';
 import 'widgets/architect_offer_bank_grid.dart';
 import 'widgets/architect_offer_va_card.dart';
@@ -18,6 +19,7 @@ class ArchitectOfferDetailScreen extends StatefulWidget {
   final int revisions;
   final int durationDays;
   final String architectName;
+  final String? chatId;
 
   const ArchitectOfferDetailScreen({
     super.key,
@@ -28,6 +30,7 @@ class ArchitectOfferDetailScreen extends StatefulWidget {
     required this.revisions,
     required this.durationDays,
     required this.architectName,
+    this.chatId,
   });
 
   @override
@@ -105,6 +108,24 @@ class _ArchitectOfferDetailScreenState extends State<ArchitectOfferDetailScreen>
           setState(() {
             _paymentTerm = term;
           });
+          if (widget.chatId != null) {
+            final chatProv = Provider.of<ChatProvider>(context, listen: false);
+            final formatter = NumberFormat.currency(locale: 'id', symbol: 'Rp ', decimalDigits: 0);
+            final percentage = term.percentage.round();
+            if (percentage < 100) {
+              await chatProv.sendMessage(
+                widget.chatId!,
+                '💸 Client telah melakukan pembayaran awal (DP $percentage%) sebesar ${formatter.format(term.amount)}! Menunggu konfirmasi arsitek.',
+                bidId: widget.bidId,
+              );
+            } else {
+              await chatProv.sendMessage(
+                widget.chatId!,
+                '💸 Client telah melakukan pembayaran penuh (100%) sebesar ${formatter.format(term.amount)}! Menunggu konfirmasi arsitek.',
+                bidId: widget.bidId,
+              );
+            }
+          }
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(content: Text('✅ Konfirmasi pembayaran terkirim! Menunggu persetujuan arsitek.'), backgroundColor: Colors.green),
           );
@@ -124,6 +145,25 @@ class _ArchitectOfferDetailScreenState extends State<ArchitectOfferDetailScreen>
         );
 
         if (success) {
+          if (widget.chatId != null && _paymentTerm != null) {
+            final chatProv = Provider.of<ChatProvider>(context, listen: false);
+            final formatter = NumberFormat.currency(locale: 'id', symbol: 'Rp ', decimalDigits: 0);
+            final orderIndex = _paymentTerm!.orderIndex;
+            if (orderIndex > 1) {
+              await chatProv.sendMessage(
+                widget.chatId!,
+                '💸 Client telah membayar pelunasan desain sebesar ${formatter.format(_paymentTerm!.amount)}! Menunggu konfirmasi arsitek.',
+                bidId: widget.bidId,
+              );
+            } else {
+              final percentage = _paymentTerm!.percentage.round();
+              await chatProv.sendMessage(
+                widget.chatId!,
+                '💸 Client telah membayar pembayaran desain sebesar ${formatter.format(_paymentTerm!.amount)} ($percentage%)! Menunggu konfirmasi arsitek.',
+                bidId: widget.bidId,
+              );
+            }
+          }
           await _loadData();
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(content: Text('✅ Konfirmasi pembayaran terkirim! Menunggu persetujuan arsitek.'), backgroundColor: Colors.green),

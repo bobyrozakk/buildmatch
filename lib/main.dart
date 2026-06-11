@@ -24,10 +24,7 @@ import 'core/constants/colors.dart';
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await initializeDateFormatting('id', null);
-
-  // Credentials dimuat dari --dart-define saat build/run.
-  // Contoh: flutter run --dart-define=SUPABASE_URL=https://xxx.supabase.co --dart-define=SUPABASE_ANON_KEY=xxx
-  // Fallback values hanya untuk development — JANGAN push ke Git publik.
+  
   const supabaseUrl = String.fromEnvironment(
     'SUPABASE_URL',
     defaultValue: 'https://eboseqlzrfabtiurwjpl.supabase.co',

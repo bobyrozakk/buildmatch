@@ -489,9 +489,11 @@ class BidDetailScreen extends StatelessWidget {
                   children: [
                     Icon(Icons.check_circle_rounded, color: Colors.green, size: 20),
                     SizedBox(width: 8),
-                    Text(
-                      'Penawaran ini sudah diterima · Proyek sedang berjalan',
-                      style: TextStyle(color: Colors.green, fontWeight: FontWeight.bold, fontSize: 13),
+                    Expanded(
+                      child: Text(
+                        'Penawaran ini sudah diterima · Proyek sedang berjalan',
+                        style: TextStyle(color: Colors.green, fontWeight: FontWeight.bold, fontSize: 13),
+                      ),
                     ),
                   ],
                 ),

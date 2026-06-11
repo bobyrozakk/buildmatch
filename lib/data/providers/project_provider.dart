@@ -1385,9 +1385,9 @@ class ProjectProvider extends ChangeNotifier {
         // 2. Update bid status ke accepted
         await _supabase.from('bids').update({'status': 'accepted'}).eq('id', bidId);
 
-        // 3. Update status project ke completed
+        // 3. Update status project ke in_progress dengan progress 100% (agar arsitek menyelesaikan secara manual)
         await _supabase.from('projects').update({
-          'status': 'completed',
+          'status': 'in_progress',
           'progress_percent': 100,
         }).eq('id', projectId);
       } else {

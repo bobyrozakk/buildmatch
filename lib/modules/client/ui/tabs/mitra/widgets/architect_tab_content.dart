@@ -187,7 +187,14 @@ class _ArchitectTabContentState extends State<ArchitectTabContent> {
                           if (location.isNotEmpty) ...[
                             const Icon(Icons.location_on_outlined, size: 11, color: Colors.black38),
                             const SizedBox(width: 2),
-                            Text(location, style: const TextStyle(fontSize: 11, color: Colors.black45)),
+                            Flexible(
+                              child: Text(
+                                location,
+                                style: const TextStyle(fontSize: 11, color: Colors.black45),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
                             const SizedBox(width: 10),
                           ],
                           if (experience.isNotEmpty) ...[
@@ -289,6 +296,8 @@ class _ArchitectTabContentState extends State<ArchitectTabContent> {
       child: Text(
         label,
         style: const TextStyle(fontSize: 9, color: AppColors.primary, fontWeight: FontWeight.w600),
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
       ),
     );
   }

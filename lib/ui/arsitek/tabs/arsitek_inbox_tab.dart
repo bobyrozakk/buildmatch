@@ -61,8 +61,10 @@ class _ArsitekInboxTabState extends State<ArsitekInboxTab>
         final type = data['type'] as String?;
         if (type == 'offer') return '📋 Penawaran telah dikirim';
         if (type == 'design') {
-          final rev = data['revision_number'] as int? ?? 1;
-          return '🎨 Revisi ke-$rev telah diberikan';
+          final rev = data['revision_number'] as int? ?? 0;
+          return rev == 0
+              ? '🎨 Desain awal telah dikirim'
+              : '🎨 Revisi ke-$rev telah diberikan';
         }
       } catch (_) {}
     }

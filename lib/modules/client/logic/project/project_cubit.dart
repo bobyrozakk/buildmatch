@@ -224,11 +224,18 @@ class ProjectCubit extends Cubit<ProjectState> {
         if (landCustomLebar != null) 'land_custom_lebar': landCustomLebar,
       };
 
+      debugPrint("=== [DEBUG] project_cubit.dart saveDraft ===");
+      debugPrint("  incoming draftId: $draftId");
+
+      dynamic response;
       if (draftId != null && draftId.isNotEmpty) {
-        await _supabase.from('projects').update(data).eq('id', draftId);
+        debugPrint("  Branch: UPDATE");
+        response = await _supabase.from('projects').update(data).eq('id', draftId).select();
       } else {
-        await _supabase.from('projects').insert(data);
+        debugPrint("  Branch: INSERT");
+        response = await _supabase.from('projects').insert(data).select();
       }
+      debugPrint("  Supabase response: $response");
 
       _isLoading = false;
       await fetchDraftProjects(); // Refresh cached list
@@ -237,8 +244,12 @@ class ProjectCubit extends Cubit<ProjectState> {
         if (!isClosed) _emitLoaded();
       });
       return true;
-    } catch (e) {
-      debugPrint("Error save draft: $e");
+    } catch (e, stack) {
+      debugPrint("=== [DEBUG] project_cubit.dart saveDraft FAILED ===");
+      debugPrint("  incoming draftId: $draftId");
+      debugPrint("  Exception: $e");
+      debugPrint("  Stacktrace: $stack");
+      debugPrint("==================================================");
       _isLoading = false;
       _emitLoaded();
       return false;

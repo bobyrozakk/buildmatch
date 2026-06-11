@@ -145,7 +145,14 @@ class _ContractorTabContentState extends State<ContractorTabContent> {
                       ),
                       const SizedBox(width: 12),
                       const Icon(Icons.phone, color: Colors.black38, size: 14),
-                      Text(" ${vendor.phone ?? 'Tidak ada No. HP'}", style: const TextStyle(fontSize: 12, color: Colors.black54)),
+                      Flexible(
+                        child: Text(
+                          " ${vendor.phone ?? 'Tidak ada No. HP'}",
+                          style: const TextStyle(fontSize: 12, color: Colors.black54),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
                     ],
                   ),
                 ],

@@ -586,8 +586,10 @@ class _NotificationScreenState extends State<NotificationScreen> {
         if (type == 'offer') {
           formattedBody = '📋 Penawaran telah dikirim';
         } else if (type == 'design') {
-          final rev = data['revision_number'] as int? ?? 1;
-          formattedBody = '🎨 Revisi ke-$rev telah diberikan';
+          final rev = data['revision_number'] as int? ?? 0;
+          formattedBody = rev == 0
+              ? '🎨 Desain awal telah dikirim'
+              : '🎨 Revisi ke-$rev telah diberikan';
         }
       } catch (_) {}
     } else if (body.startsWith('http://') || body.startsWith('https://')) {

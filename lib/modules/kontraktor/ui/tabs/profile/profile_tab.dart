@@ -1,28 +1,28 @@
+// lib/modules/kontraktor/ui/tabs/profile/profile_tab.dart
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:buildmatch/modules/auth/logic/auth_cubit.dart';
-import 'package:buildmatch/data/models/profile_model.dart';
-import 'package:buildmatch/data/models/portfolio_model.dart';
-import 'package:buildmatch/data/models/certification_model.dart';
 import 'package:buildmatch/modules/client/logic/vendor/vendor_cubit.dart';
 import 'package:buildmatch/modules/client/logic/vendor/vendor_state.dart';
 import 'package:buildmatch/modules/kontraktor/ui/screens/profile_edit/profile_edit_screen.dart';
 import 'package:buildmatch/modules/auth/ui/login_screen.dart';
-import 'package:buildmatch/ui/shared/widgets/glass_card.dart';
 import 'package:buildmatch/core/constants/colors.dart';
+
+import 'widgets/profile_header.dart';
+import 'widgets/profile_stats.dart';
+import 'widgets/profile_porto_card.dart';
+import 'widgets/profile_cert_card.dart';
+import 'widgets/profile_menu_tile.dart';
 
 class ProfileTab extends StatefulWidget {
   const ProfileTab({super.key});
 
   @override
-  State<ProfileTab> createState() =>
-      _ProfileTabState();
+  State<ProfileTab> createState() => _ProfileTabState();
 }
 
-class _ProfileTabState
-    extends State<ProfileTab> {
-
+class _ProfileTabState extends State<ProfileTab> {
   @override
   void initState() {
     super.initState();
@@ -82,7 +82,6 @@ class _ProfileTabState
 
     if (confirm == true && mounted) {
       final authCubit = context.read<AuthCubit>();
-
       await authCubit.logout();
 
       if (!mounted) return;
@@ -100,9 +99,7 @@ class _ProfileTabState
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor:
-          AppColors.backgroundCream,
-
+      backgroundColor: AppColors.backgroundCream,
       body: BlocBuilder<VendorCubit, VendorState>(
         builder: (context, state) {
           if (state is VendorLoading || state is VendorInitial) {
@@ -121,376 +118,124 @@ class _ProfileTabState
             final certifications = state.certifications;
 
             return CustomScrollView(
-            physics:
-                const BouncingScrollPhysics(),
-            slivers: [
-
-              SliverToBoxAdapter(
-                child: _header(profile),
-              ),
-
-              SliverPadding(
-                padding:
-                    const EdgeInsets.all(20),
-                sliver: SliverToBoxAdapter(
-                  child: _stats(portfolios, state.reviews),
-                ),
-              ),
-
-              _title('Portofolio'),
-
-              SliverToBoxAdapter(
-                child: SizedBox(
-                  height: 180,
-                  child: portfolios.isEmpty
-                      ? _empty(
-                          'Belum ada portofolio',
-                        )
-                      : ListView.builder(
-                          scrollDirection:
-                              Axis.horizontal,
-                          padding:
-                              const EdgeInsets.symmetric(
-                            horizontal: 20,
-                          ),
-                          itemCount:
-                              portfolios.length,
-                          itemBuilder: (_, i) =>
-                              _portoCard(
-                            portfolios[i],
-                          ),
+              physics: const BouncingScrollPhysics(),
+              slivers: [
+                SliverToBoxAdapter(
+                  child: ProfileHeader(
+                    profile: profile,
+                    onEditTap: () async {
+                      await Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => const EditProfileScreen(),
                         ),
+                      );
+                      setState(() {
+                        _load();
+                      });
+                    },
+                  ),
                 ),
-              ),
-
-              _title('Sertifikasi'),
-
-              SliverPadding(
-                padding:
-                    const EdgeInsets.symmetric(
-                  horizontal: 20,
-                ),
-                sliver: SliverList(
-                  delegate:
-                      SliverChildBuilderDelegate(
-                    (_, i) => _certCard(
-                      certifications[i],
+                SliverPadding(
+                  padding: const EdgeInsets.all(20),
+                  sliver: SliverToBoxAdapter(
+                    child: ProfileStats(
+                      portfolioCount: portfolios.length,
+                      reviews: state.reviews,
                     ),
-                    childCount:
-                        certifications.length,
                   ),
                 ),
-              ),
-
-              _title('Pengaturan'),
-
-              SliverPadding(
-                padding:
-                    const EdgeInsets.symmetric(
-                  horizontal: 20,
-                ),
-                sliver: SliverToBoxAdapter(
-                  child: Column(
-                    children: [
-
-                      _menuTile(
-                        Icons.edit_outlined,
-                        'Kelola Profil',
-                        () async {
-                          await Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (_) =>
-                                  const EditProfileScreen(),
+                _title('Portofolio'),
+                SliverToBoxAdapter(
+                  child: SizedBox(
+                    height: 180,
+                    child: portfolios.isEmpty
+                        ? const Center(
+                            child: Text(
+                              'Belum ada portofolio',
+                              style: TextStyle(
+                                color: Colors.black38,
+                              ),
                             ),
-                          );
-
-                          setState(() {
-                            _load();
-                          });
-                        },
-                      ),
-
-                      _menuTile(
-                        Icons.reviews_outlined,
-                        'Lihat Ulasan',
-                        () {},
-                      ),
-
-                      _menuTile(
-                        Icons.support_agent_outlined,
-                        'Hubungi CS',
-                        () {},
-                      ),
-
-                      _menuTile(
-                        Icons.logout_rounded,
-                        'Keluar',
-                        _logout,
-                        isDanger: true,
-                      ),
-                    ],
+                          )
+                        : ListView.builder(
+                            scrollDirection: Axis.horizontal,
+                            padding: const EdgeInsets.symmetric(horizontal: 20),
+                            itemCount: portfolios.length,
+                            itemBuilder: (_, i) => ProfilePortoCard(
+                              portfolio: portfolios[i],
+                            ),
+                          ),
                   ),
                 ),
-              ),
-
-              const SliverToBoxAdapter(
-                child: SizedBox(height: 100),
-              ),
-            ],
-          );
-        }
-        return const SizedBox.shrink();
-      },
-    ),
-  );
-}
-
-Widget _header(ProfileModel? p) {
-  return Stack(
-    children: [
-
-      Container(
-        height: 170,
-        decoration: const BoxDecoration(
-          color: AppColors.primary,
-        ),
-      ),
-
-      Padding(
-        padding: const EdgeInsets.fromLTRB(
-          20,
-          70,
-          20,
-          0,
-        ),
-
-        child: IOSGlassCard(
-          blur: 18,
-
-          child: Padding(
-            padding: const EdgeInsets.all(22),
-
-            child: Row(
-              children: [
-
-                CircleAvatar(
-                  radius: 38,
-                  backgroundColor:
-                      Colors.white,
-
-                  backgroundImage:
-                      p?.avatarUrl != null
-                          ? NetworkImage(
-                              p!.avatarUrl!,
-                            )
-                          : null,
-
-                  child: p?.avatarUrl == null
-                      ? Text(
-                          (p?.name ?? 'V')
-                              .substring(0, 1)
-                              .toUpperCase(),
-                          style:
-                              const TextStyle(
-                            fontSize: 28,
-                            fontWeight:
-                                FontWeight.bold,
-                            color:
-                                AppColors.primary,
-                          ),
-                        )
-                      : null,
+                _title('Sertifikasi'),
+                SliverPadding(
+                  padding: const EdgeInsets.symmetric(horizontal: 20),
+                  sliver: SliverList(
+                    delegate: SliverChildBuilderDelegate(
+                      (_, i) => ProfileCertCard(
+                        certification: certifications[i],
+                      ),
+                      childCount: certifications.length,
+                    ),
+                  ),
                 ),
-
-                const SizedBox(width: 18),
-
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment:
-                        CrossAxisAlignment
-                            .start,
-
-                    children: [
-
-                      Text(
-                        p?.companyName ??
-                            'Vendor Company',
-
-                        style:
-                            const TextStyle(
-                          fontSize: 20,
-                          fontWeight:
-                              FontWeight.bold,
+                _title('Pengaturan'),
+                SliverPadding(
+                  padding: const EdgeInsets.symmetric(horizontal: 20),
+                  sliver: SliverToBoxAdapter(
+                    child: Column(
+                      children: [
+                        ProfileMenuTile(
+                          icon: Icons.edit_outlined,
+                          title: 'Kelola Profil',
+                          onTap: () async {
+                            await Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => const EditProfileScreen(),
+                              ),
+                            );
+                            setState(() {
+                              _load();
+                            });
+                          },
                         ),
-                      ),
-
-                      const SizedBox(height: 5),
-
-                      Text(
-                        p?.name ?? '',
-                        style:
-                            const TextStyle(
-                          color:
-                              Colors.black54,
+                        ProfileMenuTile(
+                          icon: Icons.reviews_outlined,
+                          title: 'Lihat Ulasan',
+                          onTap: () {},
                         ),
-                      ),
-
-                      const SizedBox(height: 10),
-
-                      if (p?.isVerified ==
-                          true)
-                        Container(
-                          padding:
-                              const EdgeInsets
-                                  .symmetric(
-                            horizontal: 12,
-                            vertical: 6,
-                          ),
-
-                          decoration:
-                              BoxDecoration(
-                            color: Colors
-                                .green
-                                .withOpacity(
-                              0.12,
-                            ),
-
-                            borderRadius:
-                                BorderRadius
-                                    .circular(
-                              20,
-                            ),
-                          ),
-
-                          child: const Text(
-                            '✓ Vendor Terverifikasi',
-
-                            style: TextStyle(
-                              color:
-                                  Colors.green,
-                              fontWeight:
-                                  FontWeight
-                                      .bold,
-                              fontSize: 11,
-                            ),
-                          ),
+                        ProfileMenuTile(
+                          icon: Icons.support_agent_outlined,
+                          title: 'Hubungi CS',
+                          onTap: () {},
                         ),
-                    ],
+                        ProfileMenuTile(
+                          icon: Icons.logout_rounded,
+                          title: 'Keluar',
+                          onTap: _logout,
+                          isDanger: true,
+                        ),
+                      ],
+                    ),
                   ),
                 ),
-
-                IconButton(
-                  onPressed: () async {
-                    await Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) =>
-                            const EditProfileScreen(),
-                      ),
-                    );
-
-                    setState(() {
-                      _load();
-                    });
-                  },
-
-                  icon: const Icon(
-                    Icons.edit_note_rounded,
-                    color: AppColors.primary,
-                    size: 28,
-                  ),
+                const SliverToBoxAdapter(
+                  child: SizedBox(height: 100),
                 ),
               ],
-            ),
-          ),
-        ),
-      ),
-    ],
-  );
-}
-
-  Widget _stats(
-    List<PortfolioModel> portfolios,
-    List<Map<String, dynamic>> reviews,
-  ) {
-    double avgRating = 0.0;
-    if (reviews.isNotEmpty) {
-      final total = reviews.fold(0.0, (sum, r) => sum + (r['rating'] as num? ?? 0.0));
-      avgRating = total / reviews.length;
-    }
-    final ratingStr = reviews.isEmpty ? '0.0' : avgRating.toStringAsFixed(1);
-
-    return Row(
-      children: [
-
-        _statBox(
-          portfolios.length.toString(),
-          'Portofolio',
-        ),
-
-        const SizedBox(width: 12),
-
-        _statBox(ratingStr, 'Rating'),
-
-        const SizedBox(width: 12),
-
-        _statBox('Aktif', 'Status'),
-      ],
-    );
-  }
-
-  Widget _statBox(
-    String value,
-    String label,
-  ) {
-    return Expanded(
-      child: Container(
-        padding:
-            const EdgeInsets.symmetric(
-          vertical: 18,
-        ),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius:
-              BorderRadius.circular(20),
-        ),
-        child: Column(
-          children: [
-
-            Text(
-              value,
-              style: const TextStyle(
-                fontSize: 20,
-                fontWeight: FontWeight.bold,
-                color: AppColors.primary,
-              ),
-            ),
-
-            const SizedBox(height: 4),
-
-            Text(
-              label,
-              style: const TextStyle(
-                fontSize: 11,
-                color: Colors.black54,
-              ),
-            ),
-          ],
-        ),
+            );
+          }
+          return const SizedBox.shrink();
+        },
       ),
     );
   }
 
   Widget _title(String text) {
     return SliverPadding(
-      padding:
-          const EdgeInsets.fromLTRB(
-        20,
-        10,
-        20,
-        14,
-      ),
+      padding: const EdgeInsets.fromLTRB(20, 10, 20, 14),
       sliver: SliverToBoxAdapter(
         child: Text(
           text,
@@ -498,139 +243,6 @@ Widget _header(ProfileModel? p) {
             fontWeight: FontWeight.bold,
             fontSize: 17,
           ),
-        ),
-      ),
-    );
-  }
-
-  Widget _portoCard(PortfolioModel p) {
-    return Container(
-      width: 160,
-      margin: const EdgeInsets.only(right: 14),
-      decoration: BoxDecoration(
-        borderRadius:
-            BorderRadius.circular(24),
-        image: p.imageUrl != null
-            ? DecorationImage(
-                image: NetworkImage(
-                  p.imageUrl!,
-                ),
-                fit: BoxFit.cover,
-              )
-            : null,
-        color: Colors.grey.shade300,
-      ),
-    );
-  }
-
-  Widget _certCard(
-    CertificationModel c,
-  ) {
-    return Container(
-      margin:
-          const EdgeInsets.only(bottom: 14),
-      padding: const EdgeInsets.all(18),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius:
-            BorderRadius.circular(20),
-      ),
-      child: Row(
-        children: [
-
-          Container(
-            padding: const EdgeInsets.all(10),
-            decoration: BoxDecoration(
-              color:
-                  AppColors.cardCream,
-              borderRadius:
-                  BorderRadius.circular(
-                14,
-              ),
-            ),
-            child: const Icon(
-              Icons.verified_outlined,
-              color: AppColors.primary,
-            ),
-          ),
-
-          const SizedBox(width: 14),
-
-          Expanded(
-            child: Column(
-              crossAxisAlignment:
-                  CrossAxisAlignment.start,
-              children: [
-
-                Text(
-                  c.title,
-                  style: const TextStyle(
-                    fontWeight:
-                        FontWeight.bold,
-                  ),
-                ),
-
-                const SizedBox(height: 3),
-
-                Text(
-                  c.issuer,
-                  style: const TextStyle(
-                    color: Colors.black54,
-                    fontSize: 12,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _menuTile(
-    IconData icon,
-    String title,
-    VoidCallback onTap, {
-    bool isDanger = false,
-  }) {
-    return Container(
-      margin:
-          const EdgeInsets.only(bottom: 14),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius:
-            BorderRadius.circular(20),
-      ),
-      child: ListTile(
-        onTap: onTap,
-        leading: Icon(
-          icon,
-          color: isDanger
-              ? Colors.red
-              : AppColors.primary,
-        ),
-        title: Text(
-          title,
-          style: TextStyle(
-            fontWeight: FontWeight.w600,
-            color: isDanger
-                ? Colors.red
-                : Colors.black87,
-          ),
-        ),
-        trailing: const Icon(
-          Icons.chevron_right_rounded,
-        ),
-      ),
-    );
-  }
-
-  Widget _empty(String text) {
-    return Center(
-      child: Text(
-        text,
-        style: const TextStyle(
-          color: Colors.black38,
         ),
       ),
     );

@@ -49,6 +49,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
   String? _activeBidId;       // bidId dari penawaran aktif di chat ini
   String? _activeTermId;      // termId dari payment term aktif
   String? _activeProjectId;   // projectId dari penawaran aktif
+  String _activeProjectStatus = 'pending';
 
   String _offerPaymentStatus = 'none'; // 'none' | 'pending' | 'paid' | 'confirmed' | 'submitted' | 'revision_requested' | 'completed'
   dynamic _existingReview;    // Holds ReviewModel? or similar json map (dynamic to avoid direct ReviewModel cast if needed)
@@ -56,7 +57,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
   bool _hideRatingReview = false;
   bool _isSplitPayment = false;
   bool _isDesignApproved = false;
-  bool _projectFinishedConfirmed = false;
+  String? _lastProcessedMessageId;
 
   // Track status per bid id to keep cards independent
   final Map<String, String> _bidStatuses = {}; // bidId -> status ('pending', 'paid', etc.)
@@ -65,6 +66,9 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
   final Map<String, String> _bidActualStatuses = {}; // bidId -> bid actual status ('pending', 'accepted', 'rejected', 'cancelled', etc.)
   final Map<String, DateTime> _bidCreatedAts = {}; // bidId -> bid created_at
   final Map<String, int> _bidActiveTermOrderIndexes = {}; // bidId -> active term order index
+  final Map<String, bool> _bidIsDesignApproved = {}; // bidId -> is design approved
+  final Map<String, bool> _bidIsSplitPayment = {};   // bidId -> is split payment
+  final Map<String, int> _bidMaxDesignRevisions = {}; // bidId -> max design revision
 
   // Track the highest revision number across all design messages in this chat
   int _maxDesignRevision = -1;
@@ -154,6 +158,19 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
           } else {
             _bidStatuses[bidId] = 'pending';
           }
+
+          // Populate split and design approved flags for this bid
+          final isSplit = bidTerms.length > 1;
+          _bidIsSplitPayment[bidId] = isSplit;
+          
+          bool isApproved = false;
+          if (isSplit) {
+            final dpTerm = bidTerms.firstWhere((t) => t['order_index'] == 1, orElse: () => bidTerms.first);
+            isApproved = dpTerm['status'] == 'completed';
+          } else {
+            isApproved = bidTerms.first['status'] == 'completed';
+          }
+          _bidIsDesignApproved[bidId] = isApproved;
         }
       });
     } catch (e) {
@@ -162,8 +179,25 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
   }
 
   void _checkAndLoadBidStatuses(List<Map<String, dynamic>> messages) {
+    if (messages.isNotEmpty) {
+      final lastMsg = messages.last;
+      final lastMsgId = lastMsg['id'] as String?;
+      if (lastMsgId != _lastProcessedMessageId) {
+        _lastProcessedMessageId = lastMsgId;
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) {
+            _loadActiveBidStatus();
+            final bidIds = _bidStatuses.keys.toList();
+            if (bidIds.isNotEmpty) {
+              _loadBidsStatuses(bidIds);
+            }
+          }
+        });
+      }
+    }
+
     final List<String> newBidIds = [];
-    int maxRev = -1;
+    final Map<String, int> tempMaxRevs = {};
     for (final m in messages) {
       final content = m['content'] as String? ?? '';
       if (content.startsWith('{')) {
@@ -176,19 +210,38 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
             }
           } else if (data['type'] == 'design') {
             final bidId = data['bid_id'] as String?;
-            if (bidId == _activeBidId) {
+            if (bidId != null) {
               final rev = data['revision_number'] as int? ?? 0;
-              if (rev > maxRev) maxRev = rev;
+              final currentMax = tempMaxRevs[bidId] ?? -1;
+              if (rev > currentMax) {
+                tempMaxRevs[bidId] = rev;
+              }
             }
           }
         } catch (_) {}
       }
     }
 
-    // Update max design revision if it changed
-    if (maxRev > _maxDesignRevision) {
+    bool changed = false;
+    for (final entry in tempMaxRevs.entries) {
+      if (_bidMaxDesignRevisions[entry.key] != entry.value) {
+        _bidMaxDesignRevisions[entry.key] = entry.value;
+        changed = true;
+      }
+    }
+
+    // Keep _maxDesignRevision in sync for the active bid
+    if (_activeBidId != null) {
+      final activeMax = tempMaxRevs[_activeBidId!] ?? -1;
+      if (activeMax > _maxDesignRevision) {
+        _maxDesignRevision = activeMax;
+        changed = true;
+      }
+    }
+
+    if (changed) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) setState(() => _maxDesignRevision = maxRev);
+        if (mounted) setState(() {});
       });
     }
 
@@ -254,10 +307,10 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
             if (data['type'] == 'offer') {
               final bidId = data['bid_id'] as String?;
               if (bidId != null && mounted) {
-                // Fetch actual status of the bid to see if it is rejected/cancelled/expired
+                // Fetch actual status of the bid and project to see if it is rejected/cancelled/expired
                 final bidRes = await supabase
                     .from('bids')
-                    .select('status')
+                    .select('status, projects(status)')
                     .eq('id', bidId)
                     .maybeSingle();
 
@@ -265,6 +318,9 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
                 if (bidActualStatus == 'rejected' || bidActualStatus == 'cancelled' || bidActualStatus == 'expired') {
                   continue; // Skip this offer, look for another one
                 }
+
+                final projectMap = bidRes?['projects'] as Map<String, dynamic>?;
+                final projectStatus = projectMap?['status'] as String? ?? 'pending';
 
                 final term = await projectProvider.fetchPaymentTermByBidId(bidId);
                 final allTermsRes = await supabase
@@ -291,6 +347,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
                   _activeBidId = bidId;
                   _activeTermId = term?.id;
                   _activeProjectId = term?.projectId;
+                  _activeProjectStatus = projectStatus;
                   _isDesignApproved = isDesignApproved;
                   _isSplitPayment = isSplitPayment;
                   _maxDesignRevision = -1;
@@ -310,6 +367,11 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
                   } else {
                     _offerPaymentStatus = 'pending';
                   }
+
+                  // Synchronize local maps for the active bid
+                  _bidStatuses[bidId] = _offerPaymentStatus;
+                  _bidIsSplitPayment[bidId] = isSplitPayment;
+                  _bidIsDesignApproved[bidId] = isDesignApproved;
                 });
 
                 if (_offerPaymentStatus == 'completed' && _activeProjectId != null) {
@@ -327,11 +389,11 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
         _activeBidId = null;
         _activeTermId = null;
         _activeProjectId = null;
+        _activeProjectStatus = 'pending';
         _offerPaymentStatus = 'none';
         _maxDesignRevision = -1;
         _isSplitPayment = false;
         _isDesignApproved = false;
-        _projectFinishedConfirmed = false;
       });
     } catch (_) {}
   }
@@ -1144,6 +1206,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
                   revisions: revisions,
                   durationDays: durationDays,
                   architectName: widget.receiverName,
+                  chatId: widget.chatId,
                 ),
               ),
             );
@@ -1526,6 +1589,13 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
                             backgroundColor: ok ? Colors.green : Colors.red,
                           ));
                           if (ok) {
+                            final formatter = NumberFormat.currency(locale: 'id', symbol: 'Rp ', decimalDigits: 0);
+                            final titleStr = titleCtrl.text.trim();
+                            await Provider.of<ChatProvider>(context, listen: false).sendMessage(
+                              widget.chatId,
+                              '✏️ Arsitek memperbarui penawaran: "$titleStr" seharga ${formatter.format(newPrice)}',
+                              bidId: bidId,
+                            );
                             _loadBidsStatuses([bidId]);
                             _loadActiveBidStatus();
                           }
@@ -1653,6 +1723,9 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
           _bidTermIds.remove(bidId);
           _bidProjectIds.remove(bidId);
           _bidCreatedAts.remove(bidId);
+          _bidIsSplitPayment.remove(bidId);
+          _bidIsDesignApproved.remove(bidId);
+          _bidMaxDesignRevisions.remove(bidId);
           if (_activeBidId == bidId) {
             _activeBidId = null;
             _offerPaymentStatus = 'none';
@@ -1670,13 +1743,18 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
     final filesRaw = data['files'] as List<dynamic>? ?? [];
     final files = filesRaw.map((f) => Map<String, String>.from(f as Map)).toList();
 
-    // Determine if this is the latest design card
-    final isLatestDesign = revisionNumber >= _maxDesignRevision;
+    // Determine if this is the latest design card for this specific bid
+    final maxRevForBid = _bidMaxDesignRevisions[bidId] ?? 0;
+    final isLatestDesign = revisionNumber >= maxRevForBid;
 
     // Effective status for this card
     // - If not the latest card: always show as "revised"
-    // - If latest card: use current offer payment status
-    final effectiveStatus = isLatestDesign ? _offerPaymentStatus : 'previously_revised';
+    // - If latest card: use specific bid's status
+    final bidStatus = _bidStatuses[bidId] ?? (bidId == _activeBidId ? _offerPaymentStatus : 'pending');
+    final effectiveStatus = isLatestDesign ? bidStatus : 'previously_revised';
+
+    final bidIsSplitPayment = _bidIsSplitPayment[bidId] ?? (bidId == _activeBidId ? _isSplitPayment : false);
+    final bidIsDesignApproved = _bidIsDesignApproved[bidId] ?? (bidId == _activeBidId ? _isDesignApproved : false);
 
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 4),
@@ -1776,7 +1854,14 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
               ),
               const SizedBox(height: 14),
               // Status area
-              _buildDesignCardStatus(effectiveStatus, bidId, data, isLatestDesign),
+              _buildDesignCardStatus(
+                effectiveStatus: effectiveStatus,
+                bidId: bidId,
+                data: data,
+                isLatestDesign: isLatestDesign,
+                bidIsSplitPayment: bidIsSplitPayment,
+                bidIsDesignApproved: bidIsDesignApproved,
+              ),
             ],
           ),
         ),
@@ -1785,7 +1870,14 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
   }
 
   /// Bangun area status/aksi di bawah card desain
-  Widget _buildDesignCardStatus(String effectiveStatus, String bidId, Map<String, dynamic> data, bool isLatestDesign) {
+  Widget _buildDesignCardStatus({
+    required String effectiveStatus,
+    required String bidId,
+    required Map<String, dynamic> data,
+    required bool isLatestDesign,
+    required bool bidIsSplitPayment,
+    required bool bidIsDesignApproved,
+  }) {
     // Card desain yang sudah direvisi (bukan yang terbaru)
     if (effectiveStatus == 'previously_revised') {
       return Container(
@@ -1813,7 +1905,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
 
     if (!_isArchitect) {
       // Client
-      if (_isDesignApproved && _isSplitPayment) {
+      if (bidIsDesignApproved && bidIsSplitPayment) {
         String statusLabel = '';
         Color boxColor = Colors.green.shade50;
         Color textColor = Colors.green.shade700;
@@ -1853,9 +1945,11 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
             children: [
               Icon(icon, color: textColor, size: 16),
               const SizedBox(width: 6),
-              Text(
-                statusLabel,
-                style: TextStyle(color: textColor, fontSize: 12, fontWeight: FontWeight.bold),
+              Expanded(
+                child: Text(
+                  statusLabel,
+                  style: TextStyle(color: textColor, fontSize: 12, fontWeight: FontWeight.bold),
+                ),
               ),
             ],
           ),
@@ -1872,7 +1966,12 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
             children: [
               Icon(Icons.verified_rounded, color: Colors.green.shade700, size: 16),
               const SizedBox(width: 6),
-              Text('Desain Telah Selesai ✓', style: TextStyle(color: Colors.green.shade700, fontSize: 12, fontWeight: FontWeight.bold)),
+              Expanded(
+                child: Text(
+                  'Desain Telah Selesai ✓',
+                  style: TextStyle(color: Colors.green.shade700, fontSize: 12, fontWeight: FontWeight.bold),
+                ),
+              ),
             ],
           ),
         );
@@ -1886,7 +1985,12 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
             children: [
               Icon(Icons.hourglass_top_rounded, color: Colors.orange.shade700, size: 16),
               const SizedBox(width: 6),
-              Text('Revisi Diajukan – Menunggu Arsitek', style: TextStyle(color: Colors.orange.shade700, fontSize: 12, fontWeight: FontWeight.bold)),
+              Expanded(
+                child: Text(
+                  'Revisi Diajukan – Menunggu Arsitek',
+                  style: TextStyle(color: Colors.orange.shade700, fontSize: 12, fontWeight: FontWeight.bold),
+                ),
+              ),
             ],
           ),
         );
@@ -1920,7 +2024,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
       }
     } else {
       // Arsitek
-      if (_isDesignApproved && _isSplitPayment) {
+      if (bidIsDesignApproved && bidIsSplitPayment) {
         String statusLabel = '';
         Color boxColor = Colors.green.shade50;
         Color borderAndTextColor = Colors.green.shade700;
@@ -1977,7 +2081,12 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
             children: [
               Icon(Icons.verified_rounded, color: Colors.green.shade700, size: 14),
               const SizedBox(width: 6),
-              Text('Desain Telah Selesai ✓ (Client Setujui)', style: TextStyle(color: Colors.green.shade700, fontSize: 11, fontWeight: FontWeight.w600)),
+              Expanded(
+                child: Text(
+                  'Desain Telah Selesai ✓ (Client Setujui)',
+                  style: TextStyle(color: Colors.green.shade700, fontSize: 11, fontWeight: FontWeight.w600),
+                ),
+              ),
             ],
           ),
         );
@@ -1989,7 +2098,12 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
             children: [
               Icon(Icons.edit_note_rounded, color: Colors.orange.shade700, size: 14),
               const SizedBox(width: 6),
-              Text('Client meminta revisi draf', style: TextStyle(color: Colors.orange.shade700, fontSize: 11, fontWeight: FontWeight.w600)),
+              Expanded(
+                child: Text(
+                  'Client meminta revisi draf',
+                  style: TextStyle(color: Colors.orange.shade700, fontSize: 11, fontWeight: FontWeight.w600),
+                ),
+              ),
             ],
           ),
         );
@@ -2001,7 +2115,12 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
             children: [
               Icon(Icons.hourglass_top_rounded, color: Colors.teal.shade700, size: 14),
               const SizedBox(width: 6),
-              Text('Menunggu tinjauan client', style: TextStyle(color: Colors.teal.shade700, fontSize: 11, fontWeight: FontWeight.w600)),
+              Expanded(
+                child: Text(
+                  'Menunggu tinjauan client',
+                  style: TextStyle(color: Colors.teal.shade700, fontSize: 11, fontWeight: FontWeight.w600),
+                ),
+              ),
             ],
           ),
         );
@@ -2144,8 +2263,8 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
     );
   }
 
-  void _showProjectCompletedDialog() {
-    showDialog(
+  void _showProjectCompletedDialog() async {
+    final ok = await showDialog<bool>(
       context: context,
       barrierDismissible: false,
       builder: (ctx) => AlertDialog(
@@ -2156,30 +2275,87 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
           children: [
             Icon(Icons.celebration_rounded, color: Colors.teal, size: 24),
             SizedBox(width: 8),
-            Text('Proyek Selesai!', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+            Text('Selesaikan Proyek?', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
           ],
         ),
         content: const Text(
-          'Selamat! Proyek desain konsultasi Anda telah selesai secara keseluruhan. Terima kasih telah mempercayakan proyek Anda pada platform kami.',
+          'Apakah Anda yakin ingin menandai proyek desain ini sebagai selesai? Klien akan diminta memberikan ulasan setelah ini.',
           style: TextStyle(fontSize: 13, height: 1.4, color: Colors.black87),
         ),
         actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Batal', style: TextStyle(color: Colors.black54)),
+          ),
           ElevatedButton(
-            onPressed: () {
-              Navigator.pop(ctx);
-              setState(() {
-                _projectFinishedConfirmed = true;
-              });
-            },
+            onPressed: () => Navigator.pop(ctx, true),
             style: ElevatedButton.styleFrom(
               backgroundColor: Colors.teal,
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
               padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
               elevation: 0,
             ),
-            child: const Text('OK', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13)),
+            child: const Text('Ya, Selesai', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13)),
           ),
         ],
+      ),
+    );
+
+    if (ok == true && _activeProjectId != null) {
+      if (!mounted) return;
+      setState(() => _isSending = true);
+      final success = await Provider.of<ProjectProvider>(context, listen: false)
+          .completeProject(_activeProjectId!);
+      if (!mounted) return;
+      setState(() => _isSending = false);
+
+      if (success) {
+        await Provider.of<ChatProvider>(context, listen: false).sendMessage(
+          widget.chatId,
+          '🎉 Arsitek telah menandai proyek desain ini selesai secara keseluruhan! Klien silakan memberikan ulasan dan rating.',
+          bidId: _activeBidId,
+        );
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('✅ Proyek berhasil diselesaikan!')),
+          );
+        }
+        _loadActiveBidStatus();
+      } else {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('❌ Gagal menyelesaikan proyek, silakan coba lagi.')),
+          );
+        }
+      }
+    }
+  }
+
+  Widget _buildWaitingForArchitectSection() {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      decoration: const BoxDecoration(
+        color: Color(0xFFF9F5F1),
+        border: Border(top: BorderSide(color: Color(0xFFE5DCD3), width: 1)),
+      ),
+      child: SafeArea(
+        top: false,
+        child: Row(
+          children: [
+            const SizedBox(
+              width: 16,
+              height: 16,
+              child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.primary),
+            ),
+            const SizedBox(width: 12),
+            const Expanded(
+              child: Text(
+                'Pembayaran Lunas. Menunggu arsitek menyelesaikan proyek...',
+                style: TextStyle(color: Colors.black54, fontSize: 12, fontWeight: FontWeight.w500),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -2197,25 +2373,16 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Row(
+            const Row(
               children: [
-                const Icon(Icons.check_circle_outline_rounded, color: AppColors.primary, size: 20),
-                const SizedBox(width: 8),
-                const Text('Pelunasan Pembayaran Diterima 🎉', style: TextStyle(fontWeight: FontWeight.bold, color: AppColors.primary, fontSize: 13)),
-                const Spacer(),
-                TextButton(
-                  onPressed: () {
-                    setState(() {
-                      _hideRatingReview = true;
-                    });
-                  },
-                  child: const Text('Tulis Pesan', style: TextStyle(color: AppColors.primary, fontSize: 11, fontWeight: FontWeight.bold)),
-                ),
+                Icon(Icons.check_circle_outline_rounded, color: AppColors.primary, size: 20),
+                SizedBox(width: 8),
+                Text('Pelunasan Pembayaran Diterima 🎉', style: TextStyle(fontWeight: FontWeight.bold, color: AppColors.primary, fontSize: 13)),
               ],
             ),
             const SizedBox(height: 6),
             const Text(
-              'Pembayaran pelunasan telah terkonfirmasi oleh arsitek. Silakan selesaikan proyek ini.',
+              'Pembayaran pelunasan telah terkonfirmasi. Silakan tandai proyek desain ini sebagai selesai agar klien dapat memberikan ulasan.',
               style: TextStyle(color: Colors.black54, fontSize: 12),
             ),
             const SizedBox(height: 12),
@@ -2450,21 +2617,33 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
           );
         }
 
-        // Tampilkan ulasan rating jika client dan proyek selesai konsultasi
-        if (!_isArchitect && _offerPaymentStatus == 'completed' && !_hideRatingReview) {
-          if (_loadingReview) {
-            return const Padding(
-              padding: EdgeInsets.all(16.0),
-              child: Center(child: CircularProgressIndicator(color: AppColors.primary)),
-            );
-          }
-          if (_existingReview == null) {
-            if (_isSplitPayment && !_projectFinishedConfirmed) {
+        // Flow baru: Arsitek menekan tombol Selesaikan Proyek, Client mengisi rating setelah selesai.
+        if (_offerPaymentStatus == 'completed') {
+          if (!_isArchitect) {
+            // Client
+            if (_activeProjectStatus == 'completed') {
+              if (!_hideRatingReview) {
+                if (_loadingReview) {
+                  return const Padding(
+                    padding: EdgeInsets.all(16.0),
+                    child: Center(child: CircularProgressIndicator(color: AppColors.primary)),
+                  );
+                }
+                if (_existingReview == null) {
+                  return _buildRatingInputSection();
+                } else {
+                  return _buildRatingCompletedSection();
+                }
+              }
+            } else {
+              // Pembayaran sudah lunas tetapi proyek belum ditandai selesai oleh arsitek
+              return _buildWaitingForArchitectSection();
+            }
+          } else {
+            // Arsitek melihat tombol Selesaikan Desain Proyek jika status belum completed
+            if (_activeProjectStatus != 'completed') {
               return _buildSelesaikanProyekSection();
             }
-            return _buildRatingInputSection();
-          } else {
-            return _buildRatingCompletedSection();
           }
         }
 

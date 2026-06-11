@@ -500,6 +500,12 @@ class _CreateProjectScreenState extends State<CreateProjectScreen> {
       _isConsulting = false;
     });
 
+    debugPrint("=== TRACE DRAFT SAVE ===");
+    debugPrint("_editingDraftId: $_editingDraftId");
+    debugPrint("widget.draft?.id: ${widget.draft?.id}");
+    debugPrint("latitude: ${_selectedLocation?.latitude}");
+    debugPrint("longitude: ${_selectedLocation?.longitude}");
+
     final success = await context.read<ProjectCubit>().saveDraft(
       draftId: _editingDraftId,
       title: _titleController.text.trim(),
@@ -539,6 +545,12 @@ class _CreateProjectScreenState extends State<CreateProjectScreen> {
       _isDrafting = true;
       _isConsulting = true;
     });
+
+    debugPrint("=== TRACE DRAFT SAVE ===");
+    debugPrint("_editingDraftId: $_editingDraftId");
+    debugPrint("widget.draft?.id: ${widget.draft?.id}");
+    debugPrint("latitude: ${_selectedLocation?.latitude}");
+    debugPrint("longitude: ${_selectedLocation?.longitude}");
 
     final success = await context.read<ProjectCubit>().saveDraft(
       draftId: _editingDraftId,
@@ -938,6 +950,7 @@ class _CreateProjectScreenState extends State<CreateProjectScreen> {
   Widget _buildStep1() {
     return SingleChildScrollView(
       physics: const BouncingScrollPhysics(),
+      keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
       padding: const EdgeInsets.all(24),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -976,6 +989,7 @@ class _CreateProjectScreenState extends State<CreateProjectScreen> {
   Widget _buildStep2() {
     return SingleChildScrollView(
       physics: const BouncingScrollPhysics(),
+      keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
       padding: const EdgeInsets.all(24),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1061,6 +1075,7 @@ class _CreateProjectScreenState extends State<CreateProjectScreen> {
   Widget _buildStep3() {
     return SingleChildScrollView(
       physics: const BouncingScrollPhysics(),
+      keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
       padding: const EdgeInsets.all(24),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1211,6 +1226,7 @@ class _CreateProjectScreenState extends State<CreateProjectScreen> {
   Widget _buildStep4() {
     return SingleChildScrollView(
       physics: const BouncingScrollPhysics(),
+      keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
       padding: const EdgeInsets.all(24),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
