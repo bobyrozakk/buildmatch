@@ -1,4 +1,4 @@
-// lib/modules/kontraktor/ui/tabs/kontraktor_progress_tab.dart
+// lib/modules/kontraktor/ui/tabs/progress/progress_tab.dart
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:buildmatch/modules/kontraktor/logic/contractor_project/contractor_project_cubit.dart';
@@ -6,17 +6,17 @@ import 'package:buildmatch/modules/kontraktor/logic/contractor_project/contracto
 import 'package:buildmatch/data/models/bid_model.dart';
 import 'package:buildmatch/core/constants/colors.dart';
 import 'package:buildmatch/core/utils/formatters.dart';
-import 'package:buildmatch/modules/kontraktor/ui/screens/kontraktor_bid_detail_screen.dart';
+import 'package:buildmatch/modules/kontraktor/ui/screens/bid_detail/bid_detail_screen.dart';
 import 'package:buildmatch/ui/shared/widgets/animated_success_dialog.dart';
 
-class KontraktorProgressTab extends StatefulWidget {
-  const KontraktorProgressTab({super.key});
+class ProgressTab extends StatefulWidget {
+  const ProgressTab({super.key});
 
   @override
-  State<KontraktorProgressTab> createState() => _KontraktorProgressTabState();
+  State<ProgressTab> createState() => _ProgressTabState();
 }
 
-class _KontraktorProgressTabState extends State<KontraktorProgressTab> {
+class _ProgressTabState extends State<ProgressTab> {
   @override
   void initState() {
     super.initState();
@@ -90,7 +90,7 @@ class _KontraktorProgressTabState extends State<KontraktorProgressTab> {
                     Navigator.push(
                       context,
                       MaterialPageRoute(
-                        builder: (_) => KontraktorBidDetailScreen(bid: bid),
+                        builder: (_) => BidDetailScreen(bid: bid),
                       ),
                     );
                   },

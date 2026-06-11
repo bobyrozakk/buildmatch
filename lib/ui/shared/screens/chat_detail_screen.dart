@@ -15,6 +15,7 @@ import '../../arsitek/widgets/buat_penawaran_sheet.dart';
 import '../../arsitek/screens/kirim_desain_screen.dart';
 import 'package:buildmatch/modules/client/ui/screens/architect_offer_detail/architect_offer_detail_screen.dart';
 import 'package:buildmatch/modules/client/ui/screens/client_design_review/client_design_review_screen.dart';
+import 'package:buildmatch/modules/client/logic/chat/chat_cubit.dart';
 
 class ChatDetailScreen extends StatefulWidget {
   final String chatId;
@@ -2407,6 +2408,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
                         if (ok == true) {
                           final rejected = await chatProv.rejectChat(widget.chatId);
                           if (rejected && context.mounted) {
+                            context.read<ChatCubit>().fetchChats();
                             Navigator.pop(context);
                           }
                         }
@@ -2427,6 +2429,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
                       onPressed: () async {
                         final ok = await chatProv.acceptChat(widget.chatId);
                         if (ok && context.mounted) {
+                          context.read<ChatCubit>().fetchChats();
                           ScaffoldMessenger.of(context).showSnackBar(
                             const SnackBar(content: Text('Permintaan konsultasi diterima')),
                           );

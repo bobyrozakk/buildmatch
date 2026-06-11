@@ -1,23 +1,23 @@
-// lib/modules/kontraktor/ui/tabs/kontraktor_proyek_tab.dart
+// lib/modules/kontraktor/ui/tabs/proyek/proyek_tab.dart
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:buildmatch/modules/kontraktor/logic/contractor_project/contractor_project_cubit.dart';
 import 'package:buildmatch/modules/kontraktor/logic/contractor_project/contractor_project_state.dart';
 import 'package:buildmatch/data/models/project_model.dart';
 import 'package:buildmatch/data/models/bid_model.dart';
-import 'package:buildmatch/modules/kontraktor/ui/screens/kontraktor_detail_proyek_screen.dart';
+import 'package:buildmatch/modules/kontraktor/ui/screens/detail_proyek/detail_proyek_screen.dart';
 import 'package:buildmatch/ui/shared/widgets/location_picker_sheet.dart';
 import 'package:buildmatch/core/constants/colors.dart';
 import 'package:buildmatch/core/utils/formatters.dart';
 
-class KontraktorProyekTab extends StatefulWidget {
-  const KontraktorProyekTab({super.key});
+class ProyekTab extends StatefulWidget {
+  const ProyekTab({super.key});
 
   @override
-  State<KontraktorProyekTab> createState() => _KontraktorProyekTabState();
+  State<ProyekTab> createState() => _ProyekTabState();
 }
 
-class _KontraktorProyekTabState extends State<KontraktorProyekTab> {
+class _ProyekTabState extends State<ProyekTab> {
   String _searchQuery = '';
   String _selectedFilter = 'Semua';
   LocationResult _location = const LocationResult();
@@ -46,7 +46,7 @@ class _KontraktorProyekTabState extends State<KontraktorProyekTab> {
   void _openDetail(ProjectModel p) {
     Navigator.push(
       context,
-      MaterialPageRoute(builder: (_) => KontraktorDetailProyekScreen(project: p)),
+      MaterialPageRoute(builder: (_) => DetailProyekScreen(project: p)),
     ).then((_) => _refresh());
   }
 

@@ -91,7 +91,7 @@ class ChatCubit extends Cubit<ChatState> {
 
         if (status == 'accepted') {
           accepted.add(chat);
-        } else {
+        } else if (status == 'pending') {
           pending.add(chat);
         }
       }
@@ -181,16 +181,21 @@ class ChatCubit extends Cubit<ChatState> {
     }
   }
 
-  /// Arsitek menolak permintaan chat
+  /// Arsitek menolak permintaan chat (set status = 'rejected')
   Future<bool> rejectChat(String chatId) async {
     try {
+      await _supabase
+          .from('chats')
+          .update({'status': 'rejected'})
+          .eq('id', chatId);
+
+      // Hapus data terkait secara opsional, abaikan jika RLS melarang
       try {
         await _supabase.from('notifications').delete().eq('chat_id', chatId);
-      } catch (e) {
-        debugPrint('Error deleting notifications for chat reject: $e');
-      }
-      await _supabase.from('messages').delete().eq('chat_id', chatId);
-      await _supabase.from('chats').delete().eq('id', chatId);
+      } catch (_) {}
+      try {
+        await _supabase.from('messages').delete().eq('chat_id', chatId);
+      } catch (_) {}
 
       _pendingChats.removeWhere((c) => c.id == chatId);
       _emitLoaded();

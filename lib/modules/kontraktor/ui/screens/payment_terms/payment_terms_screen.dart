@@ -1,25 +1,25 @@
-// lib/modules/kontraktor/ui/screens/kontraktor_payment_terms_screen.dart
+// lib/modules/kontraktor/ui/screens/payment_terms/payment_terms_screen.dart
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:buildmatch/modules/kontraktor/logic/contractor_project/contractor_project_cubit.dart';
 import 'package:buildmatch/modules/kontraktor/logic/contractor_project/contractor_project_state.dart';
-import 'package:buildmatch/modules/kontraktor/ui/widgets/term_form_sheet.dart';
-import 'package:buildmatch/modules/kontraktor/ui/widgets/progress_report_sheet.dart';
+import 'package:buildmatch/modules/kontraktor/ui/tabs/progress/widgets/progress_report_sheet.dart';
+import 'widgets/term_form_sheet.dart';
 import 'package:buildmatch/data/models/payment_term_model.dart';
 import 'package:buildmatch/data/models/project_model.dart';
 import 'package:buildmatch/core/constants/colors.dart';
 import 'package:buildmatch/core/utils/formatters.dart';
 import 'package:buildmatch/ui/shared/widgets/animated_success_dialog.dart';
 
-class KontraktorPaymentTermsScreen extends StatefulWidget {
+class PaymentTermsScreen extends StatefulWidget {
   final String projectId;
   final String bidId;
   final double dealPrice;
   final String projectTitle;
 
-  const KontraktorPaymentTermsScreen({
+  const PaymentTermsScreen({
     super.key,
     required this.projectId,
     required this.bidId,
@@ -28,12 +28,12 @@ class KontraktorPaymentTermsScreen extends StatefulWidget {
   });
 
   @override
-  State<KontraktorPaymentTermsScreen> createState() =>
-      _KontraktorPaymentTermsScreenState();
+  State<PaymentTermsScreen> createState() =>
+      _PaymentTermsScreenState();
 }
 
-class _KontraktorPaymentTermsScreenState
-    extends State<KontraktorPaymentTermsScreen> {
+class _PaymentTermsScreenState
+    extends State<PaymentTermsScreen> {
   @override
   void initState() {
     super.initState();

@@ -1,4 +1,4 @@
-// lib/modules/kontraktor/ui/screens/kontraktor_detail_proyek_screen.dart
+// lib/modules/kontraktor/ui/screens/detail_proyek/detail_proyek_screen.dart
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -35,18 +35,18 @@ class _ThousandsSeparatorFormatter extends TextInputFormatter {
   }
 }
 
-class KontraktorDetailProyekScreen extends StatefulWidget {
+class DetailProyekScreen extends StatefulWidget {
   final ProjectModel project;
-  const KontraktorDetailProyekScreen(
+  const DetailProyekScreen(
       {super.key, required this.project});
 
   @override
-  State<KontraktorDetailProyekScreen> createState() =>
-      _KontraktorDetailProyekScreenState();
+  State<DetailProyekScreen> createState() =>
+      _DetailProyekScreenState();
 }
 
-class _KontraktorDetailProyekScreenState
-    extends State<KontraktorDetailProyekScreen> {
+class _DetailProyekScreenState
+    extends State<DetailProyekScreen> {
   final _priceController = TextEditingController();
   final _messageController = TextEditingController();
 

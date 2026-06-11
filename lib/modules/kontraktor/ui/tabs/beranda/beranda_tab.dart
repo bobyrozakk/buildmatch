@@ -1,4 +1,4 @@
-// lib/modules/kontraktor/ui/tabs/kontraktor_home_tab.dart
+// lib/modules/kontraktor/ui/tabs/beranda/beranda_tab.dart
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -13,20 +13,20 @@ import 'package:buildmatch/modules/kontraktor/logic/contractor_project/contracto
 import 'package:buildmatch/modules/kontraktor/logic/contractor_project/contractor_project_state.dart';
 import 'package:buildmatch/modules/client/logic/chat/chat_cubit.dart';
 import 'package:buildmatch/modules/client/logic/chat/chat_state.dart';
-import 'package:buildmatch/modules/kontraktor/ui/screens/kontraktor_profile_edit_screen.dart';
-import 'package:buildmatch/modules/kontraktor/ui/screens/kontraktor_detail_proyek_screen.dart';
+import 'package:buildmatch/modules/kontraktor/ui/screens/profile_edit/profile_edit_screen.dart';
+import 'package:buildmatch/modules/kontraktor/ui/screens/detail_proyek/detail_proyek_screen.dart';
 import 'package:buildmatch/ui/shared/screens/chat_list_screen.dart';
 import 'package:buildmatch/ui/shared/screens/notification_screen.dart';
 
-class KontraktorHomeTab extends StatefulWidget {
+class BerandaTab extends StatefulWidget {
   final ValueChanged<int>? onSwitchTab;
-  const KontraktorHomeTab({super.key, this.onSwitchTab});
+  const BerandaTab({super.key, this.onSwitchTab});
 
   @override
-  State<KontraktorHomeTab> createState() => _KontraktorHomeTabState();
+  State<BerandaTab> createState() => _BerandaTabState();
 }
 
-class _KontraktorHomeTabState extends State<KontraktorHomeTab> {
+class _BerandaTabState extends State<BerandaTab> {
   @override
   void initState() {
     super.initState();
@@ -75,7 +75,7 @@ class _KontraktorHomeTabState extends State<KontraktorHomeTab> {
   void _openProjectDetail(ProjectModel project) {
     Navigator.push(
       context,
-      MaterialPageRoute(builder: (_) => KontraktorDetailProyekScreen(project: project)),
+      MaterialPageRoute(builder: (_) => DetailProyekScreen(project: project)),
     );
   }
 

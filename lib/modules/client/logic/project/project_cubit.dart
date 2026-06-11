@@ -466,6 +466,7 @@ class ProjectCubit extends Cubit<ProjectState> {
           .order('created_at', ascending: false);
       final list = List<Map<String, dynamic>>.from(response)
           .map((json) => ProjectModel.fromJson(json))
+          .where((p) => p.title != 'Konsultasi Desain dengan Arsitek')
           .toList();
       _projects = list;
       _emitLoaded();
@@ -485,6 +486,7 @@ class ProjectCubit extends Cubit<ProjectState> {
           .from('projects')
           .select('*, profiles:client_id(name)')
           .eq('status', 'open')
+          .neq('title', 'Konsultasi Desain dengan Arsitek')
           .order('created_at', ascending: false);
       final list = List<Map<String, dynamic>>.from(response)
           .map((json) => ProjectModel.fromJson(json))

@@ -415,6 +415,7 @@ class ProjectProvider extends ChangeNotifier {
           .from('projects')
           .select('*, profiles:client_id(name)')
           .eq('status', 'open')
+          .neq('title', 'Konsultasi Desain dengan Arsitek')
           .order('created_at', ascending: false);
       return List<Map<String, dynamic>>.from(
         response,

@@ -7,21 +7,21 @@ import 'package:buildmatch/data/models/portfolio_model.dart';
 import 'package:buildmatch/data/models/certification_model.dart';
 import 'package:buildmatch/modules/client/logic/vendor/vendor_cubit.dart';
 import 'package:buildmatch/modules/client/logic/vendor/vendor_state.dart';
-import 'package:buildmatch/modules/kontraktor/ui/screens/kontraktor_profile_edit_screen.dart';
+import 'package:buildmatch/modules/kontraktor/ui/screens/profile_edit/profile_edit_screen.dart';
 import 'package:buildmatch/modules/auth/ui/login_screen.dart';
 import 'package:buildmatch/ui/shared/widgets/glass_card.dart';
 import 'package:buildmatch/core/constants/colors.dart';
 
-class KontraktorProfileTab extends StatefulWidget {
-  const KontraktorProfileTab({super.key});
+class ProfileTab extends StatefulWidget {
+  const ProfileTab({super.key});
 
   @override
-  State<KontraktorProfileTab> createState() =>
-      _KontraktorProfileTabState();
+  State<ProfileTab> createState() =>
+      _ProfileTabState();
 }
 
-class _KontraktorProfileTabState
-    extends State<KontraktorProfileTab> {
+class _ProfileTabState
+    extends State<ProfileTab> {
 
   @override
   void initState() {

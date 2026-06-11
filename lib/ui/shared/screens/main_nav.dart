@@ -9,10 +9,10 @@ import '../../../modules/client/ui/tabs/consultasi/consultasi_tab.dart';
 import '../../../modules/client/ui/tabs/profile/profile_tab.dart'; 
 
 // --- IMPORT TAB KONTRAKTOR ---
-import '../../../modules/kontraktor/ui/tabs/kontraktor_home_tab.dart';
-import '../../../modules/kontraktor/ui/tabs/kontraktor_proyek_tab.dart';
-import '../../../modules/kontraktor/ui/tabs/kontraktor_progress_tab.dart';
-import '../../../modules/kontraktor/ui/tabs/kontraktor_profile_tab.dart'; 
+import '../../../modules/kontraktor/ui/tabs/beranda/beranda_tab.dart' as contractor;
+import '../../../modules/kontraktor/ui/tabs/proyek/proyek_tab.dart';
+import '../../../modules/kontraktor/ui/tabs/progress/progress_tab.dart' as contractor;
+import '../../../modules/kontraktor/ui/tabs/profile/profile_tab.dart' as contractor; 
 
 
 // --- IMPORT TAB ARSITEK ---
@@ -76,12 +76,12 @@ class _MainNavScreenState extends State<MainNavScreen> {
     ];
 
     final List<Widget> vendorTabs = [
-      KontraktorHomeTab(
+      contractor.BerandaTab(
         onSwitchTab: (i) => setState(() => _currentIndex = i),
       ),
-      const KontraktorProyekTab(),
-      const KontraktorProgressTab(),
-      const KontraktorProfileTab(),
+      const ProyekTab(),
+      const contractor.ProgressTab(),
+      const contractor.ProfileTab(),
     ];
 
     final List<Widget> architectTabs = [

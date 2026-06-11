@@ -43,6 +43,7 @@ class ContractorProjectCubit extends Cubit<ContractorProjectState> {
           .from('projects')
           .select('*, profiles:client_id(name)')
           .eq('status', 'open')
+          .neq('title', 'Konsultasi Desain dengan Arsitek')
           .order('created_at', ascending: false);
       final list = List<Map<String, dynamic>>.from(response)
           .map((json) => ProjectModel.fromJson(json))

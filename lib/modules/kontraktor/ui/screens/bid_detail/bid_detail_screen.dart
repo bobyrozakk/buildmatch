@@ -4,11 +4,11 @@ import 'package:buildmatch/data/models/bid_model.dart';
 import 'package:buildmatch/ui/shared/widgets/glass_card.dart';
 import 'package:buildmatch/core/constants/colors.dart';
 import 'package:buildmatch/core/utils/formatters.dart';
-import 'kontraktor_payment_terms_screen.dart';
+import '../payment_terms/payment_terms_screen.dart';
 
-class KontraktorBidDetailScreen extends StatelessWidget {
+class BidDetailScreen extends StatelessWidget {
   final BidModel bid;
-  const KontraktorBidDetailScreen({
+  const BidDetailScreen({
     super.key,
     required this.bid,
   });
@@ -286,7 +286,7 @@ class KontraktorBidDetailScreen extends StatelessWidget {
                           Navigator.push(
                             context,
                             MaterialPageRoute(
-                              builder: (_) => KontraktorPaymentTermsScreen(
+                              builder: (_) => PaymentTermsScreen(
                                 projectId: bid.projectId, // FIX: gunakan bid.projectId yg selalu ada
                                 bidId: bid.id ?? '',
                                 dealPrice: bid.price,
