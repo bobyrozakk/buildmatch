@@ -5,7 +5,7 @@ import 'package:buildmatch/core/constants/colors.dart';
 import 'package:buildmatch/core/utils/formatters.dart';
 import 'package:buildmatch/data/models/bid_model.dart';
 import 'package:buildmatch/data/providers/project_provider.dart';
-import 'package:buildmatch/data/providers/chat_provider.dart';
+import 'package:buildmatch/modules/client/logic/chat/chat_cubit.dart';
 import 'package:buildmatch/ui/shared/screens/contractor_chat_detail_screen.dart';
 import 'widgets/bid_price_tile.dart';
 import 'widgets/bid_price_diff_banner.dart';
@@ -147,7 +147,7 @@ class BidDetailScreen extends StatelessWidget {
   }
 
   Future<void> _handleContactContractor(BuildContext context) async {
-    final chatProvider = Provider.of<ChatProvider>(context, listen: false);
+    final chatCubit = context.read<ChatCubit>();
     
     showDialog(
       context: context,
@@ -158,7 +158,7 @@ class BidDetailScreen extends StatelessWidget {
     );
 
     try {
-      final chatId = await chatProvider.getOrCreateChat(
+      final chatId = await chatCubit.getOrCreateChat(
         bid.vendorId,
         projectId: bid.projectId,
         forceStatus: 'accepted',

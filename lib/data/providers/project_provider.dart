@@ -9,7 +9,6 @@ import '../models/review_model.dart';
 
 
 /// Provider khusus untuk CRUD proyek dan penawaran (bid).
-/// Vendor-related functions sudah dipindah ke VendorProvider.
 class ProjectProvider extends ChangeNotifier {
   final _supabase = Supabase.instance.client;
 

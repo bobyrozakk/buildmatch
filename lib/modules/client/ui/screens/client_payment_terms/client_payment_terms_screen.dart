@@ -56,9 +56,11 @@ class _ClientPaymentTermsScreenState extends State<ClientPaymentTermsScreen> {
 
     try {
       final p = await prov.fetchProjectById(widget.projectId);
+      if (!mounted) return;
       ReviewModel? r;
       if (p?.status == 'completed') {
         r = await prov.fetchProjectReview(widget.projectId);
+        if (!mounted) return;
         if (!_hasShownAlert) {
           _hasShownAlert = true;
           WidgetsBinding.instance.addPostFrameCallback((_) {

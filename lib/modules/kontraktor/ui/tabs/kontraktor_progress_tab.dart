@@ -1,7 +1,8 @@
+// lib/modules/kontraktor/ui/tabs/kontraktor_progress_tab.dart
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:buildmatch/modules/client/logic/project/project_cubit.dart';
-import 'package:buildmatch/modules/client/logic/project/project_state.dart';
+import 'package:buildmatch/modules/kontraktor/logic/contractor_project/contractor_project_cubit.dart';
+import 'package:buildmatch/modules/kontraktor/logic/contractor_project/contractor_project_state.dart';
 import 'package:buildmatch/data/models/bid_model.dart';
 import 'package:buildmatch/core/constants/colors.dart';
 import 'package:buildmatch/core/utils/formatters.dart';
@@ -19,11 +20,11 @@ class _KontraktorProgressTabState extends State<KontraktorProgressTab> {
   @override
   void initState() {
     super.initState();
-    context.read<ProjectCubit>().fetchVendorBids();
+    context.read<ContractorProjectCubit>().fetchVendorBids();
   }
 
   Future<void> _refresh() async {
-    await context.read<ProjectCubit>().fetchVendorBids();
+    await context.read<ContractorProjectCubit>().fetchVendorBids();
   }
 
   @override
@@ -44,274 +45,268 @@ class _KontraktorProgressTabState extends State<KontraktorProgressTab> {
           ),
         ],
       ),
-      body: BlocBuilder<ProjectCubit, ProjectState>(
+      body: BlocBuilder<ContractorProjectCubit, ContractorProjectState>(
         builder: (context, state) {
-          if (state is ProjectLoading || state is ProjectInitial) {
+          if (state is ContractorProjectLoading || state is ContractorProjectInitial) {
             return const Center(
               child: CircularProgressIndicator(color: AppColors.primary),
             );
           }
-          if (state is ProjectError) {
+          if (state is ContractorProjectError) {
             return Center(child: Text(state.message));
           }
-          if (state is ProjectLoaded) {
-            final allBids = state.vendorBids;
-          // Urutkan: accepted dulu, lalu pending, lalu rejected/diabaikan
-          final bids = [...allBids]..sort((a, b) {
-            int rank(BidModel bid) {
-              if (bid.status == 'accepted') return 0;
-              final isOld = bid.status == 'pending' && bid.createdAt != null && DateTime.now().difference(bid.createdAt!).inDays > 7;
-              if (bid.status == 'pending' && !isOld) return 1;
-              return 2;
+          if (state is ContractorProjectLoaded) {
+            final allBids = state.myBids;
+            // Urutkan: accepted dulu, lalu pending, lalu rejected/diabaikan
+            final bids = [...allBids]..sort((a, b) {
+              int rank(BidModel bid) {
+                if (bid.status == 'accepted') return 0;
+                final isOld = bid.status == 'pending' && bid.createdAt != null && DateTime.now().difference(bid.createdAt!).inDays > 7;
+                if (bid.status == 'pending' && !isOld) return 1;
+                return 2;
+              }
+              return rank(a).compareTo(rank(b));
+            });
+
+            if (bids.isEmpty) {
+              return _buildEmptyState();
             }
-            return rank(a).compareTo(rank(b));
-          });
 
-          if (bids.isEmpty) {
-            return _buildEmptyState();
-          }
+            return ListView.builder(
+              padding: const EdgeInsets.all(20),
+              itemCount: bids.length,
+              itemBuilder: (_, i) {
+                final bid = bids[i];
+                final project = bid.project;
 
-          return ListView.builder(
-            padding: const EdgeInsets.all(20),
-            itemCount: bids.length,
-            itemBuilder: (_, i) {
-              final bid = bids[i];
-              final project = bid.project;
+                final isAccepted = bid.status == 'accepted';
+                final isRejectedOrIgnored = bid.status == 'rejected' || (bid.status == 'pending' && bid.createdAt != null && DateTime.now().difference(bid.createdAt!).inDays > 7);
+                final isCancelable = bid.status == 'pending' && bid.createdAt != null && DateTime.now().difference(bid.createdAt!).inHours < 24;
 
-              final isAccepted = bid.status == 'accepted';
-              final isRejectedOrIgnored = bid.status == 'rejected' || (bid.status == 'pending' && bid.createdAt != null && DateTime.now().difference(bid.createdAt!).inDays > 7);
-              final isCancelable = bid.status == 'pending' && bid.createdAt != null && DateTime.now().difference(bid.createdAt!).inHours < 24;
+                final progress = project?.progressPercent ?? 0;
 
-              final progress = project?.progressPercent ?? 0;
-
-              return GestureDetector(
-                onTap: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => KontraktorBidDetailScreen(bid: bid),
-                    ),
-                  );
-                },
-
-                child: Container(
-                  margin: const EdgeInsets.only(bottom: 16),
-                  padding: const EdgeInsets.all(18),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(22),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withOpacity(0.03),
-                        blurRadius: 12,
-                        offset: const Offset(0, 4),
+                return GestureDetector(
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => KontraktorBidDetailScreen(bid: bid),
                       ),
-                    ],
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      // Gambar Proyek
-                      if (project != null && project.imageUrls.isNotEmpty)
-                        ClipRRect(
-                          borderRadius: BorderRadius.circular(12),
-                          child: Image.network(
-                            project.imageUrls[0],
-                            height: 140,
-                            width: double.infinity,
-                            fit: BoxFit.cover,
-                            errorBuilder: (ctx, err, stack) => Container(
+                    );
+                  },
+                  child: Container(
+                    margin: const EdgeInsets.only(bottom: 16),
+                    padding: const EdgeInsets.all(18),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(22),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(0.03),
+                          blurRadius: 12,
+                          offset: const Offset(0, 4),
+                        ),
+                      ],
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        // Gambar Proyek
+                        if (project != null && project.imageUrls.isNotEmpty)
+                          ClipRRect(
+                            borderRadius: BorderRadius.circular(12),
+                            child: Image.network(
+                              project.imageUrls[0],
                               height: 140,
                               width: double.infinity,
+                              fit: BoxFit.cover,
+                              errorBuilder: (ctx, err, stack) => Container(
+                                height: 140,
+                                width: double.infinity,
+                                color: Colors.grey.shade200,
+                                child: const Icon(Icons.image_not_supported_outlined, color: Colors.grey),
+                              ),
+                            ),
+                          )
+                        else
+                          Container(
+                            height: 140,
+                            width: double.infinity,
+                            decoration: BoxDecoration(
                               color: Colors.grey.shade200,
-                              child: const Icon(Icons.image_not_supported_outlined, color: Colors.grey),
+                              borderRadius: BorderRadius.circular(12),
                             ),
+                            child: const Icon(Icons.image_outlined, color: Colors.grey),
                           ),
-                        )
-                      else
-                        Container(
-                          height: 140,
-                          width: double.infinity,
-                          decoration: BoxDecoration(
-                            color: Colors.grey.shade200,
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          child: const Icon(Icons.image_outlined, color: Colors.grey),
-                        ),
-                      const SizedBox(height: 16),
-
-                      /// STATUS
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Expanded(
-                            child: Text(
-                              project?.title ?? 'Project',
-                              style: const TextStyle(
-                                fontWeight: FontWeight.bold,
-                                fontSize: 16,
-                              ),
-                            ),
-                          ),
-
-                          _statusChip(bid.status, bid.createdAt),
-                        ],
-                      ),
-
-                      const SizedBox(height: 10),
-
-                      /// LOKASI
-                      Row(
-                        children: [
-                          const Icon(
-                            Icons.location_on_outlined,
-                            size: 14,
-                            color: Colors.black54,
-                          ),
-                          const SizedBox(width: 4),
-                          Expanded(
-                            child: Text(
-                              project?.location ?? '-',
-                              style: const TextStyle(
-                                fontSize: 12,
-                                color: Colors.black54,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-
-                      const SizedBox(height: 16),
-
-                      /// HARGA BID
-                      Container(
-                        padding: const EdgeInsets.all(14),
-                        decoration: BoxDecoration(
-                          color: AppColors.cardCream,
-                          borderRadius: BorderRadius.circular(16),
-                        ),
-                        child: Row(
-                          children: [
-                            const Icon(
-                              Icons.payments_outlined,
-                              color: AppColors.primary,
-                            ),
-                            const SizedBox(width: 10),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  const Text(
-                                    'Penawaran Anda',
-                                    style: TextStyle(
-                                      fontSize: 11,
-                                      color: Colors.black54,
-                                    ),
-                                  ),
-                                  const SizedBox(height: 2),
-                                  Text(
-                                    AppFormatters.formatRupiah(bid.price),
-                                    style: const TextStyle(
-                                      fontWeight: FontWeight.bold,
-                                      fontSize: 15,
-                                      color: AppColors.primary,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-
-                            const Icon(
-                              Icons.arrow_forward_ios_rounded,
-                              size: 16,
-                              color: Colors.black38,
-                            ),
-                          ],
-                        ),
-                      ),
-
-                      if (isCancelable) ...[
                         const SizedBox(height: 16),
-                        SizedBox(
-                          width: double.infinity,
-                          child: OutlinedButton.icon(
-                            onPressed: () => _confirmCancelBid(context, bid.id ?? ''),
-                            icon: const Icon(Icons.cancel_outlined, size: 18, color: Colors.orange),
-                            label: const Text('Batalkan Penawaran', style: TextStyle(color: Colors.orange, fontWeight: FontWeight.bold)),
-                            style: OutlinedButton.styleFrom(
-                              padding: const EdgeInsets.symmetric(vertical: 12),
-                              side: const BorderSide(color: Colors.orange),
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                            ),
-                          ),
-                        ),
-                      ],
 
-                      if (isRejectedOrIgnored) ...[
-                        const SizedBox(height: 16),
-                        SizedBox(
-                          width: double.infinity,
-                          child: OutlinedButton.icon(
-                            onPressed: () => _confirmDeleteBid(context, bid.id ?? ''),
-                            icon: const Icon(Icons.delete_outline_rounded, size: 18, color: Colors.red),
-                            label: const Text('Hapus Penawaran', style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold)),
-                            style: OutlinedButton.styleFrom(
-                              padding: const EdgeInsets.symmetric(vertical: 12),
-                              side: const BorderSide(color: Colors.red),
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                            ),
-                          ),
-                        ),
-                      ],
-
-                      if (isAccepted) ...[
-                        const SizedBox(height: 18),
-
+                        /// STATUS
                         Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
-                            const Text(
-                              'Progress Pembangunan',
-                              style: TextStyle(
-                                fontSize: 12,
-                                fontWeight: FontWeight.w600,
+                            Expanded(
+                              child: Text(
+                                project?.title ?? 'Project',
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 16,
+                                ),
                               ),
                             ),
-                            Text(
-                              '$progress%',
-                              style: const TextStyle(
-                                fontSize: 12,
-                                fontWeight: FontWeight.bold,
-                                color: AppColors.primary,
+                            _statusChip(bid.status, bid.createdAt),
+                          ],
+                        ),
+
+                        const SizedBox(height: 10),
+
+                        /// LOKASI
+                        Row(
+                          children: [
+                            const Icon(
+                              Icons.location_on_outlined,
+                              size: 14,
+                              color: Colors.black54,
+                            ),
+                            const SizedBox(width: 4),
+                            Expanded(
+                              child: Text(
+                                project?.location ?? '-',
+                                style: const TextStyle(
+                                  fontSize: 12,
+                                  color: Colors.black54,
+                                ),
                               ),
                             ),
                           ],
                         ),
 
-                        const SizedBox(height: 8),
+                        const SizedBox(height: 16),
 
-                        ClipRRect(
-                          borderRadius: BorderRadius.circular(12),
-                          child: LinearProgressIndicator(
-                            value: progress / 100,
-                            minHeight: 8,
-                            backgroundColor: AppColors.cardCream,
-                            color: AppColors.primary,
+                        /// HARGA BID
+                        Container(
+                          padding: const EdgeInsets.all(14),
+                          decoration: BoxDecoration(
+                            color: AppColors.cardCream,
+                            borderRadius: BorderRadius.circular(16),
+                          ),
+                          child: Row(
+                            children: [
+                              const Icon(
+                                Icons.payments_outlined,
+                                color: AppColors.primary,
+                              ),
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    const Text(
+                                      'Penawaran Anda',
+                                      style: TextStyle(
+                                        fontSize: 11,
+                                        color: Colors.black54,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 2),
+                                    Text(
+                                      AppFormatters.formatRupiah(bid.price),
+                                      style: const TextStyle(
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 15,
+                                        color: AppColors.primary,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              const Icon(
+                                Icons.arrow_forward_ios_rounded,
+                                size: 16,
+                                color: Colors.black38,
+                              ),
+                            ],
                           ),
                         ),
+
+                        if (isCancelable) ...[
+                          const SizedBox(height: 16),
+                          SizedBox(
+                            width: double.infinity,
+                            child: OutlinedButton.icon(
+                              onPressed: () => _confirmCancelBid(context, bid.id ?? ''),
+                              icon: const Icon(Icons.cancel_outlined, size: 18, color: Colors.orange),
+                              label: const Text('Batalkan Penawaran', style: TextStyle(color: Colors.orange, fontWeight: FontWeight.bold)),
+                              style: OutlinedButton.styleFrom(
+                                padding: const EdgeInsets.symmetric(vertical: 12),
+                                side: const BorderSide(color: Colors.orange),
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                              ),
+                            ),
+                          ),
+                        ],
+
+                        if (isRejectedOrIgnored) ...[
+                          const SizedBox(height: 16),
+                          SizedBox(
+                            width: double.infinity,
+                            child: OutlinedButton.icon(
+                              onPressed: () => _confirmDeleteBid(context, bid.id ?? ''),
+                              icon: const Icon(Icons.delete_outline_rounded, size: 18, color: Colors.red),
+                              label: const Text('Hapus Penawaran', style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold)),
+                              style: OutlinedButton.styleFrom(
+                                padding: const EdgeInsets.symmetric(vertical: 12),
+                                side: const BorderSide(color: Colors.red),
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                              ),
+                            ),
+                          ),
+                        ],
+
+                        if (isAccepted) ...[
+                          const SizedBox(height: 18),
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              const Text(
+                                'Progress Pembangunan',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                              Text(
+                                '$progress%',
+                                style: const TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.bold,
+                                  color: AppColors.primary,
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 8),
+                          ClipRRect(
+                            borderRadius: BorderRadius.circular(12),
+                            child: LinearProgressIndicator(
+                              value: progress / 100.0,
+                              minHeight: 8,
+                              backgroundColor: AppColors.cardCream,
+                              color: AppColors.primary,
+                            ),
+                          ),
+                        ],
                       ],
-                    ],
+                    ),
                   ),
-                ),
-              );
-            },
-          );
-        }
-        return const SizedBox.shrink();
-      },
-    ),
-  );
-}
+                );
+              },
+            );
+          }
+          return const SizedBox.shrink();
+        },
+      ),
+    );
+  }
 
   Widget _statusChip(String status, DateTime? createdAt) {
     final isOldPending = status == 'pending' && createdAt != null && DateTime.now().difference(createdAt).inDays > 7;
@@ -393,7 +388,7 @@ class _KontraktorProgressTabState extends State<KontraktorProgressTab> {
 
     if (confirm != true || !mounted) return;
 
-    final provider = context.read<ProjectCubit>();
+    final provider = context.read<ContractorProjectCubit>();
     final success = await provider.deleteBid(bidId: bidId);
 
     if (!mounted) return;
@@ -464,7 +459,7 @@ class _KontraktorProgressTabState extends State<KontraktorProgressTab> {
 
     if (confirm != true || !mounted) return;
 
-    final provider = context.read<ProjectCubit>();
+    final provider = context.read<ContractorProjectCubit>();
     final success = await provider.deleteBid(bidId: bidId);
 
     if (!mounted) return;
@@ -508,24 +503,18 @@ class _KontraktorProgressTabState extends State<KontraktorProgressTab> {
                 color: AppColors.primary,
               ),
             ),
-
             const SizedBox(height: 24),
-
             const Text(
               'Belum Ada Aktivitas Proyek',
               style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
             ),
-
             const SizedBox(height: 8),
-
             const Text(
               'Ajukan penawaran ke proyek klien agar progress pekerjaan muncul di sini.',
               textAlign: TextAlign.center,
               style: TextStyle(color: Colors.black54, height: 1.5),
             ),
-
             const SizedBox(height: 24),
-
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
               decoration: BoxDecoration(

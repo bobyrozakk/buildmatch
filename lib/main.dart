@@ -4,7 +4,6 @@ import 'package:provider/provider.dart';
 import 'package:intl/date_symbol_data_local.dart';
 
 import 'data/providers/project_provider.dart';
-import 'data/providers/vendor_provider.dart';
 import 'data/providers/chat_provider.dart';
 import 'data/providers/notification_provider.dart';
 import 'data/providers/architect_provider.dart';
@@ -14,6 +13,7 @@ import 'modules/client/logic/vendor/vendor_cubit.dart';
 import 'modules/client/logic/architect/architect_cubit.dart';
 import 'modules/client/logic/chat/chat_cubit.dart';
 import 'modules/auth/logic/auth_cubit.dart';
+import 'modules/kontraktor/logic/contractor_project/contractor_project_cubit.dart';
 
 // --- IMPORT SCREENS ---
 import 'modules/startup/ui/splash/splash_screen.dart';
@@ -50,11 +50,11 @@ void main() async {
         BlocProvider<ArchitectCubit>(create: (_) => ArchitectCubit()),
         BlocProvider<ChatCubit>(create: (_) => ChatCubit()),
         BlocProvider<AuthCubit>(create: (_) => AuthCubit()),
+        BlocProvider<ContractorProjectCubit>(create: (_) => ContractorProjectCubit()),
       ],
       child: MultiProvider(
         providers: [
           ChangeNotifierProvider(create: (_) => ProjectProvider()),
-          ChangeNotifierProvider(create: (_) => VendorProvider()),
           ChangeNotifierProvider(create: (_) => ChatProvider()),
           ChangeNotifierProvider(create: (_) => NotificationProvider()),
           ChangeNotifierProvider(create: (_) => ArchitectProvider()),

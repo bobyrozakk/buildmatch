@@ -1,10 +1,11 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:intl/intl.dart';
 import '../../../core/constants/colors.dart';
-import '../../../data/providers/chat_provider.dart';
+import 'package:buildmatch/modules/client/logic/chat/chat_cubit.dart';
+import 'package:buildmatch/modules/client/logic/chat/chat_state.dart';
 import '../../../data/models/chat_model.dart';
 import 'chat_detail_screen.dart';
 import 'contractor_chat_detail_screen.dart';
@@ -25,7 +26,7 @@ class _ChatListScreenState extends State<ChatListScreen> {
   void initState() {
     super.initState();
     _fetchChatsFuture =
-        Provider.of<ChatProvider>(context, listen: false).fetchChats();
+        context.read<ChatCubit>().fetchChats();
   }
 
   @override
@@ -122,9 +123,9 @@ class _ChatListScreenState extends State<ChatListScreen> {
                       child: CircularProgressIndicator(color: AppColors.primary));
                 }
 
-                return Consumer<ChatProvider>(
-                  builder: (context, chatProvider, child) {
-                    var chats = chatProvider.chats;
+                return BlocBuilder<ChatCubit, ChatState>(
+                  builder: (context, state) {
+                    var chats = state is ChatLoaded ? state.chats : <ChatModel>[];
 
                     // Filter search
                     if (_searchQuery.isNotEmpty) {
@@ -166,7 +167,7 @@ class _ChatListScreenState extends State<ChatListScreen> {
                     return RefreshIndicator(
                       color: AppColors.primary,
                       onRefresh: () async {
-                        await chatProvider.fetchChats();
+                        await context.read<ChatCubit>().fetchChats();
                       },
                       child: ListView.builder(
                         physics: const BouncingScrollPhysics(),
@@ -190,7 +191,6 @@ class _ChatListScreenState extends State<ChatListScreen> {
                             chat: chat,
                             displayName: displayName,
                             displayAvatar: displayAvatar,
-                            chatProvider: chatProvider,
                           );
                         },
                       ),
@@ -245,7 +245,6 @@ class _ChatListScreenState extends State<ChatListScreen> {
     required ChatModel chat,
     required String displayName,
     String? displayAvatar,
-    required ChatProvider chatProvider,
   }) {
     final hasUnread = chat.unreadCount > 0;
     final currentUserId = Supabase.instance.client.auth.currentUser?.id;
@@ -273,7 +272,9 @@ class _ChatListScreenState extends State<ChatListScreen> {
                   ),
           ),
         );
-        chatProvider.fetchChats();
+        if (context.mounted) {
+          context.read<ChatCubit>().fetchChats();
+        }
       },
       child: Container(
         margin: const EdgeInsets.only(bottom: 10),

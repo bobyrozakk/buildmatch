@@ -3,7 +3,7 @@ import 'package:provider/provider.dart';
 import 'package:buildmatch/core/constants/colors.dart';
 import 'package:buildmatch/data/models/profile_model.dart';
 import 'package:buildmatch/data/providers/architect_provider.dart';
-import 'package:buildmatch/data/providers/chat_provider.dart';
+import 'package:buildmatch/modules/client/logic/chat/chat_cubit.dart';
 import 'package:buildmatch/ui/shared/screens/chat_detail_screen.dart';
 import 'widgets/architect_stat_pill.dart';
 import 'widgets/architect_spec_chip.dart';
@@ -45,14 +45,14 @@ class _ArchitectDetailScreenState extends State<ArchitectDetailScreen> {
     setState(() => _startingChat = true);
 
     final profile = widget.architectData['profile'] as ProfileModel;
-    final chatProvider = Provider.of<ChatProvider>(context, listen: false);
+    final chatCubit = context.read<ChatCubit>();
 
     // Cek apakah sudah ada chat yang accepted
-    final existingAccepted = chatProvider.chats.where((c) =>
+    final existingAccepted = chatCubit.chats.where((c) =>
         (c.clientId == profile.id || c.vendorId == profile.id)).toList();
     final isExistingAccepted = existingAccepted.isNotEmpty;
 
-    final chatId = await chatProvider.getOrCreateChat(profile.id);
+    final chatId = await chatCubit.getOrCreateChat(profile.id);
 
     setState(() => _startingChat = false);
 
@@ -329,7 +329,7 @@ class _ArchitectDetailScreenState extends State<ArchitectDetailScreen> {
                       final title = porto['title'] as String? ?? 'Portofolio';
                       final imgUrl = porto['image_url'] as String?;
                       final style = porto['style'] as String? ?? '';
-                      final area = porto['area'] as double? ?? 0;
+                      final area = porto['area'] as double? ?? 0.0;
 
                       return ArchitectPortfolioCard(
                         title: title,

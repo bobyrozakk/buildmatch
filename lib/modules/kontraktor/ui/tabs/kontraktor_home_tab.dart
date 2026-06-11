@@ -1,3 +1,4 @@
+// lib/modules/kontraktor/ui/tabs/kontraktor_home_tab.dart
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -8,11 +9,11 @@ import 'package:buildmatch/data/models/project_model.dart';
 import 'package:buildmatch/data/models/bid_model.dart';
 import 'package:buildmatch/modules/client/logic/vendor/vendor_cubit.dart';
 import 'package:buildmatch/modules/client/logic/vendor/vendor_state.dart';
-import 'package:buildmatch/modules/client/logic/project/project_cubit.dart';
-import 'package:buildmatch/modules/client/logic/project/project_state.dart';
+import 'package:buildmatch/modules/kontraktor/logic/contractor_project/contractor_project_cubit.dart';
+import 'package:buildmatch/modules/kontraktor/logic/contractor_project/contractor_project_state.dart';
 import 'package:buildmatch/modules/client/logic/chat/chat_cubit.dart';
 import 'package:buildmatch/modules/client/logic/chat/chat_state.dart';
-import 'package:buildmatch/modules/kontraktor/ui/screens/profile_edit/kontraktor_profileEdit_screen.dart';
+import 'package:buildmatch/modules/kontraktor/ui/screens/kontraktor_profile_edit_screen.dart';
 import 'package:buildmatch/modules/kontraktor/ui/screens/kontraktor_detail_proyek_screen.dart';
 import 'package:buildmatch/ui/shared/screens/chat_list_screen.dart';
 import 'package:buildmatch/ui/shared/screens/notification_screen.dart';
@@ -26,7 +27,6 @@ class KontraktorHomeTab extends StatefulWidget {
 }
 
 class _KontraktorHomeTabState extends State<KontraktorHomeTab> {
-
   @override
   void initState() {
     super.initState();
@@ -35,7 +35,7 @@ class _KontraktorHomeTabState extends State<KontraktorHomeTab> {
 
   void _loadData() {
     final vendor = context.read<VendorCubit>();
-    final project = context.read<ProjectCubit>();
+    final project = context.read<ContractorProjectCubit>();
     final userId = Supabase.instance.client.auth.currentUser?.id ?? "";
     
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -53,7 +53,7 @@ class _KontraktorHomeTabState extends State<KontraktorHomeTab> {
 
   Future<void> _refresh() async {
     final vendor = context.read<VendorCubit>();
-    final project = context.read<ProjectCubit>();
+    final project = context.read<ContractorProjectCubit>();
     final userId = Supabase.instance.client.auth.currentUser?.id ?? "";
     
     await Future.wait([
@@ -87,7 +87,6 @@ class _KontraktorHomeTabState extends State<KontraktorHomeTab> {
     widget.onSwitchTab?.call(3);
   }
 
-
   // --- BUILD ---
 
   @override
@@ -100,12 +99,12 @@ class _KontraktorHomeTabState extends State<KontraktorHomeTab> {
           onRefresh: _refresh,
           child: BlocBuilder<VendorCubit, VendorState>(
             builder: (context, vendorState) {
-              return BlocBuilder<ProjectCubit, ProjectState>(
+              return BlocBuilder<ContractorProjectCubit, ContractorProjectState>(
                 builder: (context, projectState) {
                   if (vendorState is VendorLoading ||
                       vendorState is VendorInitial ||
-                      projectState is ProjectLoading ||
-                      projectState is ProjectInitial) {
+                      projectState is ContractorProjectLoading ||
+                      projectState is ContractorProjectInitial) {
                     return const Center(
                       child: CircularProgressIndicator(color: AppColors.primary),
                     );
@@ -121,10 +120,10 @@ class _KontraktorHomeTabState extends State<KontraktorHomeTab> {
                   List<ProjectModel> tenders = [];
                   List<ProjectModel> activeProjects = [];
                   List<BidModel> submittedBids = [];
-                  if (projectState is ProjectLoaded) {
+                  if (projectState is ContractorProjectLoaded) {
                     tenders = projectState.availableProjects;
-                    activeProjects = projectState.projects;
-                    submittedBids = projectState.vendorBids;
+                    activeProjects = projectState.activeProjects;
+                    submittedBids = projectState.myBids;
                   }
 
                   double avgRating = 0.0;
@@ -588,10 +587,13 @@ class _KontraktorHomeTabState extends State<KontraktorHomeTab> {
     if (projects.isEmpty) {
       return _buildEmptyCard('Belum ada proyek berjalan');
     }
-    final list = projects.take(3).toList();
+    final list = projects.where((p) => p.status == 'in_progress').take(3).toList();
+    if (list.isEmpty) {
+      return _buildEmptyCard('Belum ada proyek berjalan');
+    }
     return Column(
       children: list.map((p) {
-        final progress = (p.progressPercent / 100).clamp(0.0, 1.0);
+        final progress = (p.progressPercent / 100.0).clamp(0.0, 1.0);
         return GestureDetector(
           onTap: () => _openProjectDetail(p),
           child: Container(

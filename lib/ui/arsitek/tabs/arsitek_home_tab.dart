@@ -3,8 +3,11 @@ import 'package:provider/provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../core/constants/colors.dart';
 import '../../../data/models/profile_model.dart';
+import '../../../data/models/chat_model.dart';
 import '../../../data/providers/architect_provider.dart';
-import '../../../data/providers/chat_provider.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:buildmatch/modules/client/logic/chat/chat_cubit.dart';
+import 'package:buildmatch/modules/client/logic/chat/chat_state.dart';
 import '../../../data/providers/notification_provider.dart';
 import '../../shared/screens/notification_screen.dart';
 import '../screens/edit_profil_screen.dart';
@@ -45,7 +48,7 @@ class _ArsitekHomeTabState extends State<ArsitekHomeTab> {
           context,
           listen: false,
         ).fetchNotifications();
-        Provider.of<ChatProvider>(context, listen: false).fetchChats();
+        context.read<ChatCubit>().fetchChats();
       }
     });
   }
@@ -156,54 +159,57 @@ class _ArsitekHomeTabState extends State<ArsitekHomeTab> {
           ),
         ),
         const Spacer(),
-        Consumer<ChatProvider>(
-          builder: (context, chat, child) => GestureDetector(
-            onTap: () {
-              widget.onSwitchTab?.call(2);
-            },
-            child: Stack(
-              clipBehavior: Clip.none,
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(
-                    color: AppColors.cardCream,
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: const Icon(
-                    Icons.chat_bubble_outline_rounded,
-                    size: 20,
-                    color: AppColors.primary,
-                  ),
-                ),
-                if (chat.totalUnreadCount > 0)
-                  Positioned(
-                    top: -2,
-                    right: -2,
-                    child: Container(
-                      padding: const EdgeInsets.all(4),
-                      decoration: const BoxDecoration(
-                        color: Colors.red,
-                        shape: BoxShape.circle,
-                      ),
-                      constraints: const BoxConstraints(
-                        minWidth: 16,
-                        minHeight: 16,
-                      ),
-                      child: Text(
-                        '${chat.totalUnreadCount}',
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 9,
-                          fontWeight: FontWeight.bold,
-                        ),
-                        textAlign: TextAlign.center,
-                      ),
+        BlocBuilder<ChatCubit, ChatState>(
+          builder: (context, state) {
+            final unreadCount = state is ChatLoaded ? state.totalUnreadCount : 0;
+            return GestureDetector(
+              onTap: () {
+                widget.onSwitchTab?.call(2);
+              },
+              child: Stack(
+                clipBehavior: Clip.none,
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: AppColors.cardCream,
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: const Icon(
+                      Icons.chat_bubble_outline_rounded,
+                      size: 20,
+                      color: AppColors.primary,
                     ),
                   ),
-              ],
-            ),
-          ),
+                  if (unreadCount > 0)
+                    Positioned(
+                      top: -2,
+                      right: -2,
+                      child: Container(
+                        padding: const EdgeInsets.all(4),
+                        decoration: const BoxDecoration(
+                          color: Colors.red,
+                          shape: BoxShape.circle,
+                        ),
+                        constraints: const BoxConstraints(
+                          minWidth: 16,
+                          minHeight: 16,
+                        ),
+                        child: Text(
+                          '$unreadCount',
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 9,
+                            fontWeight: FontWeight.bold,
+                          ),
+                          textAlign: TextAlign.center,
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+            );
+          },
         ),
         const SizedBox(width: 8),
         Consumer<NotificationProvider>(
@@ -445,9 +451,9 @@ class _ArsitekHomeTabState extends State<ArsitekHomeTab> {
   }
 
   Widget _buildPermintaanKolaborasi() {
-    return Consumer<ChatProvider>(
-      builder: (context, chatProv, child) {
-        final pendingChats = chatProv.pendingChats;
+    return BlocBuilder<ChatCubit, ChatState>(
+      builder: (context, state) {
+        final pendingChats = state is ChatLoaded ? state.pendingChats : <ChatModel>[];
         if (pendingChats.isEmpty) return const SizedBox.shrink();
 
         return Column(
@@ -497,7 +503,7 @@ class _ArsitekHomeTabState extends State<ArsitekHomeTab> {
                     lastMsg,
                     clientAvatar,
                     onAccept: () async {
-                      final ok = await chatProv.acceptChat(chat.id);
+                      final ok = await context.read<ChatCubit>().acceptChat(chat.id);
                       if (ok && mounted) {
                         widget.onSwitchTab?.call(2);
                       }

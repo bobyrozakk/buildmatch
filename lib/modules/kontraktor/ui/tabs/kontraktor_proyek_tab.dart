@@ -1,7 +1,8 @@
+// lib/modules/kontraktor/ui/tabs/kontraktor_proyek_tab.dart
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:buildmatch/modules/client/logic/project/project_cubit.dart';
-import 'package:buildmatch/modules/client/logic/project/project_state.dart';
+import 'package:buildmatch/modules/kontraktor/logic/contractor_project/contractor_project_cubit.dart';
+import 'package:buildmatch/modules/kontraktor/logic/contractor_project/contractor_project_state.dart';
 import 'package:buildmatch/data/models/project_model.dart';
 import 'package:buildmatch/data/models/bid_model.dart';
 import 'package:buildmatch/modules/kontraktor/ui/screens/kontraktor_detail_proyek_screen.dart';
@@ -32,13 +33,13 @@ class _KontraktorProyekTabState extends State<KontraktorProyekTab> {
   }
 
   void _loadData() {
-    final p = context.read<ProjectCubit>();
+    final p = context.read<ContractorProjectCubit>();
     p.fetchAvailableProjects();
     p.fetchVendorBids();
   }
 
   Future<void> _refresh() async {
-    final p = context.read<ProjectCubit>();
+    final p = context.read<ContractorProjectCubit>();
     await Future.wait([p.fetchAvailableProjects(), p.fetchVendorBids()]);
   }
 
@@ -96,17 +97,17 @@ class _KontraktorProyekTabState extends State<KontraktorProyekTab> {
     return Scaffold(
       backgroundColor: AppColors.backgroundCream,
       body: SafeArea(
-        child: BlocBuilder<ProjectCubit, ProjectState>(
+        child: BlocBuilder<ContractorProjectCubit, ContractorProjectState>(
           builder: (context, state) {
-            if (state is ProjectLoading || state is ProjectInitial) {
+            if (state is ContractorProjectLoading || state is ContractorProjectInitial) {
               return const Center(child: CircularProgressIndicator(color: AppColors.primary));
             }
-            if (state is ProjectError) {
+            if (state is ContractorProjectError) {
               return Center(child: Text(state.message));
             }
-            if (state is ProjectLoaded) {
+            if (state is ContractorProjectLoaded) {
               final allProjects = state.availableProjects;
-              final allBids = state.vendorBids;
+              final allBids = state.myBids;
 
               final filteredProjects = _isBidFilter ? const <ProjectModel>[] : _applyProjectFilters(allProjects);
               final filteredBids = _isBidFilter ? _applyBidFilters(allBids) : const <BidModel>[];
@@ -399,7 +400,7 @@ class _KontraktorProyekTabState extends State<KontraktorProyekTab> {
                 ),
                 const SizedBox(width: 8),
                 ElevatedButton(
-                  onPressed: () => _openDetail(p), // Selalu bisa diklik untuk melihat detail/membatalkan
+                  onPressed: () => _openDetail(p),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: hasBid ? Colors.grey.shade400 : AppColors.primary,
                     elevation: 0,
@@ -441,7 +442,6 @@ class _KontraktorProyekTabState extends State<KontraktorProyekTab> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // ── Banner proyek dibatalkan ──
             if (p?.status == 'cancelled')
               Container(
                 width: double.infinity,
@@ -469,7 +469,6 @@ class _KontraktorProyekTabState extends State<KontraktorProyekTab> {
                   ],
                 ),
               ),
-            // Gambar Proyek
             if (p != null)
               ClipRRect(
                 borderRadius: BorderRadius.circular(12),

@@ -66,7 +66,9 @@ class _MainNavScreenState extends State<MainNavScreen> {
         key: UniqueKey(),
         initialTab: _mitraInitialTab,
       ),
-      const ConsultasiTab(), // Konsultasi: Inbox + Arsitek dalam 1 tab
+      ConsultasiTab(
+        onSwitchTab: _handleSwitchTab,
+      ), // Konsultasi: Inbox + Arsitek dalam 1 tab
       ProgressTab(
         onSwitchTab: _handleSwitchTab,
       ),

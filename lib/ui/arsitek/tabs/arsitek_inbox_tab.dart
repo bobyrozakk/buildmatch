@@ -4,7 +4,9 @@ import 'package:intl/intl.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'dart:convert';
 import '../../../core/constants/colors.dart';
-import '../../../data/providers/chat_provider.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:buildmatch/modules/client/logic/chat/chat_cubit.dart';
+import 'package:buildmatch/modules/client/logic/chat/chat_state.dart';
 import '../../../data/models/chat_model.dart';
 import '../../../data/providers/notification_provider.dart';
 import '../../shared/screens/notification_screen.dart';
@@ -29,7 +31,7 @@ class _ArsitekInboxTabState extends State<ArsitekInboxTab>
     super.initState();
     _tabController = TabController(length: 2, vsync: this);
     _fetchFuture =
-        Provider.of<ChatProvider>(context, listen: false).fetchChats();
+        context.read<ChatCubit>().fetchChats();
   }
 
   @override
@@ -156,9 +158,9 @@ class _ArsitekInboxTabState extends State<ArsitekInboxTab>
         ],
         bottom: PreferredSize(
           preferredSize: const Size.fromHeight(48),
-          child: Consumer<ChatProvider>(
-            builder: (_, chatProv, __) {
-              final pendingCount = chatProv.pendingChats.length;
+          child: BlocBuilder<ChatCubit, ChatState>(
+            builder: (context, state) {
+              final pendingCount = state is ChatLoaded ? state.pendingChats.length : 0;
               return TabBar(
                 controller: _tabController,
                 labelColor: AppColors.primary,
@@ -252,9 +254,9 @@ class _ArsitekInboxTabState extends State<ArsitekInboxTab>
           ),
         ),
         Expanded(
-          child: Consumer<ChatProvider>(
-            builder: (_, chatProv, __) {
-              var chats = chatProv.chats; // accepted only
+          child: BlocBuilder<ChatCubit, ChatState>(
+            builder: (context, state) {
+              var chats = state is ChatLoaded ? state.chats : <ChatModel>[]; // accepted only
 
               if (_searchQuery.isNotEmpty) {
                 final q = _searchQuery.toLowerCase();
@@ -290,7 +292,7 @@ class _ArsitekInboxTabState extends State<ArsitekInboxTab>
 
               return RefreshIndicator(
                 color: AppColors.primary,
-                onRefresh: () => chatProv.fetchChats(),
+                onRefresh: () => context.read<ChatCubit>().fetchChats(),
                 child: ListView.builder(
                   physics: const BouncingScrollPhysics(),
                   padding:
@@ -306,7 +308,6 @@ class _ArsitekInboxTabState extends State<ArsitekInboxTab>
                       chat: chat,
                       displayName: displayName,
                       displayAvatar: displayAvatar,
-                      chatProv: chatProv,
                     );
                   },
                 ),
@@ -322,7 +323,6 @@ class _ArsitekInboxTabState extends State<ArsitekInboxTab>
     required ChatModel chat,
     required String displayName,
     String? displayAvatar,
-    required ChatProvider chatProv,
   }) {
     final isActive = chat.unreadCount > 0;
 
@@ -339,7 +339,9 @@ class _ArsitekInboxTabState extends State<ArsitekInboxTab>
             ),
           ),
         );
-        chatProv.fetchChats();
+        if (context.mounted) {
+          context.read<ChatCubit>().fetchChats();
+        }
       },
       child: Container(
         margin: const EdgeInsets.only(bottom: 10),
@@ -471,9 +473,9 @@ class _ArsitekInboxTabState extends State<ArsitekInboxTab>
   // ==================== TAB PERMINTAAN (pending chats) ====================
 
   Widget _buildPermintaanTab() {
-    return Consumer<ChatProvider>(
-      builder: (_, chatProv, __) {
-        final pendingChats = chatProv.pendingChats;
+    return BlocBuilder<ChatCubit, ChatState>(
+      builder: (context, state) {
+        final pendingChats = state is ChatLoaded ? state.pendingChats : <ChatModel>[];
 
         if (pendingChats.isEmpty) {
           return Center(
@@ -512,20 +514,20 @@ class _ArsitekInboxTabState extends State<ArsitekInboxTab>
 
         return RefreshIndicator(
           color: AppColors.primary,
-          onRefresh: () => chatProv.fetchChats(),
+          onRefresh: () => context.read<ChatCubit>().fetchChats(),
           child: ListView.builder(
             physics: const BouncingScrollPhysics(),
             padding: const EdgeInsets.fromLTRB(20, 16, 20, 100),
             itemCount: pendingChats.length,
             itemBuilder: (_, i) =>
-                _buildPermintaanCard(pendingChats[i], chatProv),
+                _buildPermintaanCard(pendingChats[i]),
           ),
         );
       },
     );
   }
 
-  Widget _buildPermintaanCard(ChatModel chat, ChatProvider chatProv) {
+  Widget _buildPermintaanCard(ChatModel chat) {
     final clientName = chat.clientName ?? 'Klien';
     final clientAvatar = chat.clientAvatar;
     final lastMsg = chat.lastMessage != null && chat.lastMessage!.isNotEmpty
@@ -677,7 +679,7 @@ class _ArsitekInboxTabState extends State<ArsitekInboxTab>
                       ),
                     );
                     if (ok == true) {
-                      await chatProv.rejectChat(chat.id);
+                      await context.read<ChatCubit>().rejectChat(chat.id);
                     }
                   },
                   icon: const Icon(Icons.close, size: 16),
@@ -696,7 +698,7 @@ class _ArsitekInboxTabState extends State<ArsitekInboxTab>
               Expanded(
                 child: ElevatedButton.icon(
                   onPressed: () async {
-                    final ok = await chatProv.acceptChat(chat.id);
+                    final ok = await context.read<ChatCubit>().acceptChat(chat.id);
                     if (ok && mounted) {
                       // Langsung buka chat room setelah terima
                       Navigator.push(

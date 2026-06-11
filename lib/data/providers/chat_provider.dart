@@ -179,6 +179,11 @@ class ChatProvider extends ChangeNotifier {
   /// Arsitek menolak permintaan chat (hapus chat + messages)
   Future<bool> rejectChat(String chatId) async {
     try {
+      try {
+        await _supabase.from('notifications').delete().eq('chat_id', chatId);
+      } catch (e) {
+        debugPrint('Error deleting notifications for chat reject: $e');
+      }
       await _supabase.from('messages').delete().eq('chat_id', chatId);
       await _supabase.from('chats').delete().eq('id', chatId);
 

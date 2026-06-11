@@ -105,7 +105,7 @@ class KontraktorBidDetailScreen extends StatelessWidget {
                       Icons.account_balance_wallet_outlined,
                       'Budget Klien',
                       AppFormatters.formatRupiah(
-                          project?.budget ?? 0),
+                          project?.budget ?? 0.0),
                     ),
                     const SizedBox(height: 16),
                     _infoTile(

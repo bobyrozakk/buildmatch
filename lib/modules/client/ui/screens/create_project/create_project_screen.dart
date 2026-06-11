@@ -359,8 +359,8 @@ class _CreateProjectScreenState extends State<CreateProjectScreen> {
       return false;
     }
     if (_isCustomLand) {
-      final p = double.tryParse(_customLandPanjangController.text) ?? 0;
-      final l = double.tryParse(_customLandLebarController.text) ?? 0;
+      final p = double.tryParse(_customLandPanjangController.text) ?? 0.0;
+      final l = double.tryParse(_customLandLebarController.text) ?? 0.0;
       if (p <= 0 || l <= 0) {
         _showError('Masukkan panjang dan lebar tanah untuk pilihan Custom');
         return false;

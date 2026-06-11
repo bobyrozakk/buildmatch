@@ -7,7 +7,7 @@ import 'package:buildmatch/data/models/portfolio_model.dart';
 import 'package:buildmatch/data/models/certification_model.dart';
 import 'package:buildmatch/modules/client/logic/vendor/vendor_cubit.dart';
 import 'package:buildmatch/modules/client/logic/vendor/vendor_state.dart';
-import 'package:buildmatch/modules/kontraktor/ui/screens/profile_edit/kontraktor_profileEdit_screen.dart';
+import 'package:buildmatch/modules/kontraktor/ui/screens/kontraktor_profile_edit_screen.dart';
 import 'package:buildmatch/modules/auth/ui/login_screen.dart';
 import 'package:buildmatch/ui/shared/widgets/glass_card.dart';
 import 'package:buildmatch/core/constants/colors.dart';

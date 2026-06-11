@@ -6,7 +6,7 @@ import '../../../core/constants/colors.dart';
 import '../../../data/models/notification_model.dart';
 import '../../../data/providers/notification_provider.dart';
 import '../../../data/providers/project_provider.dart';
-import '../../../data/providers/chat_provider.dart';
+import 'package:buildmatch/modules/client/logic/chat/chat_cubit.dart';
 import 'package:buildmatch/modules/client/ui/screens/project_detail/project_detail_screen.dart';
 import 'chat_detail_screen.dart';
 import 'contractor_chat_detail_screen.dart';
@@ -269,7 +269,7 @@ class _NotificationScreenState extends State<NotificationScreen> {
 
   Future<bool> _openChatFromProjectOrBidNotification(NotificationModel notif) async {
     try {
-      final chatProvider = context.read<ChatProvider>();
+      final chatCubit = context.read<ChatCubit>();
       final userId = _supabase.auth.currentUser?.id;
       if (userId == null) return false;
 
@@ -337,7 +337,7 @@ class _NotificationScreenState extends State<NotificationScreen> {
       }
 
       if (otherUserId != null && otherUserId.isNotEmpty) {
-        final chatId = await chatProvider.getOrCreateChat(
+        final chatId = await chatCubit.getOrCreateChat(
           otherUserId,
           projectId: projectId,
           forceStatus: 'accepted',
