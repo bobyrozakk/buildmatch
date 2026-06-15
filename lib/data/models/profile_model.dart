@@ -15,6 +15,7 @@ class ProfileModel extends Equatable {
   final String? avatarUrl;
   final DateTime? createdAt;
   final double? avgRating;
+  final int? collabCount;
 
   const ProfileModel({
     required this.id,
@@ -23,13 +24,14 @@ class ProfileModel extends Equatable {
     required this.role,
     this.companyName,
     this.npwp,
-    this.nib, // ADDED
+    this.nib,
     this.straNumber,
     this.experienceYears,
     this.isVerified = false,
     this.avatarUrl,
     this.createdAt,
     this.avgRating,
+    this.collabCount = 0,
   });
 
   factory ProfileModel.fromJson(Map<String, dynamic> json) {
@@ -49,6 +51,7 @@ class ProfileModel extends Equatable {
           ? DateTime.tryParse(json['created_at'] as String)
           : null,
       avgRating: (json['avg_rating'] as num?)?.toDouble(),
+      collabCount: json['collab_count'] as int? ?? 0,
     );
   }
 
@@ -65,6 +68,7 @@ class ProfileModel extends Equatable {
       'experience_years': experienceYears,
       'is_verified': isVerified,
       if (avgRating != null) 'avg_rating': avgRating,
+      if (collabCount != null) 'collab_count': collabCount,
     };
   }
 
@@ -82,6 +86,7 @@ class ProfileModel extends Equatable {
     String? avatarUrl,
     DateTime? createdAt,
     double? avgRating,
+    int? collabCount,
   }) {
     return ProfileModel(
       id: id ?? this.id,
@@ -97,6 +102,7 @@ class ProfileModel extends Equatable {
       avatarUrl: avatarUrl ?? this.avatarUrl,
       createdAt: createdAt ?? this.createdAt,
       avgRating: avgRating ?? this.avgRating,
+      collabCount: collabCount ?? this.collabCount,
     );
   }
 
@@ -115,5 +121,6 @@ class ProfileModel extends Equatable {
         avatarUrl,
         createdAt,
         avgRating,
+        collabCount,
       ];
 }

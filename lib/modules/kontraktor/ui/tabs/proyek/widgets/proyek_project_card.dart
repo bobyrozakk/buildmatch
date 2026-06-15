@@ -75,16 +75,16 @@ class ProyekProjectCard extends StatelessWidget {
             Row(
               children: [
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                   decoration: BoxDecoration(color: AppColors.cardCream, borderRadius: BorderRadius.circular(8)),
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      const Icon(Icons.local_offer_rounded, size: 12, color: AppColors.primary),
-                      const SizedBox(width: 4),
+                      const Icon(Icons.local_offer_rounded, size: 14, color: AppColors.primary),
+                      const SizedBox(width: 6),
                       Text(
                         AppFormatters.formatRupiah(project.budget),
-                        style: const TextStyle(color: AppColors.primary, fontSize: 11, fontWeight: FontWeight.bold),
+                        style: const TextStyle(color: AppColors.primary, fontSize: 13, fontWeight: FontWeight.bold),
                       ),
                     ],
                   ),
@@ -140,16 +140,31 @@ class ProyekProjectCard extends StatelessWidget {
                         style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold),
                         overflow: TextOverflow.ellipsis,
                       ),
+                      const SizedBox(height: 4),
+                      Row(
+                        children: [
+                          const Icon(Icons.phone_outlined, size: 11, color: Colors.black45),
+                          const SizedBox(width: 4),
+                          Expanded(
+                            child: Text(
+                              project.clientPhone ?? '-',
+                              style: const TextStyle(fontSize: 10, color: Colors.black54),
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        ],
+                      ),
                       const SizedBox(height: 2),
                       Row(
                         children: [
-                          const Icon(Icons.star_rounded, size: 12, color: Colors.amber),
-                          const SizedBox(width: 2),
-                          const Text('4.9', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600)),
+                          const Icon(Icons.mail_outline_rounded, size: 11, color: Colors.black45),
                           const SizedBox(width: 4),
-                          Text(
-                            '(${project.progressPercent} Proyek)',
-                            style: const TextStyle(fontSize: 11, color: Colors.black54),
+                          Expanded(
+                            child: Text(
+                              project.clientEmail ?? '-',
+                              style: const TextStyle(fontSize: 10, color: Colors.black54),
+                              overflow: TextOverflow.ellipsis,
+                            ),
                           ),
                         ],
                       ),

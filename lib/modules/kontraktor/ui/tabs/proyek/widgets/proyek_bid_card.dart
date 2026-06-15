@@ -157,7 +157,7 @@ class ProyekBidCard extends StatelessWidget {
                       const SizedBox(height: 2),
                       Text(
                         AppFormatters.formatRupiah(p.budget),
-                        style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Colors.black87),
+                        style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.black87),
                       ),
                     ],
                   ),

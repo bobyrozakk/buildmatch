@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:url_launcher/url_launcher.dart';
 import 'package:buildmatch/core/constants/colors.dart';
 import 'package:buildmatch/core/utils/formatters.dart';
 import 'package:buildmatch/data/models/project_model.dart';
@@ -88,6 +89,17 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
     setState(() => _loadBids());
   }
 
+  Future<void> _openUrl(BuildContext context, String url) async {
+    final uri = Uri.tryParse(url);
+    if (uri == null) return;
+    final ok = await launchUrl(uri, mode: LaunchMode.externalApplication);
+    if (!ok && context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Tidak dapat membuka tautan.')),
+      );
+    }
+  }
+
   // Fungsi Logika Sorting di Sisi Client
   List<BidModel> _sortBids(List<BidModel> bids) {
     final sorted = List<BidModel>.from(bids);
@@ -169,9 +181,68 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
     );
   }
 
+  Widget _buildGridSpecItem(IconData icon, String value, String label) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.02),
+            blurRadius: 6,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: AppColors.primary.withValues(alpha: 0.08),
+              shape: BoxShape.circle,
+            ),
+            child: Icon(icon, color: AppColors.primary, size: 18),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  value,
+                  style: const TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 13,
+                    color: Colors.black87,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  label,
+                  style: const TextStyle(
+                    fontSize: 10,
+                    color: Colors.black45,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final isInProgress = _project.status == 'in_progress';
+    final landDimensions = (_project.landCustomPanjang != null && _project.landCustomLebar != null)
+        ? ' (${_project.landCustomPanjang!.toStringAsFixed(0)}×${_project.landCustomLebar!.toStringAsFixed(0)} m)'
+        : '';
 
     return Scaffold(
       backgroundColor: AppColors.backgroundCream,
@@ -194,87 +265,323 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
         ],
       ),
       body: SingleChildScrollView(
-        padding: const EdgeInsets.all(24),
+        padding: const EdgeInsets.fromLTRB(20, 8, 20, 32),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // ── Banner Proyek ──
-            Container(
-              padding: const EdgeInsets.all(20),
-              decoration: BoxDecoration(
-                color: AppColors.primary,
-                borderRadius: BorderRadius.circular(24),
-                image: _project.imageUrls.isNotEmpty
-                    ? DecorationImage(
-                        image: NetworkImage(_project.imageUrls[0]),
-                        fit: BoxFit.cover,
-                        colorFilter: ColorFilter.mode(
-                          Colors.black.withValues(alpha: 0.4),
-                          BlendMode.darken,
-                        ),
-                      )
-                    : null,
-              ),
-              height: 200,
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.end,
-                crossAxisAlignment: CrossAxisAlignment.start,
+            // ── Banner Proyek Premium ──
+            ClipRRect(
+              borderRadius: BorderRadius.circular(24),
+              child: Stack(
                 children: [
                   Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 8,
-                      vertical: 4,
-                    ),
+                    height: 220,
+                    width: double.infinity,
                     decoration: BoxDecoration(
-                      color: isInProgress ? Colors.blue : Colors.green,
-                      borderRadius: BorderRadius.circular(8),
+                      color: AppColors.primary,
+                      image: _project.imageUrls.isNotEmpty
+                          ? DecorationImage(
+                              image: NetworkImage(_project.imageUrls[0]),
+                              fit: BoxFit.cover,
+                            )
+                          : null,
                     ),
-                    child: Text(
-                      isInProgress ? 'BERJALAN' : 'LIVE TENDER',
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 10,
-                        fontWeight: FontWeight.bold,
+                    child: _project.imageUrls.isEmpty
+                        ? Container(
+                            decoration: const BoxDecoration(
+                              gradient: LinearGradient(
+                                colors: [AppColors.primary, Color(0xFFC84B20)],
+                                begin: Alignment.topLeft,
+                                end: Alignment.bottomRight,
+                              ),
+                            ),
+                            child: Center(
+                              child: Icon(
+                                Icons.home_work_rounded,
+                                size: 80,
+                                color: Colors.white.withValues(alpha: 0.2),
+                              ),
+                            ),
+                          )
+                        : null,
+                  ),
+                  Positioned.fill(
+                    child: Container(
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          colors: [
+                            Colors.black.withValues(alpha: 0.65),
+                            Colors.black.withValues(alpha: 0.2),
+                            Colors.transparent,
+                          ],
+                          begin: Alignment.bottomCenter,
+                          end: Alignment.topCenter,
+                        ),
                       ),
                     ),
                   ),
-                  const SizedBox(height: 8),
-                  Text(
-                    _project.title,
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 20,
-                      fontWeight: FontWeight.bold,
+                  Positioned(
+                    top: 16,
+                    left: 16,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                      decoration: BoxDecoration(
+                        color: isInProgress ? Colors.blue : Colors.green,
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: Text(
+                        isInProgress ? 'PROYEK BERJALAN' : 'TENDER TERBUKA',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 9,
+                          fontWeight: FontWeight.bold,
+                          letterSpacing: 1.0,
+                        ),
+                      ),
                     ),
                   ),
-                  const SizedBox(height: 4),
-                  Text(
-                    'Budget: ${AppFormatters.formatRupiah(_project.budget)}',
-                    style: const TextStyle(color: Colors.white70, fontSize: 13),
+                  Positioned(
+                    bottom: 20,
+                    left: 20,
+                    right: 20,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          _project.title,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 22,
+                            fontWeight: FontWeight.bold,
+                            height: 1.2,
+                          ),
+                        ),
+                        const SizedBox(height: 6),
+                        Row(
+                          children: [
+                            const Icon(Icons.account_balance_wallet_rounded, color: Colors.white70, size: 14),
+                            const SizedBox(width: 6),
+                            Text(
+                              'Budget: ${AppFormatters.formatRupiah(_project.budget)}',
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 13,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
                   ),
                 ],
               ),
             ),
             const SizedBox(height: 24),
 
-            // ── Info Bangunan ──
+            // ── Info Spesifikasi Detail ──
             const Text(
-              'Informasi Bangunan',
-              style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+              'Detail Spesifikasi',
+              style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Colors.black87),
             ),
-            const SizedBox(height: 16),
-            Row(
+            const SizedBox(height: 12),
+            GridView.count(
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              crossAxisCount: 2,
+              childAspectRatio: 2.3,
+              crossAxisSpacing: 12,
+              mainAxisSpacing: 12,
               children: [
-                _buildInfoChip(
-                  Icons.square_foot,
+                _buildGridSpecItem(
+                  Icons.square_foot_rounded,
                   '${_project.buildingSize.toStringAsFixed(0)} m²',
+                  'Luas Bangunan',
                 ),
-                const SizedBox(width: 12),
-                _buildInfoChip(Icons.layers, '${_project.floors} Lantai'),
-                const SizedBox(width: 12),
-                _buildInfoChip(Icons.bed, '${_project.bedrooms} Kamar'),
+                _buildGridSpecItem(
+                  Icons.landscape_rounded,
+                  '${_project.landSize.toStringAsFixed(0)} m²$landDimensions',
+                  'Luas Tanah',
+                ),
+                _buildGridSpecItem(
+                  Icons.layers_rounded,
+                  '${_project.floors} Lantai',
+                  'Tinggi Bangunan',
+                ),
+                _buildGridSpecItem(
+                  Icons.palette_rounded,
+                  _project.houseStyle,
+                  'Gaya Desain',
+                ),
+                _buildGridSpecItem(
+                  Icons.bed_rounded,
+                  '${_project.bedrooms} Kamar',
+                  'Kamar Tidur',
+                ),
+                _buildGridSpecItem(
+                  Icons.bathtub_rounded,
+                  '${_project.bathrooms} Ruang',
+                  'Kamar Mandi',
+                ),
               ],
             ),
+            const SizedBox(height: 24),
+
+            // ── Deskripsi Proyek ──
+            const Text(
+              'Deskripsi Proyek',
+              style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Colors.black87),
+            ),
+            const SizedBox(height: 12),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(16),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.02),
+                    blurRadius: 8,
+                    offset: const Offset(0, 3),
+                  ),
+                ],
+              ),
+              child: Text(
+                _project.description != null && _project.description!.trim().isNotEmpty
+                    ? _project.description!
+                    : 'Tidak ada deskripsi proyek.',
+                style: const TextStyle(
+                  fontSize: 13,
+                  color: Colors.black87,
+                  height: 1.5,
+                ),
+              ),
+            ),
+            const SizedBox(height: 24),
+
+            // ── Lokasi Proyek ──
+            const Text(
+              'Lokasi Proyek',
+              style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Colors.black87),
+            ),
+            const SizedBox(height: 12),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(16),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.02),
+                    blurRadius: 8,
+                    offset: const Offset(0, 3),
+                  ),
+                ],
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Icon(Icons.location_on_rounded, color: AppColors.primary, size: 20),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          _project.location != null && _project.location!.trim().isNotEmpty
+                              ? _project.location!
+                              : 'Lokasi tidak ditentukan.',
+                          style: const TextStyle(
+                            fontSize: 13,
+                            color: Colors.black87,
+                            height: 1.4,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  if (_project.latitude != null && _project.longitude != null) ...[
+                    const SizedBox(height: 12),
+                    OutlinedButton.icon(
+                      onPressed: () {
+                        final mapUrl = 'https://www.google.com/maps/search/?api=1&query=${_project.latitude},${_project.longitude}';
+                        _openUrl(context, mapUrl);
+                      },
+                      icon: const Icon(Icons.map_rounded, size: 14, color: AppColors.primary),
+                      label: const Text(
+                        'Buka Google Maps',
+                        style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: AppColors.primary),
+                      ),
+                      style: OutlinedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                        side: const BorderSide(color: AppColors.primary, width: 1.2),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+
+            // ── Dokumen Referensi PDF ──
+            if (_project.referencePdfUrl != null && _project.referencePdfUrl!.isNotEmpty) ...[
+              const SizedBox(height: 24),
+              const Text(
+                'Dokumen Pendukung',
+                style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Colors.black87),
+              ),
+              const SizedBox(height: 12),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(16),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.02),
+                      blurRadius: 8,
+                      offset: const Offset(0, 3),
+                    ),
+                  ],
+                ),
+                child: Row(
+                  children: [
+                    const Icon(Icons.picture_as_pdf_rounded, color: Colors.redAccent, size: 32),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text(
+                            'PDF Referensi Proyek',
+                            style: TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.black87,
+                            ),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            'Ketuk untuk membuka dokumen referensi',
+                            style: TextStyle(
+                              fontSize: 11,
+                              color: Colors.grey.shade500,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.open_in_new_rounded, color: AppColors.primary),
+                      onPressed: () => _openUrl(context, _project.referencePdfUrl!),
+                    ),
+                  ],
+                ),
+              ),
+            ],
             const SizedBox(height: 32),
 
             // ── Header Daftar Bid + Tombol Filter Berwarna Dinamis ──
@@ -283,7 +590,7 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
                 const Expanded(
                   child: Text(
                     'Daftar Penawaran (Bids)',
-                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                    style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
                   ),
                 ),
                 if (isInProgress)
@@ -457,28 +764,6 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
               },
             ),
             const SizedBox(height: 24),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildInfoChip(IconData icon, String label) {
-    return Expanded(
-      child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 12),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(16),
-        ),
-        child: Column(
-          children: [
-            Icon(icon, color: AppColors.primary, size: 20),
-            const SizedBox(height: 4),
-            Text(
-              label,
-              style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
-            ),
           ],
         ),
       ),

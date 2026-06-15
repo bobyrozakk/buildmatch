@@ -5,12 +5,14 @@ import 'package:buildmatch/ui/shared/widgets/glass_card.dart';
 class ProfileHeader extends StatelessWidget {
   final String name;
   final String email;
+  final String? avatarUrl;
   final VoidCallback onEditPressed;
 
   const ProfileHeader({
     super.key,
     required this.name,
     required this.email,
+    this.avatarUrl,
     required this.onEditPressed,
   });
 
@@ -37,14 +39,17 @@ class ProfileHeader extends StatelessWidget {
                   CircleAvatar(
                     radius: 35,
                     backgroundColor: AppColors.cardCream,
-                    child: Text(
-                      _getInitials(name),
-                      style: const TextStyle(
-                        fontSize: 22,
-                        fontWeight: FontWeight.bold,
-                        color: AppColors.primary,
-                      ),
-                    ),
+                    backgroundImage: avatarUrl != null ? NetworkImage(avatarUrl!) : null,
+                    child: avatarUrl == null
+                        ? Text(
+                            _getInitials(name),
+                            style: const TextStyle(
+                              fontSize: 22,
+                              fontWeight: FontWeight.bold,
+                              color: AppColors.primary,
+                            ),
+                          )
+                        : null,
                   ),
                   const SizedBox(width: 16),
                   Expanded(

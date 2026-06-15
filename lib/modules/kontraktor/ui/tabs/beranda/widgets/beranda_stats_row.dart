@@ -62,8 +62,6 @@ class BerandaStatsRow extends StatelessWidget {
         const SizedBox(width: 10),
         _buildStatItem('$completedCount', 'Selesai'),
         const SizedBox(width: 10),
-        _buildStatItem('Rp 0', 'Pendapatan'),
-        const SizedBox(width: 10),
         _buildStatItemWithIcon(ratingStr, 'Rating', Icons.star_rounded),
       ],
     );

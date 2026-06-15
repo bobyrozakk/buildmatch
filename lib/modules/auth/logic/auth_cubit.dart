@@ -183,7 +183,7 @@ class AuthCubit extends Cubit<AuthState> {
   }
 
   // FUNGSI UPDATE PROFILE
-  Future<bool> updateProfile({required String name, required String phone}) async {
+  Future<bool> updateProfile({required String name, required String phone, File? avatarFile}) async {
     final user = _supabase.auth.currentUser;
     if (user == null) return false;
 
@@ -191,8 +191,29 @@ class AuthCubit extends Cubit<AuthState> {
     emit(const AuthLoading());
 
     try {
-      await _supabase.auth.updateUser(UserAttributes(data: {'name': name, 'phone': phone}));
-      await _supabase.from('profiles').update({'name': name, 'phone': phone}).eq('id', user.id);
+      String? avatarUrl;
+      if (avatarFile != null) {
+        final ext = avatarFile.path.split('.').last;
+        final fileName = 'avatar_${user.id}_${DateTime.now().millisecondsSinceEpoch}.$ext';
+        await _supabase.storage.from('portfolios').upload(fileName, avatarFile);
+        avatarUrl = _supabase.storage.from('portfolios').getPublicUrl(fileName);
+      }
+
+      final Map<String, dynamic> userMetadata = {
+        'name': name,
+        'phone': phone,
+        if (avatarUrl != null) 'avatar_url': avatarUrl,
+      };
+
+      await _supabase.auth.updateUser(UserAttributes(data: userMetadata));
+
+      final Map<String, dynamic> dbProfileData = {
+        'name': name,
+        'phone': phone,
+        if (avatarUrl != null) 'avatar_url': avatarUrl,
+      };
+
+      await _supabase.from('profiles').update(dbProfileData).eq('id', user.id);
       
       // Re-fetch current user and emit updated state
       final updatedUser = _supabase.auth.currentUser;

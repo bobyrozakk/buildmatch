@@ -70,8 +70,11 @@ class _BerandaTabState extends State<BerandaTab> {
 
   // --- ACTIONS ---
 
-  Future<void> _openEditProfile() async {
-    await Navigator.push(context, MaterialPageRoute(builder: (_) => const EditProfileScreen()));
+  Future<void> _openEditProfile({int initialTab = 0}) async {
+    await Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => EditProfileScreen(initialTab: initialTab)),
+    );
     _loadData();
   }
 
@@ -145,12 +148,12 @@ class _BerandaTabState extends State<BerandaTab> {
                       children: [
                         BerandaAppBar(
                           profile: profile,
-                          onAvatarTap: _openEditProfile,
+                          onAvatarTap: () => _openEditProfile(initialTab: 0),
                         ),
                         const SizedBox(height: 20),
                         BerandaWelcomeCard(
                           profile: profile,
-                          onTap: _openEditProfile,
+                          onTap: () => _openEditProfile(initialTab: 1),
                         ),
                         const SizedBox(height: 24),
                         BerandaStatsRow(

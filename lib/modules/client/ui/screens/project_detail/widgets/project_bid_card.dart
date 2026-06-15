@@ -92,16 +92,21 @@ class ProjectBidCard extends StatelessWidget {
               CircleAvatar(
                 radius: 20,
                 backgroundColor: AppColors.primary.withValues(alpha: 0.12),
-                child: Text(
-                  (bid.vendorName?.isNotEmpty == true)
-                      ? bid.vendorName![0].toUpperCase()
-                      : 'K',
-                  style: const TextStyle(
-                    color: AppColors.primary,
-                    fontWeight: FontWeight.bold,
-                    fontSize: 15,
-                  ),
-                ),
+                backgroundImage: bid.vendorAvatarUrl != null && bid.vendorAvatarUrl!.isNotEmpty
+                    ? NetworkImage(bid.vendorAvatarUrl!)
+                    : null,
+                child: bid.vendorAvatarUrl == null || bid.vendorAvatarUrl!.isEmpty
+                    ? Text(
+                        (bid.vendorName?.isNotEmpty == true)
+                            ? bid.vendorName![0].toUpperCase()
+                            : 'K',
+                        style: const TextStyle(
+                          color: AppColors.primary,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 15,
+                        ),
+                      )
+                    : null,
               ),
               const SizedBox(width: 10),
               Expanded(

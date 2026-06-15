@@ -17,6 +17,42 @@ class ArchitectTabContent extends StatefulWidget {
 class _ArchitectTabContentState extends State<ArchitectTabContent> {
   final _searchArchitectController = TextEditingController();
   String _searchArchitect = '';
+  String _sortBy = 'terbaru';
+
+  Widget _buildFilterChip(String label, String key) {
+    final isSelected = _sortBy == key;
+    return GestureDetector(
+      onTap: () => setState(() => _sortBy = key),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+        decoration: BoxDecoration(
+          color: isSelected ? AppColors.primary : Colors.white,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(
+            color: isSelected ? AppColors.primary : Colors.grey.shade300,
+          ),
+          boxShadow: isSelected
+              ? [
+                  BoxShadow(
+                    color: AppColors.primary.withValues(alpha: 0.2),
+                    blurRadius: 6,
+                    offset: const Offset(0, 3),
+                  )
+                ]
+              : null,
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            fontSize: 12,
+            fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
+            color: isSelected ? Colors.white : Colors.black87,
+          ),
+        ),
+      ),
+    );
+  }
 
   @override
   void dispose() {
@@ -44,6 +80,24 @@ class _ArchitectTabContentState extends State<ArchitectTabContent> {
                 contentPadding: EdgeInsets.symmetric(vertical: 15),
               ),
             ),
+          ),
+        ),
+
+        // Filter chips
+        SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          physics: const BouncingScrollPhysics(),
+          padding: const EdgeInsets.fromLTRB(20, 4, 20, 12),
+          child: Row(
+            children: [
+              _buildFilterChip('Terbaru', 'terbaru'),
+              const SizedBox(width: 8),
+              _buildFilterChip('Proyek Terbanyak', 'collab'),
+              const SizedBox(width: 8),
+              _buildFilterChip('Rating Tertinggi', 'rating'),
+              const SizedBox(width: 8),
+              _buildFilterChip('Pengalaman Terlama', 'experience'),
+            ],
           ),
         ),
 
@@ -84,14 +138,35 @@ class _ArchitectTabContentState extends State<ArchitectTabContent> {
                   return _buildEmptyArchitects();
                 }
 
+                final sorted = List<Map<String, dynamic>>.from(filtered);
+                if (_sortBy == 'collab') {
+                  sorted.sort((a, b) {
+                    final countA = a['collabCount'] as int? ?? 0;
+                    final countB = b['collabCount'] as int? ?? 0;
+                    return countB.compareTo(countA);
+                  });
+                } else if (_sortBy == 'rating') {
+                  sorted.sort((a, b) {
+                    final ratingA = (a['profile'] as ProfileModel).avgRating ?? 0.0;
+                    final ratingB = (b['profile'] as ProfileModel).avgRating ?? 0.0;
+                    return ratingB.compareTo(ratingA);
+                  });
+                } else if (_sortBy == 'experience') {
+                  sorted.sort((a, b) {
+                    final expA = int.tryParse((a['profile'] as ProfileModel).experienceYears ?? '0') ?? 0;
+                    final expB = int.tryParse((b['profile'] as ProfileModel).experienceYears ?? '0') ?? 0;
+                    return expB.compareTo(expA);
+                  });
+                }
+
                 return RefreshIndicator(
                   color: AppColors.primary,
                   onRefresh: () async => context.read<ArchitectCubit>().fetchAllArchitects(),
                   child: ListView.builder(
                     physics: const BouncingScrollPhysics(),
                     padding: const EdgeInsets.fromLTRB(20, 10, 20, 100),
-                    itemCount: filtered.length,
-                    itemBuilder: (_, i) => _buildArchitectCard(filtered[i]),
+                    itemCount: sorted.length,
+                    itemBuilder: (_, i) => _buildArchitectCard(sorted[i]),
                   ),
                 );
               }
@@ -202,6 +277,24 @@ class _ArchitectTabContentState extends State<ArchitectTabContent> {
                             const SizedBox(width: 2),
                             Text('$experience thn', style: const TextStyle(fontSize: 11, color: Colors.black45)),
                           ],
+                        ],
+                      ),
+                      const SizedBox(height: 6),
+                      Row(
+                        children: [
+                          const Icon(Icons.star_rounded, color: Colors.amber, size: 14),
+                          const SizedBox(width: 2),
+                          Text(
+                            profile.avgRating?.toStringAsFixed(1) ?? '0.0',
+                            style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.black87),
+                          ),
+                          const SizedBox(width: 10),
+                          const Icon(Icons.chat_bubble_outline_rounded, color: Colors.black38, size: 12),
+                          const SizedBox(width: 2),
+                          Text(
+                            '${profile.collabCount ?? 0} proyek',
+                            style: const TextStyle(fontSize: 11, color: Colors.black54),
+                          ),
                         ],
                       ),
                       if (bio.isNotEmpty) ...[
