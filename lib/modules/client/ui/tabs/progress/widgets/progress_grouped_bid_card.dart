@@ -61,26 +61,61 @@ class ProgressGroupedBidCard extends StatelessWidget {
             CircleAvatar(
               radius: 16,
               backgroundColor: AppColors.primary.withValues(alpha: 0.1),
-              child: Text(
-                initial,
-                style: const TextStyle(
-                  color: AppColors.primary,
-                  fontWeight: FontWeight.bold,
-                  fontSize: 12,
-                ),
-              ),
+              backgroundImage: bid.vendorAvatarUrl != null && bid.vendorAvatarUrl!.isNotEmpty
+                  ? NetworkImage(bid.vendorAvatarUrl!)
+                  : null,
+              child: bid.vendorAvatarUrl == null || bid.vendorAvatarUrl!.isEmpty
+                  ? Text(
+                      initial,
+                      style: const TextStyle(
+                        color: AppColors.primary,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 12,
+                      ),
+                    )
+                  : null,
             ),
             const SizedBox(width: 10),
             Expanded(
-              child: Text(
-                vendorName,
-                style: const TextStyle(
-                  fontWeight: FontWeight.w600,
-                  fontSize: 13,
-                  color: Colors.black87,
-                ),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    vendorName,
+                    style: const TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 13,
+                      color: Colors.black87,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  const SizedBox(height: 2),
+                  Row(
+                    children: [
+                      const Icon(Icons.star_rounded, color: Colors.amber, size: 12),
+                      const SizedBox(width: 2),
+                      Text(
+                        bid.vendorRating?.toStringAsFixed(1) ?? '0.0',
+                        style: const TextStyle(
+                          fontSize: 10,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.black54,
+                        ),
+                      ),
+                      if (bid.vendorExperienceYears != null) ...[
+                        const SizedBox(width: 6),
+                        const Icon(Icons.work_outline_rounded, size: 10, color: Colors.black38),
+                        const SizedBox(width: 2),
+                        Text(
+                          '${bid.vendorExperienceYears} thn',
+                          style: const TextStyle(fontSize: 10, color: Colors.black54),
+                        ),
+                      ],
+                    ],
+                  ),
+                ],
               ),
             ),
             Text(

@@ -78,6 +78,34 @@ class ArchitectCubit extends Cubit<ArchitectState> {
           .eq('role', 'architect')
           .order('created_at', ascending: false);
 
+      // Fetch reviews for ratings
+      final reviewsResponse = await _supabase
+          .from('reviews')
+          .select('vendor_id, rating');
+
+      final Map<String, List<int>> ratingMap = {};
+      for (final row in List<Map<String, dynamic>>.from(reviewsResponse)) {
+        final vid = row['vendor_id'] as String?;
+        final r = row['rating'] as int?;
+        if (vid != null && r != null) {
+          ratingMap.putIfAbsent(vid, () => []).add(r);
+        }
+      }
+
+      // Fetch bids for accepted/completed projects count
+      final bidsResponse = await _supabase
+          .from('bids')
+          .select('vendor_id')
+          .inFilter('status', ['accepted', 'completed']);
+
+      final Map<String, int> projectCounts = {};
+      for (final row in List<Map<String, dynamic>>.from(bidsResponse)) {
+        final vid = row['vendor_id'] as String?;
+        if (vid != null) {
+          projectCounts[vid] = (projectCounts[vid] ?? 0) + 1;
+        }
+      }
+
       final List<Map<String, dynamic>> result = [];
       for (final row in List<Map<String, dynamic>>.from(response)) {
         final profile = ProfileModel.fromJson(row);
@@ -94,11 +122,21 @@ class ArchitectCubit extends Cubit<ArchitectState> {
           } catch (_) {}
         }
 
+        double? avgRating;
+        if (ratingMap.containsKey(profile.id)) {
+          final ratings = ratingMap[profile.id]!;
+          avgRating = ratings.reduce((a, b) => a + b) / ratings.length;
+        }
+
+        final int collabCount = projectCounts[profile.id] ?? 0;
+        final updatedProfile = profile.copyWith(avgRating: avgRating, collabCount: collabCount);
+
         result.add({
-          'profile': profile,
+          'profile': updatedProfile,
           'bio': bio,
           'location': location,
           'specializations': specializations,
+          'collabCount': collabCount,
         });
       }
       _architects = result;

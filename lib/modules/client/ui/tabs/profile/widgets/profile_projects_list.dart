@@ -45,13 +45,15 @@ class ProfileProjectsList extends StatelessWidget {
       );
     }
 
+    final displayProjects = projects.take(3).toList();
+
     return Container(
       decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(20)),
       child: Column(
-        children: List.generate(projects.length * 2 - 1, (index) {
+        children: List.generate(displayProjects.length * 2 - 1, (index) {
           if (index.isOdd) return _divider();
           final itemIndex = index ~/ 2;
-          final data = projects[itemIndex];
+          final data = displayProjects[itemIndex];
           final ProjectModel project = data['project'] as ProjectModel;
           final String contractorName = data['contractorName'] as String;
 

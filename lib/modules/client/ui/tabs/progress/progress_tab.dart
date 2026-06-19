@@ -11,7 +11,6 @@ import 'widgets/progress_architect_bid_card.dart';
 import 'widgets/progress_grouped_bid_card.dart';
 import 'widgets/progress_draft_card.dart';
 import 'widgets/progress_project_card.dart';
-import 'widgets/progress_empty_state.dart';
 
 class ProgressTab extends StatefulWidget {
   final ValueChanged<int>? onSwitchTab;
@@ -247,29 +246,227 @@ class _ProgressTabState extends State<ProgressTab> {
     }
   }
 
+  void _onMulaiProyek() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => const CreateProjectScreen()),
+    ).then((_) => _refresh());
+  }
+
+  Widget _buildEmptyState({
+    required IconData icon,
+    required String title,
+    required String subtitle,
+    String? actionLabel,
+    VoidCallback? onAction,
+  }) {
+    return Center(
+      child: SingleChildScrollView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 80),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Container(
+                padding: const EdgeInsets.all(20),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  shape: BoxShape.circle,
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.02),
+                      blurRadius: 10,
+                      offset: const Offset(0, 4),
+                    ),
+                  ],
+                ),
+                child: Icon(
+                  icon,
+                  size: 60,
+                  color: AppColors.primary.withValues(alpha: 0.4),
+                ),
+              ),
+              const SizedBox(height: 20),
+              Text(
+                title,
+                style: const TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.black87,
+                ),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 8),
+              Text(
+                subtitle,
+                style: const TextStyle(
+                  fontSize: 12,
+                  color: Colors.black54,
+                  height: 1.5,
+                ),
+                textAlign: TextAlign.center,
+              ),
+              if (actionLabel != null && onAction != null) ...[
+                const SizedBox(height: 24),
+                ElevatedButton.icon(
+                  onPressed: onAction,
+                  icon: const Icon(Icons.add, size: 16, color: Colors.white),
+                  label: Text(actionLabel, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.primary,
+                    elevation: 0,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildPembangunanTab(List<ProjectModel> projects, List<BidModel> incomingBids) {
+    if (projects.isEmpty) {
+      return _buildEmptyState(
+        icon: Icons.engineering_outlined,
+        title: 'Belum ada proyek pembangunan',
+        subtitle: 'Buat proyek baru untuk mendapatkan penawaran dari kontraktor terbaik kami.',
+        actionLabel: 'Buat Proyek Baru',
+        onAction: _onMulaiProyek,
+      );
+    }
+
+    return ListView.builder(
+      physics: const AlwaysScrollableScrollPhysics(parent: BouncingScrollPhysics()),
+      padding: const EdgeInsets.fromLTRB(20, 16, 20, 100),
+      itemCount: projects.length,
+      itemBuilder: (context, i) {
+        final item = projects[i];
+
+        if (item.status == 'open') {
+          final projectBids = incomingBids.where((b) => b.projectId == item.id).toList();
+          if (projectBids.isNotEmpty) {
+            return ProgressGroupedBidCard(
+              projectBids: projectBids,
+              project: item,
+              onRefresh: _refresh,
+            );
+          }
+        }
+
+        return ProgressProjectCard(
+          project: item,
+          onTap: () => Navigator.push(
+            context,
+            MaterialPageRoute(builder: (_) => ProjectDetailScreen(project: item)),
+          ).then((_) => _refresh()),
+          onEdit: () => _handleEditProject(item),
+          onCancel: () => _handleCancelProject(item),
+          onDelete: () => _handleDeleteProject(item),
+        );
+      },
+    );
+  }
+
+  Widget _buildDesainTab(List<BidModel> architectBids) {
+    if (architectBids.isEmpty) {
+      return _buildEmptyState(
+        icon: Icons.architecture_rounded,
+        title: 'Belum ada konsultasi desain',
+        subtitle: 'Temukan arsitek terbaik di menu Mitra dan kirimkan ajakan konsultasi.',
+        actionLabel: 'Cari Arsitek',
+        onAction: () => widget.onSwitchTab?.call(1),
+      );
+    }
+
+    return ListView.builder(
+      physics: const AlwaysScrollableScrollPhysics(parent: BouncingScrollPhysics()),
+      padding: const EdgeInsets.fromLTRB(20, 16, 20, 100),
+      itemCount: architectBids.length,
+      itemBuilder: (context, i) {
+        final bid = architectBids[i];
+        return ProgressArchitectBidCard(
+          bid: bid,
+          onRefresh: _refresh,
+        );
+      },
+    );
+  }
+
+  Widget _buildDraftTab(List<ProjectModel> drafts) {
+    if (drafts.isEmpty) {
+      return _buildEmptyState(
+        icon: Icons.bookmark_border_rounded,
+        title: 'Belum ada draft proyek',
+        subtitle: 'Proyek yang Anda simpan sebagai draft akan muncul di sini untuk dilanjutkan.',
+      );
+    }
+
+    return ListView.builder(
+      physics: const AlwaysScrollableScrollPhysics(parent: BouncingScrollPhysics()),
+      padding: const EdgeInsets.fromLTRB(20, 16, 20, 100),
+      itemCount: drafts.length,
+      itemBuilder: (context, i) {
+        final draft = drafts[i];
+        return ProgressDraftCard(
+          draft: draft,
+          onTap: () async {
+            final val = await Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) => CreateProjectScreen(draft: draft),
+              ),
+            );
+            _refresh();
+            if (val == 'route_to_consultation') {
+              widget.onSwitchTab?.call(99);
+            }
+          },
+          onDelete: () => _confirmDeleteDraft(draft),
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: AppColors.backgroundCream,
-      appBar: AppBar(
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        title: const Text(
-          "Proyek Saya",
-          style: TextStyle(color: Colors.black87, fontWeight: FontWeight.bold),
-        ),
-        centerTitle: false,
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.refresh, color: AppColors.primary),
-            onPressed: _refresh,
+    return DefaultTabController(
+      length: 3,
+      child: Scaffold(
+        backgroundColor: AppColors.backgroundCream,
+        appBar: AppBar(
+          backgroundColor: Colors.white,
+          elevation: 0,
+          title: const Text(
+            "Proyek Saya",
+            style: TextStyle(color: Colors.black87, fontWeight: FontWeight.bold, fontSize: 20),
           ),
-        ],
-      ),
-      body: RefreshIndicator(
-        color: AppColors.primary,
-        onRefresh: () async => _refresh(),
-        child: BlocBuilder<ProjectCubit, ProjectState>(
+          centerTitle: false,
+          actions: [
+            IconButton(
+              icon: const Icon(Icons.refresh, color: AppColors.primary),
+              onPressed: _refresh,
+            ),
+          ],
+          bottom: TabBar(
+            labelColor: AppColors.primary,
+            unselectedLabelColor: Colors.black45,
+            indicatorColor: AppColors.primary,
+            indicatorWeight: 3.0,
+            indicatorSize: TabBarIndicatorSize.label,
+            labelStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+            unselectedLabelStyle: const TextStyle(fontWeight: FontWeight.w500, fontSize: 14),
+            tabs: const [
+              Tab(text: 'Pembangunan'),
+              Tab(text: 'Desain'),
+              Tab(text: 'Draft'),
+            ],
+          ),
+        ),
+        body: BlocBuilder<ProjectCubit, ProjectState>(
           builder: (context, state) {
             if (state is ProjectInitial || state is ProjectLoading) {
               return const Center(
@@ -296,168 +493,24 @@ class _ProgressTabState extends State<ProgressTab> {
               final incomingBids = state.incomingBids;
               final architectBids = state.architectBids;
 
-              final List<Widget> listChildren = [];
-
-              // ── SECTION PENAWARAN KONTRAKTOR MASUK (GROUPED PER PROYEK) ──
-              if (incomingBids.isNotEmpty) {
-                final Map<String, List<BidModel>> grouped = {};
-                for (final bid in incomingBids) {
-                  grouped.putIfAbsent(bid.projectId, () => []).add(bid);
-                }
-
-                listChildren.addAll([
-                  Row(
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.all(6),
-                        decoration: BoxDecoration(
-                          color: Colors.orange.withValues(alpha: 0.1),
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: const Icon(Icons.gavel_rounded, size: 16, color: Colors.orange),
-                      ),
-                      const SizedBox(width: 8),
-                      Text(
-                        'Penawaran Kontraktor (${grouped.length} proyek)',
-                        style: const TextStyle(
-                          fontSize: 15,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.black87,
-                        ),
-                      ),
-                    ],
+              return TabBarView(
+                children: [
+                  RefreshIndicator(
+                    color: AppColors.primary,
+                    onRefresh: () async => _refresh(),
+                    child: _buildPembangunanTab(projects, incomingBids),
                   ),
-                  const SizedBox(height: 12),
-                  ...grouped.entries.map((entry) {
-                    final projectBids = entry.value;
-                    final firstBid = projectBids.first;
-                    final project = firstBid.project;
-                    return ProgressGroupedBidCard(
-                      projectBids: projectBids,
-                      project: project,
-                      onRefresh: _refresh,
-                    );
-                  }),
-                  const SizedBox(height: 8),
-                  const Divider(height: 32),
-                ]);
-              }
-
-              // ── SECTION KONSULTASI ARSITEK ──
-              if (architectBids.isNotEmpty) {
-                listChildren.addAll([
-                  Row(
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.all(6),
-                        decoration: BoxDecoration(
-                          color: Colors.purple.withValues(alpha: 0.1),
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: const Icon(Icons.architecture_rounded, size: 16, color: Colors.purple),
-                      ),
-                      const SizedBox(width: 8),
-                      Text(
-                        'Konsultasi Arsitek (${architectBids.length})',
-                        style: const TextStyle(
-                          fontSize: 15,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.black87,
-                        ),
-                      ),
-                    ],
+                  RefreshIndicator(
+                    color: AppColors.primary,
+                    onRefresh: () async => _refresh(),
+                    child: _buildDesainTab(architectBids),
                   ),
-                  const SizedBox(height: 12),
-                  ...architectBids.map(
-                    (bid) => ProgressArchitectBidCard(
-                      bid: bid,
-                      onRefresh: _refresh,
-                    ),
+                  RefreshIndicator(
+                    color: AppColors.primary,
+                    onRefresh: () async => _refresh(),
+                    child: _buildDraftTab(drafts),
                   ),
-                  const SizedBox(height: 8),
-                  const Divider(height: 32),
-                ]);
-              }
-
-              // ── SECTION DRAFT ──
-              if (drafts.isNotEmpty) {
-                listChildren.addAll([
-                  Row(
-                    children: [
-                      const Icon(Icons.bookmark_rounded, size: 16, color: AppColors.primary),
-                      const SizedBox(width: 6),
-                      Text(
-                        'Draft Saya (${drafts.length})',
-                        style: const TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.bold,
-                          color: AppColors.primary,
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 10),
-                  ...drafts.map(
-                    (draft) => ProgressDraftCard(
-                      draft: draft,
-                      onTap: () async {
-                        final val = await Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (_) => CreateProjectScreen(draft: draft),
-                          ),
-                        );
-                        _refresh();
-                        if (val == 'route_to_consultation') {
-                          widget.onSwitchTab?.call(99);
-                        }
-                      },
-                      onDelete: () => _confirmDeleteDraft(draft),
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  const Divider(height: 32),
-                  const Row(
-                    children: [
-                      Icon(Icons.assignment_outlined, size: 16, color: Colors.black54),
-                      SizedBox(width: 6),
-                      Text(
-                        'Proyek Aktif',
-                        style: TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.black54,
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 10),
-                ]);
-              }
-
-              // ── SECTION PROYEK AKTIF ──
-              if (projects.isEmpty) {
-                listChildren.add(const ProgressEmptyState());
-              } else {
-                listChildren.addAll(
-                  projects.map(
-                    (item) => ProgressProjectCard(
-                      project: item,
-                      onTap: () => Navigator.push(
-                        context,
-                        MaterialPageRoute(builder: (_) => ProjectDetailScreen(project: item)),
-                      ).then((_) => _refresh()),
-                      onEdit: () => _handleEditProject(item),
-                      onCancel: () => _handleCancelProject(item),
-                      onDelete: () => _handleDeleteProject(item),
-                    ),
-                  ),
-                );
-              }
-
-              return ListView(
-                padding: const EdgeInsets.all(20),
-                children: listChildren,
+                ],
               );
             }
 

@@ -682,7 +682,7 @@ class ProjectCubit extends Cubit<ProjectState> {
       final bidsResponse = await _supabase
           .from('bids')
           .select(
-            '*, profiles:vendor_id(name, role), projects:project_id(id, title, description, budget, land_size, building_size, floors, bedrooms, bathrooms, house_style, location, latitude, longitude, image_urls, reference_pdf_url, status, progress_percent, created_at, client_id)',
+            '*, profiles:vendor_id(name, role, experience_years, avatar_url), projects:project_id(id, title, description, budget, land_size, building_size, floors, bedrooms, bathrooms, house_style, location, latitude, longitude, image_urls, reference_pdf_url, status, progress_percent, created_at, client_id)',
           )
           .inFilter('project_id', projectIds)
           .eq('status', 'pending')
@@ -693,7 +693,47 @@ class ProjectCubit extends Cubit<ProjectState> {
         final role = profiles?['role'] as String?;
         return role != 'architect';
       }).toList();
-      final list = contractorBids.map((json) => BidModel.fromJson(json)).toList();
+
+      final vendorIds = contractorBids
+          .map((b) => b['vendor_id'] as String?)
+          .whereType<String>()
+          .toSet()
+          .toList();
+
+      Map<String, double> ratingMap = {};
+      if (vendorIds.isNotEmpty) {
+        final reviewsResponse = await _supabase
+            .from('reviews')
+            .select('vendor_id, rating')
+            .inFilter('vendor_id', vendorIds);
+        final reviews = List<Map<String, dynamic>>.from(reviewsResponse);
+        final Map<String, List<int>> ratingGroups = {};
+        for (final r in reviews) {
+          final vid = r['vendor_id'] as String?;
+          final rat = r['rating'] as int?;
+          if (vid != null && rat != null) {
+            ratingGroups.putIfAbsent(vid, () => []).add(rat);
+          }
+        }
+        ratingGroups.forEach((vid, ratings) {
+          ratingMap[vid] = ratings.reduce((a, b) => a + b) / ratings.length;
+        });
+      }
+
+      final enrichedBids = contractorBids.map((b) {
+        final vendorId = b['vendor_id'] as String?;
+        final profiles = Map<String, dynamic>.from(
+          (b['profiles'] as Map?) ?? {},
+        );
+        if (vendorId != null && ratingMap.containsKey(vendorId)) {
+          profiles['avg_rating'] = ratingMap[vendorId];
+        } else {
+          profiles['avg_rating'] = null;
+        }
+        return {...b, 'profiles': profiles};
+      }).toList();
+
+      final list = enrichedBids.map((json) => BidModel.fromJson(json)).toList();
       _incomingBids = list;
       _emitLoaded();
       return list;
@@ -750,7 +790,7 @@ class ProjectCubit extends Cubit<ProjectState> {
       if (projectId.isEmpty) return [];
       final bidsResponse = await _supabase
           .from('bids')
-          .select('*, profiles:vendor_id(name, experience_years, role)')
+          .select('*, profiles:vendor_id(name, experience_years, role, avatar_url)')
           .eq('project_id', projectId)
           .order('created_at', ascending: false);
       final allBids = List<Map<String, dynamic>>.from(bidsResponse);

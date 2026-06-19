@@ -7,6 +7,8 @@ import 'package:buildmatch/modules/auth/logic/auth_cubit.dart';
 import 'package:buildmatch/modules/auth/logic/auth_state.dart';
 import 'package:buildmatch/modules/client/logic/project/project_cubit.dart';
 import 'package:buildmatch/modules/auth/ui/login_screen.dart';
+import 'package:buildmatch/modules/client/ui/screens/profile_edit/profile_edit_screen.dart';
+import 'package:buildmatch/modules/client/ui/screens/create_project/create_project_screen.dart';
 import 'widgets/profile_header.dart';
 import 'widgets/profile_stats_row.dart';
 import 'widgets/profile_projects_list.dart';
@@ -137,63 +139,17 @@ class _ProfileTabState extends State<ProfileTab> {
     }
   }
 
-  void _showEditProfileDialog() {
-    final user = _supabase.auth.currentUser;
-    final nameController = TextEditingController(text: user?.userMetadata?['name'] ?? '');
-    final phoneController = TextEditingController(text: user?.userMetadata?['phone'] ?? '');
-
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: Colors.white,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: const Text("Edit Profil", style: TextStyle(fontWeight: FontWeight.bold, color: AppColors.primary)),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(
-              controller: nameController,
-              decoration: const InputDecoration(labelText: "Nama Lengkap", prefixIcon: Icon(Icons.person_outline)),
-            ),
-            const SizedBox(height: 10),
-            TextField(
-              controller: phoneController,
-              keyboardType: TextInputType.phone,
-              decoration: const InputDecoration(labelText: "No. Telepon", prefixIcon: Icon(Icons.phone_outlined)),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text("Batal", style: TextStyle(color: Colors.black54)),
-          ),
-          ElevatedButton(
-            onPressed: () async {
-              final newName = nameController.text;
-              final newPhone = phoneController.text;
-              Navigator.pop(ctx);
-              if (!mounted) return;
-              setState(() => _isLoading = true);
-              final success = await context.read<AuthCubit>().updateProfile(name: newName, phone: newPhone);
-              if (!mounted) return;
-              if (success) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Profil berhasil diperbarui!'), backgroundColor: Colors.green),
-                );
-              } else {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Gagal update profil.'), backgroundColor: Colors.red),
-                );
-              }
-              if (mounted) setState(() => _isLoading = false);
-            },
-            style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary),
-            child: const Text("Simpan", style: TextStyle(color: Colors.white)),
-          ),
-        ],
+  void _navigateToEditProfile() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => const ClientEditProfileScreen(),
       ),
-    );
+    ).then((updated) {
+      if (updated == true) {
+        _refresh();
+      }
+    });
   }
 
   void _showEditPasswordDialog() {
@@ -255,6 +211,127 @@ class _ProfileTabState extends State<ProfileTab> {
     );
   }
 
+  Widget _buildPromoCard(BuildContext context) {
+    return SliverPadding(
+      padding: const EdgeInsets.fromLTRB(24, 16, 24, 8),
+      sliver: SliverToBoxAdapter(
+        child: Container(
+          decoration: BoxDecoration(
+            gradient: const LinearGradient(
+              colors: [AppColors.primary, Color(0xFFC84B20)],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
+            borderRadius: BorderRadius.circular(20),
+            boxShadow: [
+              BoxShadow(
+                color: AppColors.primary.withValues(alpha: 0.25),
+                blurRadius: 15,
+                offset: const Offset(0, 8),
+              ),
+            ],
+          ),
+          child: Stack(
+            children: [
+              Positioned(
+                right: -20,
+                bottom: -20,
+                child: Opacity(
+                  opacity: 0.15,
+                  child: const Icon(
+                    Icons.construction_rounded,
+                    size: 150,
+                    color: Colors.white,
+                  ),
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.all(24),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withValues(alpha: 0.2),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: const Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.star_rounded, color: Colors.amber, size: 16),
+                          SizedBox(width: 4),
+                          Text(
+                            'Wujudkan Bangunan Impian',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 11,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    const Text(
+                      'Siap Memulai Proyek Baru?',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 20,
+                        fontWeight: FontWeight.bold,
+                        height: 1.2,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    const Text(
+                      'Hubungkan ide Anda dengan Kontraktor & Arsitek profesional terbaik di BuildMatch.',
+                      style: TextStyle(
+                        color: Colors.white70,
+                        fontSize: 12,
+                        height: 1.4,
+                      ),
+                    ),
+                    const SizedBox(height: 20),
+                    ElevatedButton(
+                      onPressed: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => const CreateProjectScreen(),
+                          ),
+                        );
+                      },
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.white,
+                        foregroundColor: AppColors.primary,
+                        elevation: 0,
+                        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                      ),
+                      child: const Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            'Buat Proyek Sekarang',
+                            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                          ),
+                          SizedBox(width: 8),
+                          Icon(Icons.arrow_forward_rounded, size: 16),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   Widget _buildSectionTitle(String title) {
     return SliverPadding(
       padding: const EdgeInsets.fromLTRB(24, 32, 24, 16),
@@ -288,7 +365,8 @@ class _ProfileTabState extends State<ProfileTab> {
                 child: ProfileHeader(
                   name: userName,
                   email: userEmail,
-                  onEditPressed: _showEditProfileDialog,
+                  avatarUrl: user?.userMetadata?['avatar_url'] as String?,
+                  onEditPressed: _navigateToEditProfile,
                 ),
               ),
               SliverPadding(
@@ -311,6 +389,7 @@ class _ProfileTabState extends State<ProfileTab> {
                   ),
                 ),
               ),
+              _buildPromoCard(context),
               _buildSectionTitle("Pengaturan Akun"),
               SliverPadding(
                 padding: const EdgeInsets.symmetric(horizontal: 24),

@@ -8,6 +8,7 @@ import 'package:buildmatch/ui/shared/screens/chat_detail_screen.dart';
 import 'widgets/architect_stat_pill.dart';
 import 'widgets/architect_spec_chip.dart';
 import 'widgets/architect_portfolio_card.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 class ArchitectDetailScreen extends StatefulWidget {
   final Map<String, dynamic> architectData;
@@ -82,14 +83,15 @@ class _ArchitectDetailScreenState extends State<ArchitectDetailScreen> {
   @override
   Widget build(BuildContext context) {
     final profile = widget.architectData['profile'] as ProfileModel;
-    final bio = widget.architectData['bio'] as String? ?? '';
     final location = widget.architectData['location'] as String? ?? '';
     final specs = widget.architectData['specializations'] as Map<String, dynamic>? ?? {};
     final styles = List<String>.from(specs['styles'] ?? []);
     final projectTypes = List<String>.from(specs['project_types'] ?? []);
     final technicalSkills = List<String>.from(specs['technical_skills'] ?? []);
 
-    final displayName = profile.name.isNotEmpty ? profile.name : 'Arsitek';
+    final displayName = profile.name.isNotEmpty
+        ? profile.name
+        : (profile.role == 'vendor' ? 'Kontraktor' : 'Arsitek');
     final studio = profile.companyName?.isNotEmpty == true ? profile.companyName! : '';
     final experience = profile.experienceYears ?? '';
 
@@ -185,16 +187,24 @@ class _ArchitectDetailScreenState extends State<ArchitectDetailScreen> {
                                     ],
                                   ],
                                 ),
-                                if (studio.isNotEmpty)
-                                  Text(studio, style: const TextStyle(color: Colors.white70, fontSize: 13)),
-                                if (location.isNotEmpty)
-                                  Row(
-                                    children: [
-                                      const Icon(Icons.location_on, color: Colors.white54, size: 12),
-                                      const SizedBox(width: 2),
-                                      Text(location, style: const TextStyle(color: Colors.white54, fontSize: 11)),
-                                    ],
-                                  ),
+                                 if (studio.isNotEmpty)
+                                   Text(studio, style: const TextStyle(color: Colors.white70, fontSize: 13)),
+                                 if (profile.role == 'vendor' && profile.nib != null && profile.nib!.isNotEmpty)
+                                   Padding(
+                                     padding: const EdgeInsets.only(top: 2.0),
+                                     child: Text(
+                                       'NIB: ${profile.nib!}',
+                                       style: const TextStyle(color: Colors.white60, fontSize: 12),
+                                     ),
+                                   ),
+                                 if (location.isNotEmpty)
+                                   Row(
+                                     children: [
+                                       const Icon(Icons.location_on, color: Colors.white54, size: 12),
+                                       const SizedBox(width: 2),
+                                       Text(location, style: const TextStyle(color: Colors.white54, fontSize: 11)),
+                                     ],
+                                   ),
                               ],
                             ),
                           ),
@@ -216,59 +226,116 @@ class _ArchitectDetailScreenState extends State<ArchitectDetailScreen> {
                   // Stats row
                   Row(
                     children: [
-                      ArchitectStatPill(
-                        icon: Icons.work_outline_rounded,
-                        value: '$experience thn',
-                        label: 'Pengalaman',
-                      ),
-                      const SizedBox(width: 10),
+                      if (profile.role == 'architect' && experience.isNotEmpty) ...[
+                        ArchitectStatPill(
+                          icon: Icons.work_outline_rounded,
+                          value: '$experience thn',
+                          label: 'Pengalaman',
+                        ),
+                        const SizedBox(width: 10),
+                      ],
                       ArchitectStatPill(
                         icon: Icons.verified_outlined,
                         value: profile.isVerified ? 'Terverifikasi' : 'Belum',
                         label: 'Status',
                       ),
+                      if (profile.role == 'vendor' && profile.phone != null && profile.phone!.isNotEmpty) ...[
+                        const SizedBox(width: 10),
+                        ArchitectStatPill(
+                          icon: Icons.phone_android_rounded,
+                          value: profile.phone!,
+                          label: 'Kontak',
+                        ),
+                      ],
                     ],
                   ),
 
-                  if (bio.isNotEmpty) ...[
-                    const SizedBox(height: 20),
-                    const Text('Tentang Saya', style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold)),
-                    const SizedBox(height: 8),
-                    Text(bio, style: const TextStyle(fontSize: 13, color: Colors.black54, height: 1.5)),
+                  if (profile.role == 'architect') ...[
+                    if (styles.isNotEmpty) ...[
+                      const SizedBox(height: 20),
+                      const Text('Gaya Desain', style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold)),
+                      const SizedBox(height: 10),
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 6,
+                        children: styles.map((s) => ArchitectSpecChip(label: s, color: AppColors.primary)).toList(),
+                      ),
+                    ],
+
+                    if (projectTypes.isNotEmpty) ...[
+                      const SizedBox(height: 20),
+                      const Text('Jenis Proyek', style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold)),
+                      const SizedBox(height: 10),
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 6,
+                        children: projectTypes.map((s) => ArchitectSpecChip(label: s, color: Colors.teal.shade700)).toList(),
+                      ),
+                    ],
+
+                    if (technicalSkills.isNotEmpty) ...[
+                      const SizedBox(height: 20),
+                      const Text('Keahlian Teknis', style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold)),
+                      const SizedBox(height: 10),
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 6,
+                        children: technicalSkills.map((s) => ArchitectSpecChip(label: s, color: Colors.blueGrey.shade700)).toList(),
+                      ),
+                    ],
                   ],
 
-                  if (styles.isNotEmpty) ...[
-                    const SizedBox(height: 20),
-                    const Text('Gaya Desain', style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold)),
-                    const SizedBox(height: 10),
-                    Wrap(
-                      spacing: 8,
-                      runSpacing: 6,
-                      children: styles.map((s) => ArchitectSpecChip(label: s, color: AppColors.primary)).toList(),
-                    ),
-                  ],
+                  // Dynamic Certifications list (Only shown for contractors/vendors)
+                  if (profile.role == 'vendor')
+                    FutureBuilder<List<Map<String, dynamic>>>(
+                      future: Supabase.instance.client
+                          .from('certifications')
+                          .select()
+                          .eq('vendor_id', profile.id)
+                          .then((res) => List<Map<String, dynamic>>.from(res)),
+                      builder: (context, snapshot) {
+                      if (snapshot.connectionState == ConnectionState.waiting) {
+                        return const SizedBox.shrink();
+                      }
+                      final certs = snapshot.data ?? [];
+                      if (certs.isEmpty) return const SizedBox.shrink();
 
-                  if (projectTypes.isNotEmpty) ...[
-                    const SizedBox(height: 20),
-                    const Text('Jenis Proyek', style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold)),
-                    const SizedBox(height: 10),
-                    Wrap(
-                      spacing: 8,
-                      runSpacing: 6,
-                      children: projectTypes.map((s) => ArchitectSpecChip(label: s, color: Colors.teal.shade700)).toList(),
-                    ),
-                  ],
-
-                  if (technicalSkills.isNotEmpty) ...[
-                    const SizedBox(height: 20),
-                    const Text('Keahlian Teknis', style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold)),
-                    const SizedBox(height: 10),
-                    Wrap(
-                      spacing: 8,
-                      runSpacing: 6,
-                      children: technicalSkills.map((s) => ArchitectSpecChip(label: s, color: Colors.blueGrey.shade700)).toList(),
-                    ),
-                  ],
+                      return Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const SizedBox(height: 20),
+                          const Text(
+                            'Sertifikasi / Berkas Pendukung',
+                            style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
+                          ),
+                          const SizedBox(height: 10),
+                          ListView.builder(
+                            shrinkWrap: true,
+                            physics: const NeverScrollableScrollPhysics(),
+                            itemCount: certs.length,
+                            itemBuilder: (context, idx) {
+                              final cert = certs[idx];
+                              return Card(
+                                margin: const EdgeInsets.only(bottom: 8),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                  side: BorderSide(color: Colors.grey.shade100),
+                                ),
+                                elevation: 0,
+                                color: Colors.white,
+                                child: ListTile(
+                                  dense: true,
+                                  leading: const Icon(Icons.workspace_premium_outlined, color: AppColors.primary),
+                                  title: Text(cert['title'] ?? 'Sertifikasi', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                                  subtitle: Text(cert['issuer'] ?? '', style: const TextStyle(fontSize: 11)),
+                                ),
+                              );
+                            },
+                          ),
+                        ],
+                      );
+                    },
+                  ),
 
                   const SizedBox(height: 24),
                   const Text('Portofolio', style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold)),
