@@ -10,6 +10,9 @@ import 'package:buildmatch/ui/shared/widgets/animated_success_dialog.dart';
 
 import 'widgets/progress_bid_card.dart';
 import 'widgets/progress_empty_state.dart';
+import 'widgets/filter_sort_sheet.dart';
+import 'widgets/progress_search_row.dart';
+import 'widgets/progress_filter_chips.dart';
 
 class ProgressTab extends StatefulWidget {
   const ProgressTab({super.key});
@@ -19,14 +22,145 @@ class ProgressTab extends StatefulWidget {
 }
 
 class _ProgressTabState extends State<ProgressTab> {
+  final TextEditingController _searchController = TextEditingController();
+  String _searchQuery = '';
+  String _selectedTab = 'Aktif'; // 'Aktif' | 'Menunggu' | 'Riwayat'
+  String _selectedSort = 'terbaru'; // 'terbaru' | 'terlama' | 'termahal' | 'termurah' | 'progress'
+
+  final List<String> _tabs = const ['Aktif', 'Menunggu', 'Riwayat'];
+
   @override
-  void initState() {
-    super.initState();
-    context.read<ContractorProjectCubit>().fetchVendorBids();
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
   }
 
   Future<void> _refresh() async {
     await context.read<ContractorProjectCubit>().fetchVendorBids();
+  }
+
+  bool _isOldPending(BidModel bid) {
+    return bid.status == 'pending' &&
+        bid.createdAt != null &&
+        DateTime.now().difference(bid.createdAt!).inDays > 7;
+  }
+
+  List<BidModel> _getFilteredAndSortedBids(List<BidModel> rawBids, String selectedTab) {
+    // 1. Filter berdasarkan tab
+    List<BidModel> bids = [];
+    if (selectedTab == 'Aktif') {
+      bids = rawBids.where((bid) => bid.status == 'accepted').toList();
+    } else if (selectedTab == 'Menunggu') {
+      bids = rawBids.where((bid) => bid.status == 'pending' && !_isOldPending(bid)).toList();
+    } else {
+      bids = rawBids.where((bid) => bid.status == 'rejected' || _isOldPending(bid)).toList();
+    }
+
+    // 2. Filter berdasarkan kata kunci pencarian (Search Query)
+    if (_searchQuery.isNotEmpty) {
+      bids = bids.where((bid) {
+        final title = bid.project?.title.toLowerCase() ?? '';
+        return title.contains(_searchQuery.toLowerCase());
+      }).toList();
+    }
+
+    // 3. Urutkan berdasarkan kriteria sorting
+    bids.sort((a, b) {
+      if (_selectedSort == 'terbaru') {
+        final dateA = a.createdAt ?? DateTime(1970);
+        final dateB = b.createdAt ?? DateTime(1970);
+        return dateB.compareTo(dateA);
+      } else if (_selectedSort == 'terlama') {
+        final dateA = a.createdAt ?? DateTime(1970);
+        final dateB = b.createdAt ?? DateTime(1970);
+        return dateA.compareTo(dateB);
+      } else if (_selectedSort == 'termahal') {
+        return b.price.compareTo(a.price);
+      } else if (_selectedSort == 'termurah') {
+        return a.price.compareTo(b.price);
+      } else if (_selectedSort == 'progress') {
+        final progressA = a.project?.progressPercent ?? 0;
+        final progressB = b.project?.progressPercent ?? 0;
+        return progressB.compareTo(progressA);
+      }
+      return 0;
+    });
+
+    return bids;
+  }
+
+  void _openFilterSortSheet() {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (ctx) {
+        return FilterSortSheet(
+          selectedSort: _selectedSort,
+          showProgressSort: _selectedTab == 'Aktif', // Hanya tampilkan sorting progress pada tab Aktif
+          onSortApplied: (newSort) {
+            setState(() {
+              _selectedSort = newSort;
+            });
+          },
+        );
+      },
+    );
+  }
+
+  Widget _buildTabContent(List<BidModel> rawBids, String selectedTab) {
+    final list = _getFilteredAndSortedBids(rawBids, selectedTab);
+
+    if (list.isEmpty) {
+      if (_searchQuery.isNotEmpty) {
+        return ProgressEmptyState(
+          title: 'Tidak Ditemukan',
+          description: 'Tidak ada proyek dengan kata kunci "$_searchQuery" di tab ini.',
+          icon: Icons.search_off_rounded,
+        );
+      }
+
+      if (selectedTab == 'Aktif') {
+        return const ProgressEmptyState(
+          title: 'Belum Ada Proyek Aktif',
+          description: 'Penawaran Anda belum ada yang diterima. Telusuri proyek baru dan mulailah mengajukan bid!',
+          icon: Icons.engineering_rounded,
+        );
+      } else if (selectedTab == 'Menunggu') {
+        return const ProgressEmptyState(
+          title: 'Tidak Ada Penawaran Aktif',
+          description: 'Tidak ada penawaran proyek yang sedang menunggu persetujuan klien saat ini.',
+          icon: Icons.hourglass_empty_rounded,
+        );
+      } else {
+        return const ProgressEmptyState(
+          title: 'Riwayat Kosong',
+          description: 'Anda tidak memiliki riwayat penawaran yang ditolak atau kedaluwarsa.',
+          icon: Icons.history_toggle_off_rounded,
+        );
+      }
+    }
+
+    return ListView.builder(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      itemCount: list.length,
+      itemBuilder: (_, i) {
+        final bid = list[i];
+        return ProgressBidCard(
+          bid: bid,
+          onTap: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) => BidDetailScreen(bid: bid),
+              ),
+            );
+          },
+          onCancelTap: () => _confirmCancelBid(bid.id ?? ''),
+          onDeleteTap: () => _confirmDeleteBid(bid.id ?? ''),
+        );
+      },
+    );
   }
 
   @override
@@ -34,11 +168,11 @@ class _ProgressTabState extends State<ProgressTab> {
     return Scaffold(
       backgroundColor: AppColors.backgroundCream,
       appBar: AppBar(
-        backgroundColor: Colors.transparent,
+        backgroundColor: Colors.white,
         elevation: 0,
         title: const Text(
           'Progress Proyek',
-          style: TextStyle(color: Colors.black87, fontWeight: FontWeight.bold),
+          style: TextStyle(color: Colors.black87, fontWeight: FontWeight.bold, fontSize: 20),
         ),
         actions: [
           IconButton(
@@ -55,44 +189,70 @@ class _ProgressTabState extends State<ProgressTab> {
             );
           }
           if (state is ContractorProjectError) {
-            return Center(child: Text(state.message));
+            return Center(
+              child: Padding(
+                padding: const EdgeInsets.all(24),
+                child: Text(
+                  state.message,
+                  style: const TextStyle(color: Colors.red),
+                  textAlign: TextAlign.center,
+                ),
+              ),
+            );
           }
           if (state is ContractorProjectLoaded) {
             final allBids = state.myBids;
-            // Urutkan: accepted dulu, lalu pending, lalu rejected/diabaikan
-            final bids = [...allBids]..sort((a, b) {
-              int rank(BidModel bid) {
-                if (bid.status == 'accepted') return 0;
-                final isOld = bid.status == 'pending' && bid.createdAt != null && DateTime.now().difference(bid.createdAt!).inDays > 7;
-                if (bid.status == 'pending' && !isOld) return 1;
-                return 2;
-              }
-              return rank(a).compareTo(rank(b));
-            });
 
-            if (bids.isEmpty) {
-              return const ProgressEmptyState();
-            }
+            // Hitung jumlah item per kategori tab secara dinamis
+            final activeCount = allBids.where((bid) => bid.status == 'accepted').length;
+            final pendingCount = allBids.where((bid) => bid.status == 'pending' && !_isOldPending(bid)).length;
+            final historyCount = allBids.where((bid) => bid.status == 'rejected' || _isOldPending(bid)).length;
 
-            return ListView.builder(
-              padding: const EdgeInsets.all(20),
-              itemCount: bids.length,
-              itemBuilder: (_, i) {
-                final bid = bids[i];
-                return ProgressBidCard(
-                  bid: bid,
-                  onTap: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) => BidDetailScreen(bid: bid),
-                      ),
-                    );
+            final tabCounts = {
+              'Aktif': activeCount,
+              'Menunggu': pendingCount,
+              'Riwayat': historyCount,
+            };
+
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                // 1. Bar Pencarian & Filter Urutan
+                ProgressSearchRow(
+                  controller: _searchController,
+                  searchQuery: _searchQuery,
+                  onSearchChanged: (val) {
+                    setState(() {
+                      _searchQuery = val;
+                    });
                   },
-                  onCancelTap: () => _confirmCancelBid(context, bid.id ?? ''),
-                  onDeleteTap: () => _confirmDeleteBid(context, bid.id ?? ''),
-                );
-              },
+                  onSortTap: _openFilterSortSheet,
+                  isSortActive: _selectedSort != 'terbaru',
+                ),
+
+                // 2. Kategori Tab Chips Kecil di bawah Search Bar
+                ProgressFilterChips(
+                  tabs: _tabs,
+                  selectedTab: _selectedTab,
+                  tabCounts: tabCounts,
+                  onTabSelected: (tab) {
+                    setState(() {
+                      _selectedTab = tab;
+                      // Reset sort ke default jika tab berpindah dan sort saat ini adalah 'progress' tapi bukan tab Aktif
+                      if (tab != 'Aktif' && _selectedSort == 'progress') {
+                        _selectedSort = 'terbaru';
+                      }
+                    });
+                  },
+                ),
+
+                const SizedBox(height: 4),
+
+                // 3. Konten Daftar Proyek
+                Expanded(
+                  child: _buildTabContent(allBids, _selectedTab),
+                ),
+              ],
             );
           }
           return const SizedBox.shrink();
@@ -101,7 +261,7 @@ class _ProgressTabState extends State<ProgressTab> {
     );
   }
 
-  Future<void> _confirmDeleteBid(BuildContext context, String bidId) async {
+  Future<void> _confirmDeleteBid(String bidId) async {
     if (bidId.isEmpty) return;
     
     final confirm = await showDialog<bool>(
@@ -172,7 +332,7 @@ class _ProgressTabState extends State<ProgressTab> {
     }
   }
 
-  Future<void> _confirmCancelBid(BuildContext context, String bidId) async {
+  Future<void> _confirmCancelBid(String bidId) async {
     if (bidId.isEmpty) return;
     
     final confirm = await showDialog<bool>(

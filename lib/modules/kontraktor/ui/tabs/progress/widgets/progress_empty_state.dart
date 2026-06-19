@@ -2,7 +2,16 @@ import 'package:flutter/material.dart';
 import 'package:buildmatch/core/constants/colors.dart';
 
 class ProgressEmptyState extends StatelessWidget {
-  const ProgressEmptyState({super.key});
+  final String title;
+  final String description;
+  final IconData icon;
+
+  const ProgressEmptyState({
+    super.key,
+    this.title = 'Belum Ada Aktivitas Proyek',
+    this.description = 'Ajukan penawaran ke proyek klien agar progress pekerjaan muncul di sini.',
+    this.icon = Icons.timeline_rounded,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -18,42 +27,31 @@ class ProgressEmptyState extends StatelessWidget {
               decoration: BoxDecoration(
                 color: Colors.white,
                 borderRadius: BorderRadius.circular(30),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.02),
+                    blurRadius: 10,
+                    offset: const Offset(0, 4),
+                  ),
+                ],
               ),
-              child: const Icon(
-                Icons.timeline_rounded,
+              child: Icon(
+                icon,
                 size: 60,
                 color: AppColors.primary,
               ),
             ),
             const SizedBox(height: 24),
-            const Text(
-              'Belum Ada Aktivitas Proyek',
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+            Text(
+              title,
+              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+              textAlign: TextAlign.center,
             ),
             const SizedBox(height: 8),
-            const Text(
-              'Ajukan penawaran ke proyek klien agar progress pekerjaan muncul di sini.',
+            Text(
+              description,
               textAlign: TextAlign.center,
-              style: TextStyle(color: Colors.black54, height: 1.5),
-            ),
-            const SizedBox(height: 24),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(18),
-              ),
-              child: const Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(Icons.lightbulb_outline, color: Colors.amber),
-                  SizedBox(width: 10),
-                  Text(
-                    'Cari proyek dan mulai bidding',
-                    style: TextStyle(fontWeight: FontWeight.w600),
-                  ),
-                ],
-              ),
+              style: const TextStyle(color: Colors.black54, height: 1.5, fontSize: 13),
             ),
           ],
         ),

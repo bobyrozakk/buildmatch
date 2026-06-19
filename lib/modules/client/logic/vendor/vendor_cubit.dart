@@ -48,46 +48,119 @@ class VendorCubit extends Cubit<VendorState> {
 
       final Map<String, List<int>> vendorRatings = {};
       for (final row in List<Map<String, dynamic>>.from(reviewsResponse)) {
-        final vid = row['vendor_id'] as String;
+        final vid = row['vendor_id'] as String?;
+        if (vid == null) continue;
         final r = row['rating'] as int? ?? 0;
         vendorRatings.putIfAbsent(vid, () => []).add(r);
       }
 
-      if (vendorRatings.isEmpty) return [];
+      final List<Map<String, dynamic>> result = [];
 
-      final ranked = vendorRatings.entries.map((e) {
-        final avg = e.value.reduce((a, b) => a + b) / e.value.length;
-        return {'vendor_id': e.key, 'avgRating': avg, 'reviewCount': e.value.length};
-      }).toList()
-        ..sort((a, b) => (b['avgRating'] as double).compareTo(a['avgRating'] as double));
+      if (vendorRatings.isNotEmpty) {
+        final ranked = vendorRatings.entries.map((e) {
+          final avg = e.value.reduce((a, b) => a + b) / e.value.length;
+          return {'vendor_id': e.key, 'avgRating': avg, 'reviewCount': e.value.length};
+        }).toList()
+          ..sort((a, b) => (b['avgRating'] as double).compareTo(a['avgRating'] as double));
 
-      final topIds = ranked.take(limit).toList();
+        final List<String> topIds = ranked.map((e) => e['vendor_id'] as String).toList();
+        if (topIds.isNotEmpty) {
+          final profilesResponse = await _supabase
+              .from('profiles')
+              .select('*')
+              .inFilter('id', topIds)
+              .inFilter('role', ['vendor', 'architect']);
 
-      final profilesResponse = await _supabase
-          .from('profiles')
-          .select('*')
-          .inFilter('id', topIds.map((e) => e['vendor_id'] as String).toList());
+          // Fetch bids for accepted/completed projects count for topIds
+          final bidsResponse = await _supabase
+              .from('bids')
+              .select('vendor_id')
+              .inFilter('vendor_id', topIds)
+              .inFilter('status', ['accepted', 'completed']);
 
-      final profileMap = <String, ProfileModel>{};
-      for (final p in List<Map<String, dynamic>>.from(profilesResponse)) {
-        final profile = ProfileModel.fromJson(p);
-        profileMap[profile.id] = profile;
-      }
+          final Map<String, int> projectCounts = {};
+          for (final row in List<Map<String, dynamic>>.from(bidsResponse)) {
+            final vid = row['vendor_id'] as String?;
+            if (vid != null) {
+              projectCounts[vid] = (projectCounts[vid] ?? 0) + 1;
+            }
+          }
 
-      final result = <Map<String, dynamic>>[];
-      for (final item in topIds) {
-        final vid = item['vendor_id'] as String;
-        if (profileMap.containsKey(vid)) {
-          result.add({
-            'profile': profileMap[vid]!,
-            'avgRating': item['avgRating'] as double,
-            'reviewCount': item['reviewCount'] as int,
-          });
+          final profileMap = <String, ProfileModel>{};
+          for (final p in List<Map<String, dynamic>>.from(profilesResponse)) {
+            var profile = ProfileModel.fromJson(p);
+            final int collabCount = projectCounts[profile.id] ?? 0;
+            profile = profile.copyWith(collabCount: collabCount);
+            profileMap[profile.id] = profile;
+          }
+
+          for (final item in ranked) {
+            final vid = item['vendor_id'] as String;
+            if (profileMap.containsKey(vid)) {
+              var prof = profileMap[vid]!;
+              prof = prof.copyWith(avgRating: item['avgRating'] as double);
+              result.add({
+                'profile': prof,
+                'avgRating': item['avgRating'] as double,
+                'reviewCount': item['reviewCount'] as int,
+              });
+            }
+          }
         }
       }
-      _topVendors = result;
+
+      // If we don't have enough top partners, fill with other active vendors/architects as fallback
+      if (result.length < limit) {
+        final existingIds = result.map((e) => (e['profile'] as ProfileModel).id).toList();
+        
+        final fallbackResponse = await _supabase
+            .from('profiles')
+            .select('*')
+            .inFilter('role', ['vendor', 'architect'])
+            .order('created_at', ascending: false)
+            .limit(limit * 2);
+
+        final List<String> fallbackIds = List<Map<String, dynamic>>.from(fallbackResponse)
+            .map((e) => e['id'] as String)
+            .toList();
+
+        final Map<String, int> fallbackProjectCounts = {};
+        if (fallbackIds.isNotEmpty) {
+          final fallbackBidsResponse = await _supabase
+              .from('bids')
+              .select('vendor_id')
+              .inFilter('vendor_id', fallbackIds)
+              .inFilter('status', ['accepted', 'completed']);
+
+          for (final row in List<Map<String, dynamic>>.from(fallbackBidsResponse)) {
+            final vid = row['vendor_id'] as String?;
+            if (vid != null) {
+              fallbackProjectCounts[vid] = (fallbackProjectCounts[vid] ?? 0) + 1;
+            }
+          }
+        }
+
+        for (final p in List<Map<String, dynamic>>.from(fallbackResponse)) {
+          if (result.length >= limit) break;
+          
+          var profile = ProfileModel.fromJson(p);
+          if (!existingIds.contains(profile.id)) {
+            final int collabCount = fallbackProjectCounts[profile.id] ?? 0;
+            profile = profile.copyWith(collabCount: collabCount);
+            result.add({
+              'profile': profile,
+              'avgRating': 0.0,
+              'reviewCount': 0,
+            });
+            existingIds.add(profile.id);
+          }
+        }
+      }
+
+      final finalResult = result.take(limit).toList();
+      _topVendors = finalResult;
       _emitLoaded();
-      return result;
+      return finalResult;
     } catch (e) {
       debugPrint('Error fetch top vendors: $e');
       return [];
@@ -119,6 +192,20 @@ class VendorCubit extends Cubit<VendorState> {
         }
       }
 
+      // Fetch bids for accepted/completed projects count
+      final bidsResponse = await _supabase
+          .from('bids')
+          .select('vendor_id')
+          .inFilter('status', ['accepted', 'completed']);
+
+      final Map<String, int> projectCounts = {};
+      for (final row in List<Map<String, dynamic>>.from(bidsResponse)) {
+        final vid = row['vendor_id'] as String?;
+        if (vid != null) {
+          projectCounts[vid] = (projectCounts[vid] ?? 0) + 1;
+        }
+      }
+
       final list = List<Map<String, dynamic>>.from(response).map((e) {
         final id = e['id'] as String;
         double? avgRating;
@@ -126,7 +213,10 @@ class VendorCubit extends Cubit<VendorState> {
           final ratings = ratingMap[id]!;
           avgRating = ratings.reduce((a, b) => a + b) / ratings.length;
         }
-        return ProfileModel.fromJson(e).copyWith(avgRating: avgRating);
+        return ProfileModel.fromJson(e).copyWith(
+          avgRating: avgRating,
+          collabCount: projectCounts[id] ?? 0,
+        );
       }).toList();
 
       _vendors = list;
@@ -170,6 +260,9 @@ class VendorCubit extends Cubit<VendorState> {
   Future<bool> updateVendorProfile({
     required String name,
     required String companyName,
+    String? nib,
+    String? npwp,
+    File? avatarFile,
   }) async {
     _isLoading = true;
     emit(const VendorLoading());
@@ -180,12 +273,25 @@ class VendorCubit extends Cubit<VendorState> {
         throw Exception('Belum login');
       }
 
+      String? avatarUrl;
+      if (avatarFile != null) {
+        final ext = avatarFile.path.split('.').last;
+        final fileName = 'avatar_${userId}_${DateTime.now().millisecondsSinceEpoch}.$ext';
+        await _supabase.storage.from('portfolios').upload(fileName, avatarFile);
+        avatarUrl = _supabase.storage.from('portfolios').getPublicUrl(fileName);
+      }
+
+      final updateData = {
+        'name': name,
+        'company_name': companyName,
+        if (nib != null) 'nib': nib,
+        if (npwp != null) 'npwp': npwp,
+        if (avatarUrl != null) 'avatar_url': avatarUrl,
+      };
+
       await _supabase
           .from('profiles')
-          .update({
-            'name': name,
-            'company_name': companyName,
-          })
+          .update(updateData)
           .eq('id', userId);
 
       await _supabase.auth.updateUser(
@@ -193,6 +299,7 @@ class VendorCubit extends Cubit<VendorState> {
           data: {
             'name': name,
             'company_name': companyName,
+            if (avatarUrl != null) 'avatar_url': avatarUrl,
           },
         ),
       );

@@ -20,6 +20,8 @@ class ProjectModel {
   final int progressPercent;
   final DateTime? createdAt;
   final String? clientName; // Joined from profiles table
+  final String? clientPhone; // Joined client phone
+  final String? clientEmail; // Client email (joined or generated)
   final double? landCustomPanjang; // Dimensi custom tanah: panjang (meter)
   final double? landCustomLebar;   // Dimensi custom tanah: lebar (meter)
 
@@ -44,6 +46,8 @@ class ProjectModel {
     this.progressPercent = 0,
     this.createdAt,
     this.clientName,
+    this.clientPhone,
+    this.clientEmail,
     this.landCustomPanjang,
     this.landCustomLebar,
   });
@@ -53,10 +57,16 @@ class ProjectModel {
   // ────────────────────────────────────────────────────
 
   factory ProjectModel.fromJson(Map<String, dynamic> json) {
-    // Handle joined profiles data for client name
+    // Handle joined profiles data for client name & contact
     String? clientName;
+    String? clientPhone;
+    String? clientEmail;
     if (json['profiles'] is Map) {
-      clientName = (json['profiles'] as Map)['name'] as String?;
+      final profilesMap = json['profiles'] as Map;
+      clientName = profilesMap['name'] as String?;
+      clientPhone = profilesMap['phone'] as String?;
+      clientEmail = profilesMap['email'] as String? ?? 
+          (clientName != null ? '${clientName.toLowerCase().replaceAll(RegExp(r'\s+'), '')}@gmail.com' : null);
     }
 
     return ProjectModel(
@@ -84,6 +94,8 @@ class ProjectModel {
           ? DateTime.tryParse(json['created_at'] as String)
           : null,
       clientName: clientName,
+      clientPhone: clientPhone,
+      clientEmail: clientEmail,
       landCustomPanjang: (json['land_custom_panjang'] as num?)?.toDouble(),
       landCustomLebar: (json['land_custom_lebar'] as num?)?.toDouble(),
     );
@@ -144,6 +156,8 @@ class ProjectModel {
     int? progressPercent,
     DateTime? createdAt,
     String? clientName,
+    String? clientPhone,
+    String? clientEmail,
     double? landCustomPanjang,
     double? landCustomLebar,
   }) {
@@ -168,6 +182,8 @@ class ProjectModel {
       progressPercent: progressPercent ?? this.progressPercent,
       createdAt: createdAt ?? this.createdAt,
       clientName: clientName ?? this.clientName,
+      clientPhone: clientPhone ?? this.clientPhone,
+      clientEmail: clientEmail ?? this.clientEmail,
       landCustomPanjang: landCustomPanjang ?? this.landCustomPanjang,
       landCustomLebar: landCustomLebar ?? this.landCustomLebar,
     );

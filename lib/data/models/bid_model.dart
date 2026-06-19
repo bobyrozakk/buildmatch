@@ -12,6 +12,7 @@ class BidModel extends Equatable {
   final DateTime? createdAt;
   final ProjectModel? project; // joined project (optional)
   final String? vendorName;    // joined from profiles table
+  final String? vendorAvatarUrl; // joined from profiles table
 
   // ── Field lama ──
   final int? estimationMonths;
@@ -31,6 +32,7 @@ class BidModel extends Equatable {
     this.createdAt,
     this.project,
     this.vendorName,
+    this.vendorAvatarUrl,
     this.estimationMonths,
     this.rabUrl,
     this.vendorExperienceYears,
@@ -41,10 +43,12 @@ class BidModel extends Equatable {
     String? vendorName;
     int? experienceYears;
     double? vendorRating;
+    String? vendorAvatarUrl;
 
     if (json['profiles'] is Map) {
       final profile = json['profiles'] as Map<String, dynamic>;
       vendorName = profile['name'] as String?;
+      vendorAvatarUrl = profile['avatar_url'] as String?;
 
       // profiles.experience_years bertipe text di DB -> parse aman ke int
       final expRaw = profile['experience_years'];
@@ -73,6 +77,7 @@ class BidModel extends Equatable {
           ? ProjectModel.fromJson(Map<String, dynamic>.from(json['projects'] as Map))
           : null,
       vendorName: vendorName,
+      vendorAvatarUrl: vendorAvatarUrl,
       estimationMonths: json['estimation_months'] as int?,
       rabUrl: json['rab_url'] as String?,
       vendorExperienceYears: experienceYears,
@@ -90,6 +95,7 @@ class BidModel extends Equatable {
     DateTime? createdAt,
     ProjectModel? project,
     String? vendorName,
+    String? vendorAvatarUrl,
     int? estimationMonths,
     String? rabUrl,
     int? vendorExperienceYears,
@@ -105,6 +111,7 @@ class BidModel extends Equatable {
       createdAt: createdAt ?? this.createdAt,
       project: project ?? this.project,
       vendorName: vendorName ?? this.vendorName,
+      vendorAvatarUrl: vendorAvatarUrl ?? this.vendorAvatarUrl,
       estimationMonths: estimationMonths ?? this.estimationMonths,
       rabUrl: rabUrl ?? this.rabUrl,
       vendorExperienceYears: vendorExperienceYears ?? this.vendorExperienceYears,
@@ -123,6 +130,7 @@ class BidModel extends Equatable {
         createdAt,
         project,
         vendorName,
+        vendorAvatarUrl,
         estimationMonths,
         rabUrl,
         vendorExperienceYears,

@@ -13,24 +13,23 @@ class ProfileCertCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      margin: const EdgeInsets.only(bottom: 14),
-      padding: const EdgeInsets.all(18),
+      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.grey.shade200),
       ),
       child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Container(
             padding: const EdgeInsets.all(10),
             decoration: BoxDecoration(
               color: AppColors.cardCream,
-              borderRadius: BorderRadius.circular(14),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: AppColors.primary.withOpacity(0.2)),
             ),
-            child: const Icon(
-              Icons.verified_outlined,
-              color: AppColors.primary,
-            ),
+            child: const Icon(Icons.verified_outlined, color: AppColors.primary, size: 20),
           ),
           const SizedBox(width: 14),
           Expanded(
@@ -41,14 +40,18 @@ class ProfileCertCard extends StatelessWidget {
                   certification.title,
                   style: const TextStyle(
                     fontWeight: FontWeight.bold,
+                    fontSize: 13,
+                    color: Colors.black87,
+                    height: 1.3,
                   ),
                 ),
-                const SizedBox(height: 3),
+                const SizedBox(height: 6),
                 Text(
-                  certification.issuer,
+                  'Diterbitkan oleh: ${certification.issuer}',
                   style: const TextStyle(
-                    color: Colors.black54,
-                    fontSize: 12,
+                    color: Colors.black45,
+                    fontSize: 10,
+                    height: 1.3,
                   ),
                 ),
               ],

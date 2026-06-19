@@ -13,19 +13,6 @@ class BerandaWelcomeCard extends StatelessWidget {
     required this.onTap,
   });
 
-  double _profileCompletion(ProfileModel? p) {
-    if (p == null) return 0.0;
-    int filled = 0;
-    const total = 6;
-    if (p.name.isNotEmpty) filled++;
-    if (p.companyName?.isNotEmpty == true) filled++;
-    if (p.phone?.isNotEmpty == true) filled++;
-    if (p.npwp?.isNotEmpty == true) filled++;
-    if (p.straNumber?.isNotEmpty == true) filled++;
-    if (p.avatarUrl?.isNotEmpty == true) filled++;
-    return filled / total;
-  }
-
   @override
   Widget build(BuildContext context) {
     final user = Supabase.instance.client.auth.currentUser;
@@ -33,7 +20,6 @@ class BerandaWelcomeCard extends StatelessWidget {
         ? profile!.name
         : (user?.userMetadata?['name'] ?? 'Kontraktor');
     final company = profile?.companyName ?? 'Vendor BuildMatch';
-    final completion = _profileCompletion(profile);
 
     return GestureDetector(
       onTap: onTap,
@@ -51,54 +37,77 @@ class BerandaWelcomeCard extends StatelessWidget {
             )
           ],
         ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+        child: Stack(
           children: [
-            const Text('Selamat datang,', style: TextStyle(color: Colors.white70, fontSize: 13)),
-            const SizedBox(height: 4),
-            Text(name, style: const TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.bold)),
-            const SizedBox(height: 4),
-            Row(
+            // Main content
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Icon(Icons.business, color: Colors.white70, size: 14),
-                const SizedBox(width: 6),
-                Expanded(
-                  child: Text(company, style: const TextStyle(color: Colors.white70, fontSize: 13), overflow: TextOverflow.ellipsis),
+                const Text('Selamat datang,', style: TextStyle(color: Colors.white70, fontSize: 13)),
+                const SizedBox(height: 4),
+                Padding(
+                  padding: const EdgeInsets.only(right: 60), // leave space for the helmet icon
+                  child: Text(
+                    name,
+                    style: const TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.bold),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
                 ),
-                if (profile?.isVerified == true) ...[
-                  const Icon(Icons.verified, color: Colors.white, size: 14),
-                ],
+                const SizedBox(height: 4),
+                Row(
+                  children: [
+                    const Icon(Icons.business, color: Colors.white70, size: 14),
+                    const SizedBox(width: 6),
+                    Expanded(
+                      child: Text(
+                        company,
+                        style: const TextStyle(color: Colors.white70, fontSize: 13),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    if (profile?.isVerified == true) ...[
+                      const SizedBox(width: 4),
+                      const Icon(Icons.verified, color: Colors.white, size: 14),
+                    ],
+                  ],
+                ),
+                const SizedBox(height: 20),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withOpacity(0.2),
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: const Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        'Lengkapi Portofolio / Sertifikasi',
+                        style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w600),
+                      ),
+                      SizedBox(width: 6),
+                      Icon(Icons.arrow_forward, color: Colors.white, size: 14),
+                    ],
+                  ),
+                ),
               ],
             ),
-            const SizedBox(height: 16),
-            Row(
-              children: [
-                Text('Profil ${(completion * 100).toInt()}% lengkap', style: const TextStyle(color: Colors.white70, fontSize: 12)),
-                const Spacer(),
-                Text('${(completion * 100).toInt()}%', style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold)),
-              ],
-            ),
-            const SizedBox(height: 8),
-            ClipRRect(
-              borderRadius: BorderRadius.circular(10),
-              child: LinearProgressIndicator(
-                value: completion,
-                minHeight: 6,
-                backgroundColor: Colors.white24,
-                valueColor: const AlwaysStoppedAnimation<Color>(Colors.white),
-              ),
-            ),
-            const SizedBox(height: 14),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-              decoration: BoxDecoration(color: Colors.white.withOpacity(0.2), borderRadius: BorderRadius.circular(20)),
-              child: const Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text('Lengkapi Sekarang', style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w600)),
-                  SizedBox(width: 4),
-                  Icon(Icons.arrow_forward, color: Colors.white, size: 14),
-                ],
+            // Construction helmet icon in the top right corner
+            Positioned(
+              top: 0,
+              right: 0,
+              child: Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: Colors.white.withOpacity(0.15),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(
+                  Icons.engineering_rounded,
+                  color: Colors.white,
+                  size: 32,
+                ),
               ),
             ),
           ],

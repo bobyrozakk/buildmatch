@@ -41,7 +41,7 @@ class ContractorProjectCubit extends Cubit<ContractorProjectState> {
     try {
       final response = await _supabase
           .from('projects')
-          .select('*, profiles:client_id(name)')
+          .select('*, profiles:client_id(name, phone)')
           .eq('status', 'open')
           .neq('title', 'Konsultasi Desain dengan Arsitek')
           .order('created_at', ascending: false);
@@ -63,7 +63,7 @@ class ContractorProjectCubit extends Cubit<ContractorProjectState> {
       if (vendorId == null) return [];
       final response = await _supabase
           .from('bids')
-          .select('projects:project_id(*, profiles:client_id(name))')
+          .select('projects:project_id(*, profiles:client_id(name, phone))')
           .eq('vendor_id', vendorId)
           .eq('status', 'accepted');
       final list = List<Map<String, dynamic>>.from(response);
@@ -89,7 +89,7 @@ class ContractorProjectCubit extends Cubit<ContractorProjectState> {
       if (vendorId == null) return [];
       var query = _supabase
           .from('bids')
-          .select('*, projects:project_id(*, profiles:client_id(name))')
+          .select('*, projects:project_id(*, profiles:client_id(name, phone))')
           .eq('vendor_id', vendorId);
       if (status != null) {
         query = query.eq('status', status);
@@ -133,7 +133,7 @@ class ContractorProjectCubit extends Cubit<ContractorProjectState> {
       if (vendorId == null || projectId.isEmpty) return null;
       final response = await _supabase
           .from('bids')
-          .select('*, projects:project_id(*, profiles:client_id(name))')
+          .select('*, projects:project_id(*, profiles:client_id(name, phone))')
           .eq('vendor_id', vendorId)
           .eq('project_id', projectId)
           .limit(1)
@@ -472,7 +472,7 @@ class ContractorProjectCubit extends Cubit<ContractorProjectState> {
     try {
       final response = await _supabase
           .from('projects')
-          .select('*, profiles:client_id(name)')
+          .select('*, profiles:client_id(name, phone)')
           .eq('id', projectId)
           .single();
       final project = ProjectModel.fromJson(response);

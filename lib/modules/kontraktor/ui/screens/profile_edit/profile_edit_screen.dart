@@ -2,72 +2,328 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'package:buildmatch/modules/client/logic/vendor/vendor_cubit.dart';
 import 'package:buildmatch/modules/client/logic/vendor/vendor_state.dart';
-import 'package:buildmatch/data/models/portfolio_model.dart';
-import 'package:buildmatch/data/models/certification_model.dart';
 import 'package:buildmatch/core/constants/colors.dart';
+import 'package:buildmatch/ui/shared/screens/image_cropper_screen.dart';
+import 'package:buildmatch/ui/shared/widgets/animated_success_dialog.dart';
+
+import 'widgets/edit_profile_profil_tab.dart';
+import 'widgets/edit_profile_porto_tab.dart';
+import 'widgets/edit_profile_sertifikasi_tab.dart';
 
 class EditProfileScreen extends StatefulWidget {
-  const EditProfileScreen({super.key});
+  final int initialTab;
+  const EditProfileScreen({super.key, this.initialTab = 0});
 
   @override
-  State<EditProfileScreen> createState() =>
-      _EditProfileScreenState();
+  State<EditProfileScreen> createState() => _EditProfileScreenState();
 }
 
-class _EditProfileScreenState
-    extends State<EditProfileScreen>
+class _EditProfileScreenState extends State<EditProfileScreen>
     with SingleTickerProviderStateMixin {
-
   late TabController _tabController;
+  bool _isLoading = false;
+
+  // Profil controllers
+  final _nameCtrl = TextEditingController();
+  final _companyCtrl = TextEditingController();
+  final _nibCtrl = TextEditingController();
+  final _npwpCtrl = TextEditingController();
+
+  // Avatar State
+  File? _avatarFile;
+  String? _currentAvatarUrl;
+
+  // Portofolio State
+  final _portoTitleCtrl = TextEditingController();
+  final _portoYearCtrl = TextEditingController();
+  File? _portoImageFile;
+
+  // Sertifikasi State
+  final _certTitleCtrl = TextEditingController();
+  final _certIssuerCtrl = TextEditingController();
 
   @override
   void initState() {
     super.initState();
-
     _tabController = TabController(
       length: 3,
       vsync: this,
+      initialIndex: widget.initialTab,
     );
+    _loadInitialData();
+  }
+
+  void _loadInitialData() {
+    final vendorCubit = context.read<VendorCubit>();
+    final state = vendorCubit.state;
+    if (state is VendorLoaded) {
+      final profile = state.vendorProfile;
+      if (profile != null) {
+        _nameCtrl.text = profile.name;
+        _companyCtrl.text = profile.companyName ?? '';
+        _nibCtrl.text = profile.nib ?? '';
+        _npwpCtrl.text = profile.npwp ?? '';
+        _currentAvatarUrl = profile.avatarUrl;
+      }
+    }
   }
 
   @override
   void dispose() {
     _tabController.dispose();
+    _nameCtrl.dispose();
+    _companyCtrl.dispose();
+    _nibCtrl.dispose();
+    _npwpCtrl.dispose();
+    _portoTitleCtrl.dispose();
+    _portoYearCtrl.dispose();
+    _certTitleCtrl.dispose();
+    _certIssuerCtrl.dispose();
     super.dispose();
+  }
+
+  Future<void> _pickAvatar() async {
+    final picker = ImagePicker();
+    final picked = await picker.pickImage(
+      source: ImageSource.gallery,
+      imageQuality: 70,
+    );
+    if (picked != null) {
+      final file = File(picked.path);
+      if (!mounted) return;
+      final croppedFile = await Navigator.push<File?>(
+        context,
+        MaterialPageRoute(
+          builder: (_) => ImageCropperScreen(imageFile: file),
+        ),
+      );
+      if (croppedFile != null) {
+        setState(() {
+          _avatarFile = croppedFile;
+        });
+      }
+    }
+  }
+
+  Future<void> _pickPortoImage() async {
+    final picker = ImagePicker();
+    final picked = await picker.pickImage(
+      source: ImageSource.gallery,
+      imageQuality: 60,
+    );
+    if (picked != null) {
+      setState(() {
+        _portoImageFile = File(picked.path);
+      });
+    }
+  }
+
+  Future<void> _saveProfile() async {
+    if (_nameCtrl.text.isEmpty || _companyCtrl.text.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Nama Lengkap & Nama Perusahaan wajib diisi!'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+
+    setState(() => _isLoading = true);
+    final provider = context.read<VendorCubit>();
+    final success = await provider.updateVendorProfile(
+      name: _nameCtrl.text.trim(),
+      companyName: _companyCtrl.text.trim(),
+      nib: _nibCtrl.text.trim(),
+      npwp: _npwpCtrl.text.trim(),
+      avatarFile: _avatarFile,
+    );
+
+    if (mounted) {
+      setState(() => _isLoading = false);
+      if (success) {
+        await showDialog(
+          context: context,
+          barrierDismissible: false,
+          builder: (_) => const AnimatedSuccessDialog(
+            message: 'Profil berhasil diperbarui!',
+          ),
+        );
+        if (mounted) {
+          Navigator.pop(context, true);
+        }
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Gagal memperbarui profil.'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
+  Future<void> _addPortfolio() async {
+    if (_portoTitleCtrl.text.isEmpty || _portoImageFile == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Lengkapi judul dan foto portofolio!'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+
+    setState(() => _isLoading = true);
+    final provider = context.read<VendorCubit>();
+    try {
+      final success = await provider.addPortfolio(
+        title: _portoTitleCtrl.text.trim(),
+        year: _portoYearCtrl.text.trim(),
+        imageFile: _portoImageFile,
+      );
+
+      if (success && mounted) {
+        _portoTitleCtrl.clear();
+        _portoYearCtrl.clear();
+        setState(() {
+          _portoImageFile = null;
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Portofolio berhasil ditambahkan!'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Gagal menyimpan: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
+    }
+  }
+
+  Future<void> _addCertification() async {
+    if (_certTitleCtrl.text.isEmpty || _certIssuerCtrl.text.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Nama Sertifikat & Penerbit wajib diisi!'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+
+    setState(() => _isLoading = true);
+    final provider = context.read<VendorCubit>();
+    try {
+      final success = await provider.addCertification(
+        title: _certTitleCtrl.text.trim(),
+        issuer: _certIssuerCtrl.text.trim(),
+      );
+
+      if (success && mounted) {
+        _certTitleCtrl.clear();
+        _certIssuerCtrl.clear();
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Sertifikasi berhasil ditambahkan!'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Gagal menyimpan: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor:
-          AppColors.backgroundCream,
-
+      backgroundColor: AppColors.backgroundCream,
       appBar: AppBar(
-        backgroundColor:
-            AppColors.backgroundCream,
+        backgroundColor: AppColors.backgroundCream,
         elevation: 0,
-        leading:
-            const BackButton(color: Colors.black87),
-
+        leading: IconButton(
+          icon: const Icon(Icons.close, color: Colors.black87, size: 24),
+          onPressed: () => Navigator.pop(context),
+        ),
         title: const Text(
           'Kelola Profil',
           style: TextStyle(
             color: Colors.black87,
             fontWeight: FontWeight.bold,
+            fontSize: 16,
           ),
         ),
-
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text(
+              'Batal',
+              style: TextStyle(
+                color: Colors.black54,
+                fontWeight: FontWeight.bold,
+                fontSize: 13,
+              ),
+            ),
+          ),
+          const SizedBox(width: 4),
+          Padding(
+            padding: const EdgeInsets.only(right: 16, top: 10, bottom: 10),
+            child: ElevatedButton(
+              onPressed: _saveProfile,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.primary,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                elevation: 0,
+              ),
+              child: const Text(
+                'Simpan',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 12,
+                ),
+              ),
+            ),
+          ),
+        ],
         bottom: TabBar(
           controller: _tabController,
           labelColor: AppColors.primary,
-          unselectedLabelColor:
-              Colors.grey,
-          indicatorColor:
-              AppColors.primary,
+          unselectedLabelColor: Colors.black54,
+          indicatorColor: AppColors.primary,
+          indicatorWeight: 3,
+          labelStyle: const TextStyle(
+            fontWeight: FontWeight.bold,
+            fontSize: 13,
+          ),
           tabs: const [
             Tab(text: 'Profil'),
             Tab(text: 'Portofolio'),
@@ -75,865 +331,36 @@ class _EditProfileScreenState
           ],
         ),
       ),
-
-      body: TabBarView(
-        controller: _tabController,
-        children: const [
-          _TabProfilForm(),
-          _TabPortoForm(),
-          _TabSertifForm(),
-        ],
-      ),
-    );
-  }
-}
-
-// =======================================================
-// TAB PROFIL
-// =======================================================
-
-class _TabProfilForm extends StatefulWidget {
-  const _TabProfilForm();
-
-  @override
-  State<_TabProfilForm> createState() =>
-      _TabProfilFormState();
-}
-
-class _TabProfilFormState
-    extends State<_TabProfilForm> {
-
-  final _nameCtrl =
-      TextEditingController();
-
-  final _companyCtrl =
-      TextEditingController();
-
-  @override
-  void initState() {
-    super.initState();
-
-    final user =
-        Supabase.instance.client.auth.currentUser;
-
-    _nameCtrl.text =
-        user?.userMetadata?['name'] ?? '';
-
-    _companyCtrl.text =
-        user?.userMetadata?['company_name'] ??
-            '';
-  }
-
-  @override
-  void dispose() {
-    _nameCtrl.dispose();
-    _companyCtrl.dispose();
-    super.dispose();
-  }
-
-  Future<void> _save() async {
-
-    final provider =
-        context.read<VendorCubit>();
-
-    final success =
-        await provider.updateVendorProfile(
-      name: _nameCtrl.text.trim(),
-      companyName:
-          _companyCtrl.text.trim(),
-    );
-
-    if (!mounted) return;
-
-    ScaffoldMessenger.of(context)
-        .showSnackBar(
-      SnackBar(
-        backgroundColor: success
-            ? Colors.green
-            : Colors.red,
-        content: Text(
-          success
-              ? 'Profil berhasil diupdate'
-              : 'Gagal update profil',
-        ),
-      ),
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return BlocBuilder<VendorCubit, VendorState>(
-      builder: (context, state) {
-        final loading = state is VendorLoading;
-
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(20),
-      child: Column(
-        children: [
-
-          Container(
-            padding:
-                const EdgeInsets.all(18),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius:
-                  BorderRadius.circular(24),
-            ),
-            child: Column(
+      body: _isLoading
+          ? const Center(
+              child: CircularProgressIndicator(color: AppColors.primary),
+            )
+          : TabBarView(
+              controller: _tabController,
               children: [
-
-                TextField(
-                  controller: _nameCtrl,
-                  decoration: InputDecoration(
-                    labelText:
-                        'Nama Lengkap',
-                    filled: true,
-                    fillColor:
-                        AppColors.cardCream,
-                    border:
-                        OutlineInputBorder(
-                      borderRadius:
-                          BorderRadius.circular(
-                        16,
-                      ),
-                      borderSide:
-                          BorderSide.none,
-                    ),
-                  ),
+                EditProfileProfilTab(
+                  nameCtrl: _nameCtrl,
+                  companyCtrl: _companyCtrl,
+                  nibCtrl: _nibCtrl,
+                  npwpCtrl: _npwpCtrl,
+                  avatarFile: _avatarFile,
+                  currentAvatarUrl: _currentAvatarUrl,
+                  onPickAvatar: _pickAvatar,
                 ),
-
-                const SizedBox(height: 16),
-
-                TextField(
-                  controller: _companyCtrl,
-                  decoration: InputDecoration(
-                    labelText:
-                        'Nama Perusahaan',
-                    filled: true,
-                    fillColor:
-                        AppColors.cardCream,
-                    border:
-                        OutlineInputBorder(
-                      borderRadius:
-                          BorderRadius.circular(
-                        16,
-                      ),
-                      borderSide:
-                          BorderSide.none,
-                    ),
-                  ),
+                EditProfilePortoTab(
+                  portoTitleCtrl: _portoTitleCtrl,
+                  portoYearCtrl: _portoYearCtrl,
+                  portoImageFile: _portoImageFile,
+                  onPickPortoImage: _pickPortoImage,
+                  onAddPortfolio: _addPortfolio,
                 ),
-
-                const SizedBox(height: 24),
-
-                SizedBox(
-                  width: double.infinity,
-                  height: 55,
-
-                  child: ElevatedButton(
-                    onPressed:
-                        loading ? null : _save,
-
-                    style:
-                        ElevatedButton.styleFrom(
-                      backgroundColor:
-                          AppColors.primary,
-                      shape:
-                          RoundedRectangleBorder(
-                        borderRadius:
-                            BorderRadius.circular(
-                          16,
-                        ),
-                      ),
-                    ),
-
-                    child: loading
-                        ? const CircularProgressIndicator(
-                            color: Colors.white,
-                          )
-                        : const Text(
-                            'Simpan Profil',
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontWeight:
-                                  FontWeight.bold,
-                            ),
-                          ),
-                  ),
+                EditProfileSertifikasiTab(
+                  certTitleCtrl: _certTitleCtrl,
+                  certIssuerCtrl: _certIssuerCtrl,
+                  onAddCertification: _addCertification,
                 ),
               ],
             ),
-          ),
-        ],
-      ),
-    );
-      },
-    );
-  }
-}
-
-// =======================================================
-// TAB PORTOFOLIO
-// =======================================================
-
-class _TabPortoForm extends StatefulWidget {
-  const _TabPortoForm();
-
-  @override
-  State<_TabPortoForm> createState() =>
-      _TabPortoFormState();
-}
-
-class _TabPortoFormState
-    extends State<_TabPortoForm> {
-
-  final _titleCtrl =
-      TextEditingController();
-
-  final _yearCtrl =
-      TextEditingController();
-
-  File? _imageFile;
-
-  @override
-  void initState() {
-    super.initState();
-    _load();
-  }
-
-  void _load() {
-    context.read<VendorCubit>().fetchPortfolios();
-  }
-
-  @override
-  void dispose() {
-    _titleCtrl.dispose();
-    _yearCtrl.dispose();
-    super.dispose();
-  }
-
-  Future<void> _pickImage() async {
-
-    final picker = ImagePicker();
-
-    final picked =
-        await picker.pickImage(
-      source: ImageSource.gallery,
-      imageQuality: 60,
-    );
-
-    if (picked != null) {
-      setState(() {
-        _imageFile = File(picked.path);
-      });
-    }
-  }
-  Future<void> _save() async {
-    if (_titleCtrl.text.isEmpty || _imageFile == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Lengkapi data terlebih dahulu'),
-        ),
-      );
-      return;
-    }
-
-    final provider = context.read<VendorCubit>();
-
-    try {
-      final success = await provider.addPortfolio(
-        title: _titleCtrl.text.trim(),
-        year: _yearCtrl.text.trim(),
-        imageFile: _imageFile,
-      );
-
-      if (!mounted) return;
-
-      if (success) {
-        _titleCtrl.clear();
-        _yearCtrl.clear();
-
-        setState(() {
-          _imageFile = null;
-          _load();
-        });
-
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            backgroundColor: Colors.green,
-            content: Text('Portofolio berhasil ditambah'),
-          ),
-        );
-      } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            backgroundColor: Colors.red,
-            content: Text('Gagal menambah portofolio. Pastikan storage "portfolios" terkonfigurasi.'),
-          ),
-        );
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            backgroundColor: Colors.red,
-            content: Text('Gagal menyimpan: $e'),
-          ),
-        );
-      }
-    }
-  }
-  @override
-  Widget build(BuildContext context) {
-    return BlocBuilder<VendorCubit, VendorState>(
-      builder: (context, state) {
-        final loading = state is VendorLoading;
-        final portfolios = state is VendorLoaded ? state.portfolios : <PortfolioModel>[];
-
-        return SingleChildScrollView(
-          padding:
-              const EdgeInsets.all(20),
-
-          child: Column(
-            children: [
-
-              GestureDetector(
-                onTap: _pickImage,
-
-                child: Container(
-                  height: 170,
-                  width: double.infinity,
-
-                  decoration: BoxDecoration(
-                    color: Colors.grey.shade300,
-                    borderRadius:
-                        BorderRadius.circular(
-                      24,
-                    ),
-
-                    image: _imageFile != null
-                        ? DecorationImage(
-                            image: FileImage(
-                              _imageFile!,
-                            ),
-                            fit: BoxFit.cover,
-                          )
-                        : null,
-                  ),
-
-                  child: _imageFile == null
-                      ? const Column(
-                          mainAxisAlignment:
-                              MainAxisAlignment
-                                  .center,
-                          children: [
-
-                            Icon(
-                              Icons
-                                  .add_photo_alternate_outlined,
-                              size: 50,
-                              color: Colors.black45,
-                            ),
-
-                            SizedBox(height: 10),
-
-                            Text(
-                              'Upload Foto Portofolio',
-                            ),
-                          ],
-                        )
-                      : null,
-                ),
-              ),
-
-              const SizedBox(height: 18),
-
-              TextField(
-                controller: _titleCtrl,
-                decoration: InputDecoration(
-                  labelText:
-                      'Judul Proyek',
-                  filled: true,
-                  fillColor:
-                      Colors.white,
-                  border:
-                      OutlineInputBorder(
-                    borderRadius:
-                        BorderRadius.circular(
-                      16,
-                    ),
-                    borderSide:
-                        BorderSide.none,
-                  ),
-                ),
-              ),
-
-              const SizedBox(height: 16),
-
-              TextField(
-                controller: _yearCtrl,
-                keyboardType:
-                    TextInputType.number,
-
-                decoration: InputDecoration(
-                  labelText:
-                      'Tahun Selesai',
-                  filled: true,
-                  fillColor:
-                      Colors.white,
-                  border:
-                      OutlineInputBorder(
-                    borderRadius:
-                        BorderRadius.circular(
-                      16,
-                    ),
-                    borderSide:
-                        BorderSide.none,
-                  ),
-                ),
-              ),
-
-              const SizedBox(height: 24),
-
-              SizedBox(
-                width: double.infinity,
-                height: 55,
-
-                child: ElevatedButton(
-                  onPressed:
-                      loading ? null : _save,
-
-                  style:
-                      ElevatedButton.styleFrom(
-                    backgroundColor:
-                        AppColors.primary,
-                    shape:
-                        RoundedRectangleBorder(
-                      borderRadius:
-                          BorderRadius.circular(
-                        16,
-                      ),
-                    ),
-                  ),
-
-                  child: const Text(
-                    'Tambah Portofolio',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontWeight:
-                          FontWeight.bold,
-                    ),
-                  ),
-                ),
-              ),
-
-              const SizedBox(height: 30),
-
-              const Align(
-                alignment:
-                    Alignment.centerLeft,
-                child: Text(
-                  'Daftar Portofolio',
-                  style: TextStyle(
-                    fontWeight:
-                        FontWeight.bold,
-                    fontSize: 16,
-                  ),
-                ),
-              ),
-
-              const SizedBox(height: 14),
-
-              ...portfolios.map(
-                (item) => Container(
-                  margin:
-                      const EdgeInsets.only(
-                    bottom: 14,
-                  ),
-
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius:
-                        BorderRadius.circular(
-                      20,
-                    ),
-                  ),
-
-                  child: ListTile(
-                    leading: ClipRRect(
-                      borderRadius:
-                          BorderRadius.circular(
-                        12,
-                      ),
-                      child: item.imageUrl !=
-                              null
-                          ? Image.network(
-                              item.imageUrl!,
-                              width: 55,
-                              height: 55,
-                              fit: BoxFit.cover,
-                            )
-                          : Container(
-                              width: 55,
-                              height: 55,
-                              color: Colors.grey,
-                            ),
-                    ),
-
-                    title: Text(
-                      item.title,
-                    ),
-
-                    subtitle: Text(
-                      item.year,
-                    ),
-
-                    trailing:
-                        PopupMenuButton(
-                      itemBuilder: (_) => [
-                        const PopupMenuItem(
-                          value: 'delete',
-                          child: Text(
-                            'Hapus',
-                          ),
-                        ),
-                      ],
-
-                      onSelected:
-                          (value) async {
-
-                        if (value ==
-                            'delete') {
-
-                          final provider =
-                              context.read<VendorCubit>();
-
-                          await provider
-                              .deletePortfolio(
-                            item.id!,
-                          );
-
-                          setState(() {
-                            _load();
-                          });
-                        }
-                      },
-                    ),
-                  ),
-                ),
-              ),
-            ],
-          ),
-        );
-      },
-    );
-  }
-}
-
-// =======================================================
-// TAB SERTIFIKASI
-// =======================================================
-
-class _TabSertifForm extends StatefulWidget {
-  const _TabSertifForm();
-
-  @override
-  State<_TabSertifForm> createState() =>
-      _TabSertifFormState();
-}
-
-class _TabSertifFormState
-    extends State<_TabSertifForm> {
-
-  final _titleCtrl =
-      TextEditingController();
-
-  final _issuerCtrl =
-      TextEditingController();
-
-  @override
-  void initState() {
-    super.initState();
-    _load();
-  }
-
-  void _load() {
-    context.read<VendorCubit>().fetchCertifications();
-  }
-
-  @override
-  void dispose() {
-    _titleCtrl.dispose();
-    _issuerCtrl.dispose();
-    super.dispose();
-  }
-
-  Future<void> _save() async {
-    if (_titleCtrl.text.isEmpty || _issuerCtrl.text.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Lengkapi data terlebih dahulu')),
-      );
-      return;
-    }
-
-    final provider = context.read<VendorCubit>();
-
-    try {
-      final success = await provider.addCertification(
-        title: _titleCtrl.text.trim(),
-        issuer: _issuerCtrl.text.trim(),
-      );
-
-      if (!mounted) return;
-
-      if (success) {
-        _titleCtrl.clear();
-        _issuerCtrl.clear();
-        setState(() {
-          _load();
-        });
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            backgroundColor: Colors.green,
-            content: Text('Sertifikasi berhasil ditambah'),
-          ),
-        );
-      } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            backgroundColor: Colors.red,
-            content: Text('Gagal menambah sertifikasi.'),
-          ),
-        );
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            backgroundColor: Colors.red,
-            content: Text('Gagal menyimpan: $e'),
-          ),
-        );
-      }
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return BlocBuilder<VendorCubit, VendorState>(
-      builder: (context, state) {
-        final loading = state is VendorLoading;
-        final certs = state is VendorLoaded ? state.certifications : <CertificationModel>[];
-
-        return SingleChildScrollView(
-          padding:
-              const EdgeInsets.all(20),
-
-          child: Column(
-            children: [
-
-              TextField(
-                controller: _titleCtrl,
-
-                decoration: InputDecoration(
-                  labelText:
-                      'Nama Sertifikat',
-                  filled: true,
-                  fillColor:
-                      Colors.white,
-                  border:
-                      OutlineInputBorder(
-                    borderRadius:
-                        BorderRadius.circular(
-                      16,
-                    ),
-                    borderSide:
-                        BorderSide.none,
-                  ),
-                ),
-              ),
-
-              const SizedBox(height: 16),
-
-              TextField(
-                controller: _issuerCtrl,
-
-                decoration: InputDecoration(
-                  labelText:
-                      'Penerbit',
-                  filled: true,
-                  fillColor:
-                      Colors.white,
-                  border:
-                      OutlineInputBorder(
-                    borderRadius:
-                        BorderRadius.circular(
-                      16,
-                    ),
-                    borderSide:
-                        BorderSide.none,
-                  ),
-                ),
-              ),
-
-              const SizedBox(height: 24),
-
-              SizedBox(
-                width: double.infinity,
-                height: 55,
-
-                child: ElevatedButton(
-                  onPressed:
-                      loading ? null : _save,
-
-                  style:
-                      ElevatedButton.styleFrom(
-                    backgroundColor:
-                        AppColors.primary,
-                    shape:
-                        RoundedRectangleBorder(
-                      borderRadius:
-                          BorderRadius.circular(
-                        16,
-                      ),
-                    ),
-                  ),
-
-                  child: const Text(
-                    'Tambah Sertifikasi',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontWeight:
-                          FontWeight.bold,
-                    ),
-                  ),
-                ),
-              ),
-
-              const SizedBox(height: 30),
-
-              const Align(
-                alignment:
-                    Alignment.centerLeft,
-                child: Text(
-                  'Daftar Sertifikasi',
-                  style: TextStyle(
-                    fontWeight:
-                        FontWeight.bold,
-                    fontSize: 16,
-                  ),
-                ),
-              ),
-
-              const SizedBox(height: 14),
-
-              ...certs.map(
-                (cert) => Container(
-                  margin:
-                      const EdgeInsets.only(
-                    bottom: 14,
-                  ),
-
-                  padding:
-                      const EdgeInsets.all(
-                    16,
-                  ),
-
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius:
-                        BorderRadius.circular(
-                      20,
-                    ),
-                  ),
-
-                  child: Row(
-                    children: [
-
-                      const Icon(
-                        Icons
-                            .verified_outlined,
-                        color:
-                            AppColors.primary,
-                      ),
-
-                      const SizedBox(
-                        width: 14,
-                      ),
-
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment:
-                              CrossAxisAlignment
-                                  .start,
-                          children: [
-
-                            Text(
-                              cert.title,
-                              style:
-                                  const TextStyle(
-                                fontWeight:
-                                    FontWeight
-                                        .bold,
-                              ),
-                            ),
-
-                            const SizedBox(
-                              height: 4,
-                            ),
-
-                            Text(
-                              cert.issuer,
-                              style:
-                                  const TextStyle(
-                                color:
-                                    Colors.black54,
-                                fontSize: 12,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-
-                      PopupMenuButton(
-                        itemBuilder: (_) => [
-                          const PopupMenuItem(
-                            value:
-                                'delete',
-                            child: Text(
-                              'Hapus',
-                            ),
-                          ),
-                        ],
-
-                        onSelected:
-                            (value) async {
-
-                          if (value ==
-                              'delete') {
-
-                            final provider =
-                                context.read<VendorCubit>();
-
-                            await provider
-                                .deleteCertification(
-                              cert.id!,
-                            );
-
-                            setState(() {
-                              _load();
-                            });
-                          }
-                        },
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ],
-          ),
-        );
-      },
     );
   }
 }
